@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carter Matherne — Actuarial Science</title>
+<meta name="description" content="Carter Matherne — actuarial science student at University of Wisconsin–Eau Claire. Projects, experience and résumé.">
+<meta name="author" content="Carter Matherne">
+<link rel="canonical" href="https://actuallyactuary.com">
+<meta property="og:type" content="profile">
+<meta property="og:title" content="Carter Matherne — Actuarial Science">
+<meta property="og:description" content="Actuarial science student at University of Wisconsin–Eau Claire. Building tools that test whether an investing idea actually holds up.">
+<meta property="og:url" content="https://actuallyactuary.com">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Carter Matherne — Actuarial Science">
+<meta name="twitter:description" content="Actuarial science student at University of Wisconsin–Eau Claire. Projects, experience and résumé.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fbfaf7'/%3E%3Cpath d='M3 27 C11 26 18 22 22 15 C25 10 27 7 29 5' stroke='%231f3a5f' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* The register is security printing, not software: bond paper on a desk,
+   engraved headings, a guilloché band, file tabs. Depth comes from tight
+   shadows and letterpress, never from gradients or glass. */
+:root {
+  color-scheme: light;
+  --desk:#dcd8cd;
+  --paper:#fffdf8;
+  --edge:#c9c3b4;
+  --ink:#141821; --body:#3b434e; --muted:#5f6874;
+  --accent:#1f3a5f;
+  --hair:rgba(20,24,33,.09);
+  --emboss:rgba(255,255,255,.9);
+  --tab:#efebe0;
+  --lift:0 1px 1px rgba(40,34,20,.06), 0 10px 26px -10px rgba(40,34,20,.34);
+}
+@media (prefers-color-scheme: dark) { :root {
+  color-scheme: dark;
+  --desk:#0b0d12; --paper:#161a21; --edge:#2b313b;
+  --ink:#f3f1ec; --body:#c0c6cf; --muted:#8c94a0;
+  --accent:#9db8dc;
+  --hair:rgba(255,255,255,.07);
+  --emboss:rgba(0,0,0,.55);
+  --tab:#11141a;
+  --lift:0 1px 1px rgba(0,0,0,.5), 0 12px 30px -10px rgba(0,0,0,.75);
+} }
+* { box-sizing:border-box; }
+body {
+  margin:0; padding:38px 20px 72px; min-height:100vh;
+  background:var(--desk); color:var(--body);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15.5px; line-height:1.62; -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+.shell { max-width:800px; margin:0 auto; }
+a { color:var(--accent); text-decoration:none;
+  border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+a:hover { border-bottom-color:var(--accent); }
+
+/* ---- the sheet ---- */
+.sheetwrap { position:relative; }
+.sheet {
+  background:var(--paper); border:1px solid var(--edge);
+  box-shadow:var(--lift); padding:44px 46px 34px;
+}
+.sheet::before {
+  content:""; position:absolute; inset:9px; border:1px solid var(--hair);
+  pointer-events:none;
+}
+
+/* ---- masthead ---- */
+h1 {
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:42px; line-height:1.08; letter-spacing:-0.015em; font-weight:600;
+  color:var(--ink); margin:0 0 9px;
+  text-shadow:0 1px 0 var(--emboss);
+}
+.sub { font-size:15.5px; color:var(--ink); margin:0; font-weight:500; }
+.sub .thin { color:var(--muted); font-weight:400; }
+.tagline { margin:20px 0 0; font-size:16px; max-width:58ch; }
+.links { margin:22px 0 0; font-size:13.5px; color:var(--muted); line-height:2.05; }
+.links .sep { color:var(--edge); margin:0 3px; }
+.guilloche { display:block; width:100%; height:38px; margin:26px 0 4px;
+  opacity:.34; }
+.guilloche path { fill:none; stroke:var(--accent); stroke-width:.7;
+  vector-effect:non-scaling-stroke; }
+.dblrule { border:0; border-top:1px solid var(--edge);
+  border-bottom:1px solid var(--edge); height:3px; margin:0; }
+
+/* ---- file-folder tabs ---- */
+.tabs { display:flex; gap:3px; padding-left:6px; margin:30px 0 0;
+  position:relative; z-index:2; flex-wrap:wrap; }
+.tab {
+  font:inherit; font-size:13.5px; font-weight:550;
+  color:var(--muted); cursor:pointer;
+  background:var(--tab); border:1px solid var(--edge); border-bottom:none;
+  border-radius:4px 4px 0 0; padding:9px 17px 8px; margin-bottom:-1px;
+  box-shadow:inset 0 1px 0 var(--emboss);
+  transition:color .12s, background .12s;
+}
+.tab:hover { color:var(--ink); }
+.tab[aria-selected="true"] {
+  background:var(--paper); color:var(--ink); font-weight:650;
+  padding-bottom:9px;
+}
+.tab:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+.panelbox {
+  background:var(--paper); border:1px solid var(--edge); box-shadow:var(--lift);
+  padding:6px 46px 32px; position:relative; z-index:1;
+}
+.panel[hidden] { display:none; }
+h2 { display:none; }
+
+/* ---- entries ---- */
+.entry { padding:24px 0; border-bottom:1px solid var(--hair); }
+.entry:last-child { border-bottom:0; padding-bottom:2px; }
+.entry-head { display:flex; gap:18px; align-items:baseline;
+  justify-content:space-between; flex-wrap:wrap; }
+.strong {
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:18.5px; color:var(--ink); font-weight:600; letter-spacing:-0.01em;
+  text-shadow:0 1px 0 var(--emboss);
+}
+.org { color:var(--body); font-size:14.5px; }
+.org::before { content:"·"; color:var(--edge); margin:0 7px; }
+.when { color:var(--muted); font-size:13px; white-space:nowrap; }
+.where { color:var(--muted); font-size:13px; margin-top:2px; }
+.blurb { margin:10px 0 0; max-width:62ch; }
+ul.notes { margin:10px 0 0; padding-left:18px; }
+ul.notes li { margin:5px 0; max-width:62ch; }
+ul.notes li::marker { color:var(--edge); }
+a.demo { display:inline-block; margin-top:15px; font-size:13.5px; font-weight:550;
+  border:1px solid var(--edge); border-radius:3px; padding:8px 15px;
+  color:var(--accent); background:var(--tab);
+  box-shadow:inset 0 1px 0 var(--emboss); }
+a.demo:hover { border-color:var(--accent); }
+
+/* ---- skills ---- */
+.skillrow { display:flex; gap:20px; padding:15px 0;
+  border-bottom:1px solid var(--hair); align-items:baseline; }
+.skillrow:last-child { border-bottom:0; }
+.skilllabel { min-width:94px; color:var(--muted); font-size:12.5px;
+  text-transform:uppercase; letter-spacing:.09em; }
+.tags { display:flex; flex-wrap:wrap; gap:7px; }
+.tag { font-size:13px; color:var(--body); border:1px solid var(--edge);
+  border-radius:3px; padding:3px 10px; background:var(--tab);
+  box-shadow:inset 0 1px 0 var(--emboss); }
+
+footer { margin:22px 0 0; color:var(--muted); font-size:13px;
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  padding:0 6px; }
+
+@media (max-width:640px) {
+  body { padding:16px 12px 48px; }
+  .sheet { padding:30px 22px 24px; }
+  .panelbox { padding:6px 22px 24px; }
+  h1 { font-size:32px; }
+  .tab { padding:8px 12px; font-size:12.5px; }
+}
+@media print {
+  body { background:#fff; padding:0; }
+  .sheet, .panelbox { box-shadow:none; border:0; padding:0; }
+  .sheet::before, .guilloche, .tabs, a.demo { display:none; }
+  .panel[hidden] { display:block !important; }
+  h2 { display:block; font-size:11px; text-transform:uppercase;
+    letter-spacing:.12em; color:#000; margin:22px 0 6px; }
+  a { border:0; color:#000; }
+}
+</style></head>
+<body>
+<div class="shell">
+
+<div class="sheetwrap"><div class="sheet">
+  <h1>Carter Matherne</h1>
+  <p class="sub">Actuarial Science student <span class="thin">· University of Wisconsin–Eau Claire</span></p>
+  <p class="sub thin" style="font-size:14px;margin-top:3px">Cadott, Wisconsin</p>
+  <p class="tagline">I am an aspiring actuary who has been obsessed with math and finance for as long as I can remember. I am studying actuarial science at UW–Eau Claire, and I spend my own time building the tools that test whether an investing idea actually holds up.</p>
+  <div class="links"><a href="https://www.linkedin.com/in/carter-matherne-31116a395" target="_blank" rel="noopener">LinkedIn</a> <span class="sep">·</span> <a href="https://www.youtube.com/@actuallyactuary" target="_blank" rel="noopener">YouTube &mdash; Actually Actuary</a> <span class="sep">·</span> <a href="Carter_Matherne_Resume.pdf" target="_blank">Résumé (PDF)</a> <span class="sep">·</span> <a href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com</a></div>
+  <svg class="guilloche" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0,20L10,24L20,27L30,30L40,31L50,32L60,31L70,30L80,28L90,27L100,25L110,24L120,24L130,24L140,24L150,24L160,24L170,24L180,22L190,20L200,17L210,14L220,10L230,8L240,6L250,6L260,6L270,8L280,10L290,14L300,17L310,20L320,22L330,24L340,24L350,24L360,24L370,24L380,24L390,24L400,25L410,27L420,28L430,30L440,31L450,32L460,31L470,30L480,27L490,24L500,20L510,16L520,13L530,10L540,9L550,8L560,9L570,10L580,12L590,13L600,15L610,16L620,16L630,16L640,16L650,16L660,16L670,16L680,18L690,20L700,23L710,26L720,30L730,32L740,34L750,34L760,34L770,32L780,30L790,26L800,23L810,20L820,18L830,16L840,16L850,16L860,16L870,16L880,16L890,16L900,15L910,13L920,12L930,10L940,9L950,8L960,9L970,10L980,13L990,16L1000,20"/><path d="M0,22L10,25L20,27L30,30L40,32L50,34L60,34L70,33L80,31L90,28L100,25L110,21L120,18L130,16L140,14L150,13L160,13L170,13L180,14L190,14L200,15L210,14L220,14L230,13L240,12L250,11L260,10L270,11L280,13L290,15L300,18L310,22L320,26L330,29L340,32L350,33L360,33L370,32L380,31L390,29L400,26L410,24L420,23L430,22L440,21L450,21L460,21L470,21L480,21L490,20L500,18L510,15L520,13L530,10L540,8L550,6L560,6L570,7L580,9L590,12L600,15L610,19L620,22L630,24L640,26L650,27L660,27L670,27L680,26L690,26L700,25L710,26L720,26L730,27L740,28L750,29L760,30L770,29L780,27L790,25L800,22L810,18L820,14L830,11L840,8L850,7L860,7L870,8L880,9L890,11L900,14L910,16L920,17L930,18L940,19L950,19L960,19L970,19L980,19L990,20L1000,22"/><path d="M0,27L10,26L20,25L30,25L40,26L50,26L60,27L70,27L80,26L90,25L100,23L110,20L120,16L130,13L140,10L150,7L160,6L170,6L180,7L190,9L200,12L210,14L220,17L230,19L240,21L250,22L260,22L270,22L280,22L290,22L300,23L310,24L320,26L330,28L340,30L350,32L360,33L370,33L380,32L390,30L400,27L410,23L420,19L430,16L440,13L450,11L460,10L470,10L480,11L490,12L500,13L510,14L520,15L530,15L540,14L550,14L560,13L570,13L580,14L590,15L600,17L610,20L620,24L630,27L640,30L650,33L660,34L670,34L680,33L690,31L700,28L710,26L720,23L730,21L740,19L750,18L760,18L770,18L780,18L790,18L800,17L810,16L820,14L830,12L840,10L850,8L860,7L870,7L880,8L890,10L900,13L910,17L920,21L930,24L940,27L950,29L960,30L970,30L980,29L990,28L1000,27"/><path d="M0,30L10,27L20,24L30,21L40,19L50,17L60,16L70,15L80,15L90,16L100,16L110,16L120,15L130,14L140,12L150,11L160,9L170,9L180,9L190,10L200,12L210,15L220,19L230,23L240,26L250,29L260,31L270,32L280,32L290,31L300,29L310,27L320,26L330,24L340,24L350,24L360,24L370,24L380,24L390,24L400,22L410,20L420,18L430,15L440,11L450,9L460,7L470,6L480,6L490,7L500,10L510,13L520,16L530,19L540,21L550,23L560,24L570,25L580,25L590,24L600,24L610,24L620,25L630,26L640,28L650,29L660,31L670,31L680,31L690,30L700,28L710,25L720,21L730,17L740,14L750,11L760,9L770,8L780,8L790,9L800,11L810,13L820,14L830,16L840,16L850,16L860,16L870,16L880,16L890,16L900,18L910,20L920,22L930,25L940,29L950,31L960,33L970,34L980,34L990,33L1000,30"/><path d="M0,28L10,26L20,23L30,19L40,15L50,12L60,9L70,7L80,7L90,7L100,8L110,11L120,13L130,15L140,17L150,18L160,19L170,19L180,19L190,19L200,19L210,20L220,22L230,24L240,27L250,29L260,32L270,33L280,34L290,34L300,32L310,29L320,26L330,22L340,19L350,16L360,14L370,13L380,12L390,13L400,13L410,14L420,15L430,15L440,14L450,13L460,12L470,11L480,11L490,11L500,12L510,14L520,17L530,21L540,25L550,28L560,31L570,33L580,33L590,33L600,32L610,29L620,27L630,25L640,23L650,22L660,21L670,21L680,21L690,21L700,21L710,20L720,18L730,16L740,13L750,11L760,8L770,7L780,6L790,6L800,8L810,11L820,14L830,18L840,21L850,24L860,26L870,27L880,28L890,27L900,27L910,26L920,25L930,25L940,26L950,27L960,28L970,29L980,29L990,29L1000,28"/><path d="M0,18L10,18L20,18L30,17L40,15L50,13L60,11L70,9L80,7L90,7L100,8L110,9L120,12L130,16L140,19L150,23L160,26L170,29L180,30L190,30L200,30L210,28L220,27L230,26L240,25L250,25L260,25L270,26L280,27L290,27L300,26L310,25L320,23L330,21L340,17L350,14L360,10L370,8L380,6L390,6L400,6L410,8L420,11L430,14L440,16L450,19L460,21L470,22L480,22L490,22L500,22L510,22L520,22L530,23L540,25L550,27L560,29L570,31L580,33L590,33L600,32L610,31L620,28L630,24L640,21L650,17L660,14L670,11L680,10L690,10L700,10L710,12L720,13L730,14L740,15L750,15L760,15L770,14L780,13L790,13L800,14L810,15L820,17L830,19L840,23L850,26L860,30L870,32L880,34L890,34L900,34L910,32L920,29L930,26L940,24L950,21L960,19L970,18L980,18L990,18L1000,18"/><path d="M0,8L10,9L20,10L30,12L40,14L50,15L60,16L70,17L80,16L90,16L100,16L110,16L120,17L130,19L140,21L150,24L160,28L170,31L180,33L190,34L200,34L210,33L220,31L230,28L240,25L250,22L260,19L270,17L280,16L290,15L300,15L310,15L320,16L330,16L340,15L350,14L360,13L370,11L380,10L390,9L400,9L410,9L420,11L430,14L440,18L450,22L460,25L470,28L480,31L490,32L500,32L510,31L520,30L530,28L540,26L550,25L560,24L570,23L580,24L590,24L600,24L610,24L620,23L630,21L640,19L650,16L660,12L670,9L680,7L690,6L700,6L710,7L720,9L730,12L740,15L750,18L760,21L770,23L780,24L790,25L800,25L810,25L820,24L830,24L840,25L850,26L860,27L870,29L880,30L890,31L900,31L910,31L920,29L930,26L940,22L950,18L960,15L970,12L980,9L990,8L1000,8"/><path d="M0,6L10,6L20,7L30,10L40,13L50,16L60,20L70,23L80,26L90,27L100,28L110,28L120,27L130,26L140,26L150,25L160,26L170,26L180,27L190,28L200,29L210,29L220,28L230,26L240,24L250,20L260,17L270,13L280,10L290,8L300,7L310,7L320,8L330,10L340,12L350,14L360,16L370,18L380,19L390,19L400,19L410,19L420,19L430,20L440,21L450,23L460,26L470,28L480,31L490,33L500,34L510,34L520,33L530,30L540,27L550,24L560,20L570,17L580,14L590,13L600,12L610,12L620,13L630,14L640,14L650,15L660,14L670,14L680,13L690,12L700,11L710,11L720,12L730,14L740,16L750,20L760,23L770,27L780,30L790,32L800,33L810,33L820,32L830,30L840,28L850,26L860,24L870,22L880,21L890,21L900,21L910,21L920,21L930,20L940,19L950,17L960,14L970,12L980,9L990,7L1000,6"/><path d="M0,14L10,13L20,14L30,14L40,16L50,19L60,22L70,25L80,29L90,31L100,33L110,34L120,34L130,33L140,30L150,27L160,24L170,22L180,20L190,18L200,18L210,18L220,18L230,18L240,18L250,17L260,15L270,14L280,12L290,9L300,8L310,7L320,7L330,9L340,11L350,15L360,18L370,22L380,25L390,28L400,30L410,30L420,30L430,29L440,28L450,27L460,26L470,25L480,25L490,26L500,26L510,27L520,26L530,26L540,24L550,21L560,18L570,15L580,11L590,9L600,7L610,6L620,6L630,7L640,10L650,13L660,16L670,18L680,20L690,22L700,22L710,22L720,22L730,22L740,22L750,23L760,25L770,26L780,28L790,31L800,32L810,33L820,33L830,31L840,29L850,25L860,22L870,18L880,15L890,12L900,10L910,10L920,10L930,11L940,12L950,13L960,14L970,15L980,15L990,14L1000,14"/></svg>
+  <hr class="dblrule">
+</div></div>
+
+<div class="tabs" role="tablist" aria-label="Sections"><button class="tab" role="tab" id="tab-projects" aria-controls="panel-projects" aria-selected="true" tabindex="0">Projects</button><button class="tab" role="tab" id="tab-experience" aria-controls="panel-experience" aria-selected="false" tabindex="-1">Experience</button><button class="tab" role="tab" id="tab-education" aria-controls="panel-education" aria-selected="false" tabindex="-1">Education</button><button class="tab" role="tab" id="tab-awards" aria-controls="panel-awards" aria-selected="false" tabindex="-1">Awards</button><button class="tab" role="tab" id="tab-skills" aria-controls="panel-skills" aria-selected="false" tabindex="-1">Skills</button></div>
+<div class="panelbox"><div class="panel" role="tabpanel" id="panel-projects" aria-labelledby="tab-projects"><h2>Projects</h2><div class="entry"><div class="entry-head"><div><span class="strong">Systematic AGPU Trading Strategy</span></div><div class="when">August 2026 – Present</div></div><p class="blurb">A rules-based strategy separating a long-term core holding from a tactical position, with defined entry thresholds, position sizing, average-cost tracking, staged profit-taking and drawdown triggers.</p><ul class="notes"><li>Built a Python backtesting framework (pandas, yfinance) to test it, then revised the thresholds across iterations as results came back.</li><li>Fills simulated trades at observed market prices rather than the theoretical threshold, using minute-level data, so execution assumptions are tested rather than assumed.</li><li>The framework scores every result against ten index funds and re-runs it on data the settings never saw — it is built to tell me when a strategy is not actually working.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Personal Investment Research &amp; Portfolio Management</span></div><div class="when">September 2025 – Present</div></div><p class="blurb">Ongoing research into individual equities and ETFs, and the management of my own brokerage accounts.</p><ul class="notes"><li>Built an Excel and Google Sheets tracker comparing mega-cap equity performance against the S&amp;P 500 to measure relative return.</li><li>Research through filings, market data and charting platforms to weigh risk and allocation.</li></ul></div></div><div class="panel" role="tabpanel" id="panel-experience" aria-labelledby="tab-experience" hidden><h2>Experience</h2><div class="entry"><div class="entry-head"><div><span class="strong">Deli &amp; Food Court Team Member</span><span class="org">Festival Foods</span></div><div class="when">June 2024 – Present</div></div><div class="where">Chippewa Falls, WI</div><ul class="notes"><li>Forecast weekly demand across five stations and place the department&#x27;s replenishment orders, weighing the cost of a stockout against the cost of spoilage.</li><li>Cross-trained on every station and regularly cover shifts on short notice — a reliability record now supporting a pursuit of a deli lead role.</li></ul></div></div><div class="panel" role="tabpanel" id="panel-education" aria-labelledby="tab-education" hidden><h2>Education</h2><div class="entry"><div class="entry-head"><div><span class="strong">B.S. Actuarial Science</span><span class="org">University of Wisconsin–Eau Claire</span></div><div class="when">Expected May 2029</div></div><div class="where">Eau Claire, WI</div><ul class="notes"><li>Entered with 30+ dual-enrollment college credits</li><li>Dual-enrollment GPA 3.92</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">High School Diploma</span><span class="org">Cadott High School</span></div><div class="when">May 2026</div></div><div class="where">Cadott, WI</div><ul class="notes"><li>GPA 3.90 unweighted, 4.25 weighted</li></ul></div></div><div class="panel" role="tabpanel" id="panel-awards" aria-labelledby="tab-awards" hidden><h2>Awards</h2><div class="entry"><div class="entry-head"><div><span class="strong">Team Captain</span><span class="org">Finance &amp; Investment Challenge Bowl</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Led a three-person team to a first-place regional finish, advancing to the Wisconsin state competition.</li><li>Directed preparation across personal finance, investments, economics and risk management.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">Future Business Leaders of America</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Placed 5th in Insurance &amp; Risk Management at the Wisconsin State Leadership Conference, qualifying for the National Leadership Conference.</li></ul></div></div><div class="panel" role="tabpanel" id="panel-skills" aria-labelledby="tab-skills" hidden><h2>Skills</h2><div class="skillrow"><div class="skilllabel">Analysis</div><div class="tags"><span class="tag">Microsoft Excel</span><span class="tag">Google Sheets</span><span class="tag">Investment &amp; equity research</span><span class="tag">Inventory forecasting</span></div></div><div class="skillrow"><div class="skilllabel">Technical</div><div class="tags"><span class="tag">Python — pandas, yfinance</span><span class="tag">Backtesting &amp; simulation</span><span class="tag">Data cleaning</span></div></div><div class="skillrow"><div class="skilllabel">Other</div><div class="tags"><span class="tag">Customer service</span><span class="tag">Typing 100–110 WPM</span></div></div></div></div>
+
+<footer>
+  <span>Carter Matherne · Cadott, Wisconsin</span>
+  <span><a href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com</a></span>
+</footer>
+
+</div>
+
+<script>
+// Tabs. With JavaScript off every panel stays visible, so the page still works.
+(function () {
+  var tabs = [].slice.call(document.querySelectorAll('.tab'));
+  var panels = [].slice.call(document.querySelectorAll('.panel'));
+  if (!tabs.length) return;
+
+  function show(id, push) {
+    tabs.forEach(function (t) {
+      var on = t.id === 'tab-' + id;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    });
+    panels.forEach(function (p) { p.hidden = p.id !== 'panel-' + id; });
+    if (push && history.replaceState) history.replaceState(null, '', '#' + id);
+  }
+
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () {
+      show(t.id.replace('tab-', ''), true);
+    });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var n = tabs[(i + d + tabs.length) % tabs.length];
+      n.focus();
+      show(n.id.replace('tab-', ''), true);
+    });
+  });
+
+  // Deep links (#experience) and the back button both work.
+  function fromHash() {
+    var id = (location.hash || '').replace('#', '');
+    if (id && document.getElementById('panel-' + id)) show(id, false);
+  }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+}());
+</script>
+</body></html>
