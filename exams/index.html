@@ -186,9 +186,9 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 .faq[open] summary::after { opacity:0; transform:rotate(90deg); }
 .faq[open] summary::before { background:var(--accent); }
 
-.faqa { padding:0 8px 20px 0; max-width:66ch;
+.faqa { padding:0 8px 20px 0;
   animation:unfold .26s cubic-bezier(.22,.7,.3,1) both; }
-.faqa p { margin:0 0 11px; color:var(--body); }
+.faqa p { margin:0 0 11px; color:var(--body); max-width:66ch; }
 
 /* Figures get a ruled table rather than a paragraph of numbers. It scrolls
    inside its own box so a phone never gets a sideways page. */
@@ -211,6 +211,63 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   background:var(--tab); }
 .tnote { font-size:12.5px; color:var(--muted); margin:0 0 12px;
   max-width:62ch; }
+
+/* One level deeper: the seats inside a practice area. Quieter than the FAQ
+   rows above them so the nesting reads as nesting rather than as a second
+   list of the same weight. */
+.paybreak { margin:2px 0 16px; border:1px solid var(--edge); border-radius:4px;
+  overflow:hidden; box-shadow:inset 0 1px 0 var(--emboss); }
+.sub { border-bottom:1px solid var(--hair); background:var(--paper); }
+.sub:last-child { border-bottom:0; }
+.sub summary { list-style:none; cursor:pointer; position:relative;
+  padding:11px 34px 11px 15px; font-size:13.5px; font-weight:650;
+  color:var(--body); letter-spacing:.01em; transition:color .14s ease; }
+.sub summary::-webkit-details-marker { display:none; }
+.sub summary:hover { color:var(--accent); background:var(--tab); }
+.sub summary:focus-visible { outline:2px solid var(--accent);
+  outline-offset:-2px; }
+.sub summary::after { content:""; position:absolute; right:15px; top:50%;
+  width:6px; height:6px; margin-top:-4px; border-right:1.5px solid var(--muted);
+  border-bottom:1.5px solid var(--muted); transform:rotate(45deg);
+  transition:transform .18s ease; }
+.sub[open] > summary { color:var(--accent); background:var(--tab); }
+.sub[open] > summary::after { transform:rotate(-135deg); margin-top:-1px;
+  border-color:var(--accent); }
+.subin { padding:4px 15px 15px;
+  animation:unfold .22s cubic-bezier(.22,.7,.3,1) both; }
+.snote { font-size:12.5px; color:var(--muted); max-width:66ch;
+  margin:0 0 11px; }
+.paytable.roles { min-width:520px; }
+.paytable.roles tbody th { font-weight:600; padding-right:22px; }
+.paytable.roles tbody th span { display:block; font-weight:400;
+  font-size:11.5px; color:var(--muted); margin-top:3px; max-width:44ch;
+  line-height:1.45; }
+@media (prefers-reduced-motion: reduce) { .subin { animation:none; } }
+/* Four columns will not survive a phone, and squeezing them turns the seat
+   names into one word per line. Below 620px each row becomes a block: name,
+   what it is, then the figures as labelled lines. */
+@media (max-width:620px) {
+  .subin { padding:4px 9px 12px; }
+  .paytable.roles { min-width:0; }
+  .paytable.roles thead { display:none; }
+  .paytable.roles, .paytable.roles tbody, .paytable.roles tr,
+  .paytable.roles tbody th, .paytable.roles td { display:block;
+    width:auto; }
+  .paytable.roles tr { padding:12px 13px;
+    border-bottom:1px solid var(--hair); }
+  .paytable.roles tbody tr:last-child { border-bottom:0; }
+  .paytable.roles tbody th { border:0; padding:0 0 7px; white-space:normal;
+    font-size:13.5px; }
+  .paytable.roles tbody th span { font-size:11.5px; max-width:none; }
+  .paytable.roles td { border:0; padding:3px 0; text-align:right;
+    display:flex; justify-content:space-between; align-items:baseline;
+    gap:14px; font-size:13px; }
+  .paytable.roles td::before { content:attr(data-k); color:var(--muted);
+    font-size:10px; text-transform:uppercase; letter-spacing:.07em;
+    text-align:left; font-weight:650; }
+  .paytable.roles tbody tr:hover th,
+  .paytable.roles tbody tr:hover td { background:none; }
+}
 /* On a phone the ceiling column is the one worth seeing, and it is the one
    that falls off the right edge. Tighten everything until all four fit. */
 @media (max-width:620px) {
