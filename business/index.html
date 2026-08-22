@@ -98,7 +98,6 @@ a:hover { border-bottom-color:var(--accent); }
   .enter .slide { animation:none; }
 }
 
-.hlv { max-width:60ch; }
 
 /* ---- sheet ---- */
 .sheetwrap { position:relative; }
@@ -158,6 +157,44 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   text-transform:uppercase; letter-spacing:.09em; }
 .nowv { max-width:60ch; }
 .nowlist.wide .nowk { min-width:230px; }
+
+/* ---- FAQ ---- */
+/* Native <details>, so it opens with JS off and prints open when printed.
+   Each row is a card that lifts a little once it is open, the way the sheet
+   itself sits above the desk. */
+.faqlist { margin-top:18px; border-top:1px solid var(--hair); }
+.faq { border-bottom:1px solid var(--hair); }
+.faq summary { list-style:none; cursor:pointer; position:relative;
+  padding:15px 40px 15px 0; font-size:16px; font-weight:600; color:var(--ink);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  text-shadow:0 1px 0 var(--emboss); transition:color .14s ease; }
+.faq summary::-webkit-details-marker { display:none; }
+.faq summary:hover { color:var(--accent); }
+.faq summary:focus-visible { outline:2px solid var(--accent);
+  outline-offset:3px; border-radius:2px; }
+
+/* The marker is a ruled square that loses its cross-bar when the answer is
+   open - a plus becoming a minus, drawn rather than typed. */
+.faq summary::before, .faq summary::after { content:""; position:absolute;
+  right:11px; top:50%; background:var(--muted); transition:opacity .18s ease,
+  transform .18s ease; }
+.faq summary::before { width:11px; height:1.5px; margin-top:-0.75px;
+  right:6px; }
+.faq summary::after { width:1.5px; height:11px; margin-top:-5.5px;
+  right:10.75px; }
+.faq[open] summary { color:var(--accent); }
+.faq[open] summary::after { opacity:0; transform:rotate(90deg); }
+.faq[open] summary::before { background:var(--accent); }
+
+.faqa { padding:0 8px 20px 0; max-width:66ch;
+  animation:unfold .26s cubic-bezier(.22,.7,.3,1) both; }
+.faqa p { margin:0 0 11px; color:var(--body); }
+.faqa p:last-child { margin-bottom:0; }
+@keyframes unfold {
+  from { opacity:0; transform:translateY(-5px); }
+  to   { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .faqa { animation:none; } }
+@media print { .faq summary::before, .faq summary::after { display:none; } }
 @media (max-width:620px) {
   .nowrow { display:block; }
   .nowlist.wide .nowk, .nowk { min-width:0; margin-bottom:4px; }
