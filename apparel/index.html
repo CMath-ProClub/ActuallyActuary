@@ -56,15 +56,31 @@ a:hover { border-bottom-color:var(--accent); }
 .nav a.on { background:var(--paper); color:var(--ink); font-weight:650;
   box-shadow:0 1px 2px rgba(40,34,20,.14); }
 
-/* The only movement between pages. Declared here rather than applied by
-   script, so it is already running at first paint instead of starting after
-   the page has been on screen for a frame. */
-.sheetwrap { animation:arrive .3s cubic-bezier(.22,.7,.3,1) both; }
-@keyframes arrive {
-  from { opacity:0; transform:translateY(7px); }
+/* The only movement between pages, and the whole trick is the stagger. One
+   element fading in at the same instant as everything else is invisible - it
+   reads as the page simply appearing. Bringing the tab strip in first, then
+   the sheet, then the footer makes it read as the page being laid down, which
+   is a thing you notice.
+
+   Declared in the stylesheet rather than applied by script, so it is already
+   running at first paint. That is what keeps it smooth: there is no frame
+   where the finished page is on screen before the animation starts. */
+.nav { animation:settle .34s cubic-bezier(.22,.7,.3,1) both; }
+.sheetwrap { animation:lay .52s cubic-bezier(.19,.72,.26,1) 70ms both; }
+footer { animation:settle .4s cubic-bezier(.22,.7,.3,1) 220ms both; }
+
+@keyframes settle {
+  from { opacity:0; transform:translateY(-5px); }
   to   { opacity:1; transform:none; } }
+
+/* The sheet is a piece of paper being set down on the desk: it comes from
+   slightly above and slightly large, so the shadow reads as closing. */
+@keyframes lay {
+  from { opacity:0; transform:translateY(14px) scale(1.012); }
+  to   { opacity:1; transform:none; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .sheetwrap { animation:none; } }
+  .nav, .sheetwrap, footer { animation:none; } }
 
 /* ---- sheet ---- */
 .sheetwrap { position:relative; }
@@ -204,6 +220,23 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   animation:unfold .22s cubic-bezier(.22,.7,.3,1) both; }
 .snote { font-size:12.5px; color:var(--muted); max-width:66ch;
   margin:0 0 11px; }
+
+/* The role map. Prose rather than figures, so a list reads better than a
+   table and needs no horizontal scrolling on a phone. */
+.rcount { display:inline-block; margin-left:9px; padding:1px 7px;
+  border:1px solid var(--edge); border-radius:9px; font-size:10.5px;
+  font-weight:650; color:var(--muted); vertical-align:1px; }
+.roles-list { list-style:none; margin:0; padding:0; }
+.roles-list li { padding:12px 0; border-top:1px solid var(--hair);
+  max-width:70ch; }
+.roles-list li:first-child { border-top:0; padding-top:2px; }
+.rname { display:block; font-weight:650; font-size:14px; color:var(--ink); }
+.rwhat { display:block; margin-top:4px; color:var(--body); font-size:13.5px;
+  line-height:1.5; }
+.rway { display:block; margin-top:6px; color:var(--muted); font-size:12px;
+  line-height:1.5; }
+.rway b { color:var(--accent); font-weight:650; text-transform:uppercase;
+  letter-spacing:.07em; font-size:10px; margin-right:6px; }
 .paytable.roles { min-width:520px; }
 .paytable.roles tbody th { font-weight:600; padding-right:22px; }
 .paytable.roles tbody th span { display:block; font-weight:400;
