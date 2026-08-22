@@ -7,7 +7,8 @@
 <meta property="og:type" content="profile">
 <meta property="og:title" content="Carter Matherne — Actuarial Science">
 <meta property="og:description" content="I am an aspiring actuary who has been obsessed with math and finance for as long as I can remember. I am studying actuarial science at UW–Eau Claire, and I spend my own time building the tools that test whether an investing idea actually holds up.">
-<meta property="og:url" content="https://actuallyactuary.com">
+<meta property="og:url" content="https://actuallyactuary.com/">
+<link rel="canonical" href="https://actuallyactuary.com/">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Carter Matherne — Actuarial Science">
 <meta name="twitter:description" content="I am an aspiring actuary who has been obsessed with math and finance for as long as I can remember. I am studying actuarial science at UW–Eau Claire, and I spend my own time building the tools that test whether an investing idea actually holds up.">
@@ -237,6 +238,15 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   line-height:1.5; }
 .rway b { color:var(--accent); font-weight:650; text-transform:uppercase;
   letter-spacing:.07em; font-size:10px; margin-right:6px; }
+
+/* The way back. A reader who arrived at a salary table from a search should
+   be one click from the person who wrote it. */
+.whoami { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; }
+.whoami a { border:1px solid var(--edge); border-radius:4px; padding:8px 13px;
+  font-size:13px; font-weight:600; color:var(--accent); background:var(--tab);
+  box-shadow:inset 0 1px 0 var(--emboss);
+  transition:border-color .14s ease, transform .14s ease; }
+.whoami a:hover { border-color:var(--accent); transform:translateY(-1px); }
 .paytable.roles { min-width:520px; }
 .paytable.roles tbody th { font-weight:600; padding-right:22px; }
 .paytable.roles tbody th span { display:block; font-weight:400;
