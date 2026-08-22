@@ -9,9 +9,15 @@
 <meta property="og:description" content="Actually Actuary merchandise.">
 <meta property="og:url" content="https://apparel.actuallyactuary.com/">
 <link rel="canonical" href="https://apparel.actuallyactuary.com/">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://actuallyactuary.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="Carter Matherne">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://actuallyactuary.com/og.png">
 <meta name="twitter:title" content="Apparel — Carter Matherne">
 <meta name="twitter:description" content="Actually Actuary merchandise.">
+
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fbfaf7'/%3E%3Cpath d='M3 27 C11 26 18 22 22 15 C25 10 27 7 29 5' stroke='%231f3a5f' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Security printing, not software: bond paper on a desk, engraved headings,
@@ -117,6 +123,21 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   opacity:.20; pointer-events:none; }
 .rosette path { fill:none; stroke:var(--accent); stroke-width:.55;
   vector-effect:non-scaling-stroke; }
+
+/* The portrait, if there is one. Set like a plate tipped into a printed
+   book: a hairline rule, a tight shadow, square rather than a circle. */
+.portrait { position:absolute; top:20px; right:24px; width:118px; height:118px;
+  object-fit:cover; border:1px solid var(--edge); border-radius:3px;
+  box-shadow:0 1px 2px rgba(40,34,20,.14), 0 10px 22px -12px rgba(40,34,20,.5);
+  background:var(--tab); }
+/* With a photo present the seal moves out from behind it. */
+.portrait ~ .rosette { top:150px; right:30px; width:104px; height:104px;
+  opacity:.14; }
+@media (max-width:700px) {
+  .portrait { position:static; display:block; margin:0 0 16px;
+    width:96px; height:96px; }
+  .portrait ~ .rosette { display:none; }
+}
 
 /* Numbers, struck into the page. Actuaries lead with figures; so does this. */
 .numbers { display:grid; grid-template-columns:repeat(3,1fr);
@@ -423,6 +444,7 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <p class="sub thin" style="font-size:14px;margin-top:3px"></p>
   <p class="tagline">Actually Actuary merchandise.</p>
   <div class="links"></div>
+  
   
   
   <hr class="dblrule">

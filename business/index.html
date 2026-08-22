@@ -9,9 +9,15 @@
 <meta property="og:description" content="Sponsorships, tutoring, and freelance quantitative work.">
 <meta property="og:url" content="https://business.actuallyactuary.com/">
 <link rel="canonical" href="https://business.actuallyactuary.com/">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://actuallyactuary.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="Carter Matherne">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://actuallyactuary.com/og.png">
 <meta name="twitter:title" content="Business Inquiries — Carter Matherne">
 <meta name="twitter:description" content="Sponsorships, tutoring, and freelance quantitative work.">
+
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fbfaf7'/%3E%3Cpath d='M3 27 C11 26 18 22 22 15 C25 10 27 7 29 5' stroke='%231f3a5f' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Security printing, not software: bond paper on a desk, engraved headings,
@@ -117,6 +123,21 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   opacity:.20; pointer-events:none; }
 .rosette path { fill:none; stroke:var(--accent); stroke-width:.55;
   vector-effect:non-scaling-stroke; }
+
+/* The portrait, if there is one. Set like a plate tipped into a printed
+   book: a hairline rule, a tight shadow, square rather than a circle. */
+.portrait { position:absolute; top:20px; right:24px; width:118px; height:118px;
+  object-fit:cover; border:1px solid var(--edge); border-radius:3px;
+  box-shadow:0 1px 2px rgba(40,34,20,.14), 0 10px 22px -12px rgba(40,34,20,.5);
+  background:var(--tab); }
+/* With a photo present the seal moves out from behind it. */
+.portrait ~ .rosette { top:150px; right:30px; width:104px; height:104px;
+  opacity:.14; }
+@media (max-width:700px) {
+  .portrait { position:static; display:block; margin:0 0 16px;
+    width:96px; height:96px; }
+  .portrait ~ .rosette { display:none; }
+}
 
 /* Numbers, struck into the page. Actuaries lead with figures; so does this. */
 .numbers { display:grid; grid-template-columns:repeat(3,1fr);
@@ -425,8 +446,9 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <div class="links"></div>
   
   
+  
   <hr class="dblrule">
-  <p class="lead">Email is the fastest route and I answer everything, including the enquiries I have to turn down.</p><h2 class="sechead">Available now</h2><div class="nowlist wide"><div class="nowrow"><div class="nowk">Sponsorships</div><div class="nowv">Placements in Actually Actuary videos, or a dedicated video on a product an audience of finance and maths students would genuinely use.</div></div><div class="nowrow"><div class="nowk">Tutoring</div><div class="nowv">Calculus, probability, statistics, financial mathematics, and the material behind Exam P and Exam FM. Also Excel and Python for people who need them for a job rather than for a grade.</div></div><div class="nowrow"><div class="nowk">Data and analysis</div><div class="nowv">Cleaning a messy dataset, building the model on top of it, and writing up what it does and does not support. Python, pandas, SQL and Excel.</div></div><div class="nowrow"><div class="nowk">Backtesting and portfolio analysis</div><div class="nowv">Testing an investment rule honestly - out of sample, against buy-and-hold and against a fixed basket of index funds - and reporting it when the rule does not work.</div></div></div><h2 class="sechead">As I qualify</h2><p class="note">Listed so you know where this is going, not so you can hire me for it today. I will say plainly if something you need sits here rather than above.</p><div class="nowlist wide"><div class="nowrow"><div class="nowk">Actuarial work</div><div class="nowv">Pricing, reserving and experience studies, as I clear exams and the coursework behind them.</div></div><div class="nowrow"><div class="nowk">Asset-liability management</div><div class="nowv">Matching an asset portfolio to a liability stream, and stress testing it.</div></div><div class="nowrow"><div class="nowk">Consulting</div><div class="nowv">Longer engagements once there is credentialed work behind me to justify the word.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Enquiries</span></div><div class="when"></div></div><p class="blurb">Include what you have in mind, the scope, and a rough timeline. If it is not something I can do well, I will tell you that instead of taking it on.</p><a class="demo" href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com <span aria-hidden="true">&rarr;</span></a></div>
+  <p class="lead">Email is the fastest route and I answer everything, including the enquiries I have to turn down.</p><h2 class="sechead">Available now</h2><div class="nowlist wide"><div class="nowrow"><div class="nowk">Sponsorships (from launch)</div><div class="nowv">Actually Actuary has no published videos yet and therefore no audience to sell, and I am not going to pretend otherwise. Get in touch if you want to talk about the channel once it launches - the audience it is aimed at is finance and maths students, and I will only run a product I would actually use.</div></div><div class="nowrow"><div class="nowk">Tutoring — $20/hour</div><div class="nowv">High-school and early-undergraduate mathematics, plus accounting: the accounting equation, journal entries, trial balances and the three statements. Calculus and probability at the level I have covered them. Reach out to check availability - I am carrying a full course load, so it depends on the week.</div></div><div class="nowrow"><div class="nowk">Data and analysis</div><div class="nowv">Cleaning a messy dataset, building the model on top of it, and writing up what it does and does not support. Python and pandas. I will tell you where the analysis stops being able to answer the question.</div></div><div class="nowrow"><div class="nowk">Backtesting and portfolio analysis</div><div class="nowv">Testing an investment rule honestly - out of sample, against buy-and-hold and against a fixed basket of index funds - and reporting it when the rule does not work.</div></div></div><h2 class="sechead">As I qualify</h2><p class="note">Listed so you know where this is going, not so you can hire me for it today. I will say plainly if something you need sits here rather than above.</p><div class="nowlist wide"><div class="nowrow"><div class="nowk">Actuarial work</div><div class="nowv">Pricing, reserving and experience studies, as I clear exams and the coursework behind them.</div></div><div class="nowrow"><div class="nowk">Asset-liability management</div><div class="nowv">Matching an asset portfolio to a liability stream, and stress testing it.</div></div><div class="nowrow"><div class="nowk">Consulting</div><div class="nowv">Longer engagements once there is credentialed work behind me to justify the word.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Enquiries</span></div><div class="when"></div></div><p class="blurb">Include what you have in mind, the scope, and a rough timeline. If it is not something I can do well, I will tell you that instead of taking it on.</p><a class="demo" href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com <span aria-hidden="true">&rarr;</span></a></div>
 </div></div>
 
 <footer>

@@ -9,9 +9,15 @@
 <meta property="og:description" content="A rules-based strategy, and the framework built to disprove it.">
 <meta property="og:url" content="https://projects.actuallyactuary.com/backtester/">
 <link rel="canonical" href="https://projects.actuallyactuary.com/backtester/">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://actuallyactuary.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="Carter Matherne">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://actuallyactuary.com/og.png">
 <meta name="twitter:title" content="Systematic AGPU Trading Strategy — Carter Matherne">
 <meta name="twitter:description" content="A rules-based strategy, and the framework built to disprove it.">
+
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fbfaf7'/%3E%3Cpath d='M3 27 C11 26 18 22 22 15 C25 10 27 7 29 5' stroke='%231f3a5f' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Security printing, not software: bond paper on a desk, engraved headings,
@@ -117,6 +123,21 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   opacity:.20; pointer-events:none; }
 .rosette path { fill:none; stroke:var(--accent); stroke-width:.55;
   vector-effect:non-scaling-stroke; }
+
+/* The portrait, if there is one. Set like a plate tipped into a printed
+   book: a hairline rule, a tight shadow, square rather than a circle. */
+.portrait { position:absolute; top:20px; right:24px; width:118px; height:118px;
+  object-fit:cover; border:1px solid var(--edge); border-radius:3px;
+  box-shadow:0 1px 2px rgba(40,34,20,.14), 0 10px 22px -12px rgba(40,34,20,.5);
+  background:var(--tab); }
+/* With a photo present the seal moves out from behind it. */
+.portrait ~ .rosette { top:150px; right:30px; width:104px; height:104px;
+  opacity:.14; }
+@media (max-width:700px) {
+  .portrait { position:static; display:block; margin:0 0 16px;
+    width:96px; height:96px; }
+  .portrait ~ .rosette { display:none; }
+}
 
 /* Numbers, struck into the page. Actuaries lead with figures; so does this. */
 .numbers { display:grid; grid-template-columns:repeat(3,1fr);
@@ -425,8 +446,9 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <div class="links"></div>
   
   
+  
   <hr class="dblrule">
-  <p class="lead">Most backtests are built to make an idea look good. This one is built to catch me out.</p><div class="entry"><div class="entry-head"><div><span class="strong">The problem with backtests</span></div></div><div class="prose"><p>A backtest run on the same history you used to choose your settings will almost always look excellent. That is not evidence — it is the definition of fitting the past.</p><p>So the framework treats every flattering result as suspect until it survives tests designed to break it.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">What it checks</span></div></div><div class="prose"><p>Every result is scored against a fixed basket of ten index funds, chosen in advance and never reordered — picking a flattering benchmark after seeing your result is the easiest way to fool yourself.</p><p>Settings are re-chosen using only older data and then traded on stretches the strategy has never seen.</p><p>Trades are reshuffled thousands of times to separate genuine edge from the luck of the order they happened to arrive in.</p><p>Every fill pays slippage and commission, and when a stop and a target fall inside the same bar the stop is assumed to hit first, because price data cannot say which came first.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">How it is built</span></div></div><div class="prose"><p>Python, pandas and yfinance, with no paid data feeds.</p><p>Three strategy engines: a plain-English plan builder, a YAML rule engine, and a dedicated simulator for the ladder strategy itself.</p><p>288 automated checks across five test suites, including two that verify no trade can ever use information from the future.</p></div></div>
+  <p class="lead">Most backtests are built to make an idea look good. This one is built to catch me out.</p><div class="entry"><div class="entry-head"><div><span class="strong">The problem with backtests</span></div></div><div class="prose"><p>A backtest run on the same history you used to choose your settings will almost always look excellent. That is not evidence — it is the definition of fitting the past.</p><p>So the framework treats every flattering result as suspect until it survives tests designed to break it.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">What it checks</span></div></div><div class="prose"><p>Every result is scored against a fixed basket of ten index funds, chosen in advance and never reordered — picking a flattering benchmark after seeing your result is the easiest way to fool yourself.</p><p>Settings are re-chosen using only older data and then traded on stretches the strategy has never seen.</p><p>Trades are reshuffled thousands of times to separate genuine edge from the luck of the order they happened to arrive in.</p><p>Every fill pays slippage and commission, and when a stop and a target fall inside the same bar the stop is assumed to hit first, because price data cannot say which came first.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">The strategy I killed</span></div></div><div class="prose"><p>Before this one I ran something much cruder: buy every dip. If a position dropped about 2%, I put roughly 70% of my available capital in.</p><p>It worked. That is the part worth saying out loud, because it is the reason the framework exists.</p><p>It worked because the market I ran it in went up, and because I got lucky about which dips kept dipping. Nothing about the rule made it good - concentrating that much capital into one falling position on a 2% trigger is a bet that the fall stops, and over decades that bet does not have to be wrong very often to end badly.</p><p>So I killed a strategy that was making me money, which is a harder thing to do than killing one that is not, and built something that would have told me the first one was fragile before the market did.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">How it is built</span></div></div><div class="prose"><p>Python, pandas and yfinance, with no paid data feeds.</p><p>Three strategy engines: a plain-English plan builder, a YAML rule engine, and a dedicated simulator for the ladder strategy itself.</p><p>280+ automated checks across five test suites, including two that verify no trade can ever use information from the future.</p></div></div>
 </div></div>
 
 <footer>
