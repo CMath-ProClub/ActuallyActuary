@@ -52,52 +52,19 @@ a:hover { border-bottom-color:var(--accent); }
   border-radius:5px; box-shadow:inset 0 1px 0 var(--emboss); }
 .nav a { font-size:13px; font-weight:550; color:var(--muted); border:0;
   padding:7px 13px; border-radius:3px; }
-.nav a:hover { color:var(--ink); }
+.nav a:hover { color:var(--ink); background:var(--paper); }
 .nav a.on { background:var(--paper); color:var(--ink); font-weight:650;
   box-shadow:0 1px 2px rgba(40,34,20,.14); }
 
-/* With JS the raised plate is a single element that slides between tabs, so
-   the tab you are leaving hands it to the tab you are arriving at. Without
-   JS the .on rule above still paints it and nothing moves. */
-.nav.js { position:relative; }
-.nav.js a.on { background:transparent; box-shadow:none; }
-.nav.js a { position:relative; z-index:1; transition:color .18s ease; }
-.nav.js a.lit { color:var(--ink); }
-.tabmark { display:none; }
-.nav.js .tabmark { display:block; position:absolute; top:0; left:0;
-  width:0; height:0; border-radius:3px; z-index:0;
-  background:var(--paper); box-shadow:0 1px 2px rgba(40,34,20,.14);
-  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1),
-             width var(--slide,.42s) cubic-bezier(.62,.02,.32,1),
-             height var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
-
-/* ---- page-to-page travel ---- */
-/* The sections sit side by side on one strip. Moving between two of them
-   slides the strip, so the pages in between are genuinely passed rather than
-   skipped over. */
-.stage { position:relative; }
-.slide { will-change:transform; }
-.stage.moving { overflow:hidden; }
-.stage.moving .slide {
-  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
-.flip { position:absolute; inset:0; pointer-events:none;
-  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
-.fpanel { position:absolute; top:0; width:100%; }
-.fsheet { background:var(--paper); border:1px solid var(--edge);
-  box-shadow:var(--lift); padding:40px 46px 38px; min-height:340px; }
-.fsheet h1 { margin:0; }
-.fsheet .sub { margin-top:7px; max-width:60ch; }
-.fsheet .dblrule { margin-top:26px; }
-.enter .slide { animation:settle .34s cubic-bezier(.22,.7,.3,1) both; }
-@keyframes settle {
-  from { opacity:0; transform:translateY(8px) scale(.994); }
+/* The only movement between pages. Declared here rather than applied by
+   script, so it is already running at first paint instead of starting after
+   the page has been on screen for a frame. */
+.sheetwrap { animation:arrive .3s cubic-bezier(.22,.7,.3,1) both; }
+@keyframes arrive {
+  from { opacity:0; transform:translateY(7px); }
   to   { opacity:1; transform:none; } }
-
 @media (prefers-reduced-motion: reduce) {
-  .nav.js .tabmark, .stage.moving .slide, .flip { transition:none; }
-  .enter .slide { animation:none; }
-}
-
+  .sheetwrap { animation:none; } }
 
 /* ---- sheet ---- */
 .sheetwrap { position:relative; }
@@ -404,9 +371,8 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 <body>
 <div class="shell">
 
-<nav class="nav" data-here="6"><span class="tabmark" aria-hidden="true"></span><a href="https://actuallyactuary.com/" class="tab" data-i="0" data-sub="www" data-t="Carter Matherne" data-l="Actuarial Science student · University of Wisconsin–Eau Claire">Home</a><a href="https://projects.actuallyactuary.com/" class="tab" data-i="1" data-sub="projects" data-t="Projects" data-l="Things I have built, and what testing them actually showed.">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab" data-i="2" data-sub="resume" data-t="Résumé" data-l="Education, experience and awards. The PDF is the same thing on one page.">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab" data-i="3" data-sub="exams" data-t="Actuarial Exams" data-l="Where I am in the actuarial exams, and what I learn preparing for each one.">Exams</a><a href="https://content.actuallyactuary.com/" class="tab" data-i="4" data-sub="content" data-t="Content" data-l="Actually Actuary on YouTube, and where else to find me.">Content</a><a href="https://apparel.actuallyactuary.com/" class="tab" data-i="5" data-sub="apparel" data-t="Apparel" data-l="Actually Actuary merchandise.">Apparel</a><a href="https://support.actuallyactuary.com/" class="tab on" data-i="6" data-sub="support" data-t="Support" data-l="Questions, or help with anything here. Ask and I will answer.">Support</a><a href="https://business.actuallyactuary.com/" class="tab" data-i="7" data-sub="business" data-t="Business Inquiries" data-l="Sponsorships, tutoring, and freelance quantitative work.">Business</a></nav>
+<nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://apparel.actuallyactuary.com/" class="tab">Apparel</a><a href="https://support.actuallyactuary.com/" class="tab on">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav>
 
-<div class="stage"><div class="slide">
 <div class="sheetwrap"><div class="sheet inner">
   <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <span>Support</span></div>
   <h1>Support</h1>
@@ -448,149 +414,7 @@ how far each track runs, not what to expect.</p><p>Read the last column first. T
   <span>Carter Matherne · Cadott, Wisconsin</span>
   <span><a href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com</a></span>
 </footer>
-</div></div>
 
 </div>
-<script>
-/* Moving between sections slides one strip of pages sideways, so going from
-   Home to Resume genuinely passes Projects instead of cutting to it. The tab
-   plate travels with it and lights each tab it crosses.
-
-   Pages live on separate subdomains, so there is no shared document to
-   animate across. The outgoing page plays the whole journey and ends holding
-   a panel that looks like the destination; the arriving page recognises where
-   it came from via document.referrer and settles in from there. The seam
-   lands while the destination panel is on screen. */
-(function () {
-  var nav = document.querySelector('.nav');
-  if (!nav || !window.requestAnimationFrame) return;
-  var tabs = [].slice.call(nav.querySelectorAll('a.tab'));
-  var mark = nav.querySelector('.tabmark');
-  if (!tabs.length || !mark) return;
-
-  var here = parseInt(nav.getAttribute('data-here'), 10) || 0;
-  var stage = document.querySelector('.stage');
-  var slide = stage && stage.querySelector('.slide');
-  var reduce = window.matchMedia
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  nav.classList.add('js');
-
-  function place(i, animate) {
-    var t = tabs[i];
-    if (!t) return;
-    var cs = getComputedStyle(nav);
-    var bl = parseFloat(cs.borderLeftWidth) || 0;
-    var bt = parseFloat(cs.borderTopWidth) || 0;
-    if (!animate) mark.style.transition = 'none';
-    mark.style.width = t.offsetWidth + 'px';
-    mark.style.height = t.offsetHeight + 'px';
-    mark.style.transform = 'translate(' + (t.offsetLeft - bl) + 'px,'
-      + (t.offsetTop - bt) + 'px)';
-    if (!animate) { void mark.offsetWidth; mark.style.transition = ''; }
-  }
-
-  place(here, false);
-  window.addEventListener('resize', function () { place(here, false); });
-
-  /* Match a URL to a tab by host AND path, so this works whether the sections
-     are subdomains or plain folders. */
-  function indexOf(url) {
-    if (!url) return -1;
-    var a;
-    try { a = new URL(url, location.href); } catch (e) { return -1; }
-    var ap = a.pathname.replace(/\/+$/, '');
-    for (var i = 0; i < tabs.length; i++) {
-      var b = new URL(tabs[i].getAttribute('href'), location.href);
-      if (b.host === a.host && b.pathname.replace(/\/+$/, '') === ap) return i;
-    }
-    return -1;
-  }
-
-  function travel(to, href) {
-    var steps = Math.abs(to - here);
-    var dir = to > here ? 1 : -1;
-    /* Long jumps speed up per step, or crossing seven tabs would crawl. */
-    var dur = Math.min(880, Math.max(320, steps * (steps > 3 ? 155 : 215)));
-    stage.style.setProperty('--slide', dur + 'ms');
-    nav.style.setProperty('--slide', dur + 'ms');
-
-    var strip = document.createElement('div');
-    strip.className = 'flip';
-    /* Draw the ghosts where the reader is actually looking, not at the top of
-       a page they may have scrolled halfway down. */
-    var top = Math.max(0, (window.pageYOffset || 0) - stage.offsetTop);
-    for (var k = 1; k <= steps; k++) {
-      var t = tabs[here + dir * k];
-      var p = document.createElement('div');
-      p.className = 'fpanel';
-      p.style.left = (dir * k * 100) + '%';
-      p.style.top = top + 'px';
-      p.innerHTML = '<div class="fsheet"><h1></h1><p class="sub"></p>'
-        + '<hr class="dblrule"></div>';
-      p.querySelector('h1').textContent =
-        t.getAttribute('data-t') || t.textContent;
-      p.querySelector('.sub').textContent = t.getAttribute('data-l') || '';
-      strip.appendChild(p);
-    }
-    stage.style.height = stage.offsetHeight + 'px';
-    stage.appendChild(strip);
-    stage.classList.add('moving');
-
-    for (var j = 1; j < steps; j++) {
-      (function (tab, at, hold) {
-        setTimeout(function () {
-          tab.classList.add('lit');
-          setTimeout(function () { tab.classList.remove('lit'); }, hold);
-        }, at);
-      })(tabs[here + dir * j], dur * (j - 0.5) / steps, dur / steps);
-    }
-
-    tabs[here].classList.remove('on');
-    tabs[to].classList.add('on');
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        var x = 'translateX(' + (-dir * steps * 100) + '%)';
-        slide.style.transform = x;
-        strip.style.transform = x;
-        place(to, true);
-      });
-    });
-    setTimeout(function () { location.href = href; }, dur);
-  }
-
-  nav.addEventListener('click', function (e) {
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    var a = e.target.closest ? e.target.closest('a.tab') : null;
-    if (!a) return;
-    var to = parseInt(a.getAttribute('data-i'), 10);
-    if (to === here) { e.preventDefault(); return; }
-    if (reduce || !stage || !slide) return;
-    e.preventDefault();
-    travel(to, a.href);
-  });
-
-  /* Arriving. Pick the motion up where the previous page left it. */
-  var from = indexOf(document.referrer);
-  if (!reduce && from !== -1 && from !== here) {
-    nav.style.setProperty('--slide', '360ms');
-    document.body.classList.add('enter');
-    place(from, false);
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () { place(here, true); });
-    });
-  }
-
-  /* Coming back through history restores the mid-slide state; undo it. */
-  window.addEventListener('pageshow', function (ev) {
-    if (!ev.persisted || !stage) return;
-    var old = stage.querySelector('.flip');
-    if (old) old.parentNode.removeChild(old);
-    stage.classList.remove('moving');
-    stage.style.height = '';
-    if (slide) slide.style.transform = '';
-    place(here, false);
-  });
-})();
-</script>
+<script type="speculationrules">{"prefetch":[{"where":{"href_matches":"https://*.actuallyactuary.com/*"},"eagerness":"moderate"}]}</script>
 </body></html>
