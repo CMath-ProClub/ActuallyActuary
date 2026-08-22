@@ -52,9 +52,53 @@ a:hover { border-bottom-color:var(--accent); }
   border-radius:5px; box-shadow:inset 0 1px 0 var(--emboss); }
 .nav a { font-size:13px; font-weight:550; color:var(--muted); border:0;
   padding:7px 13px; border-radius:3px; }
-.nav a:hover { color:var(--ink); background:var(--paper); }
+.nav a:hover { color:var(--ink); }
 .nav a.on { background:var(--paper); color:var(--ink); font-weight:650;
   box-shadow:0 1px 2px rgba(40,34,20,.14); }
+
+/* With JS the raised plate is a single element that slides between tabs, so
+   the tab you are leaving hands it to the tab you are arriving at. Without
+   JS the .on rule above still paints it and nothing moves. */
+.nav.js { position:relative; }
+.nav.js a.on { background:transparent; box-shadow:none; }
+.nav.js a { position:relative; z-index:1; transition:color .18s ease; }
+.nav.js a.lit { color:var(--ink); }
+.tabmark { display:none; }
+.nav.js .tabmark { display:block; position:absolute; top:0; left:0;
+  width:0; height:0; border-radius:3px; z-index:0;
+  background:var(--paper); box-shadow:0 1px 2px rgba(40,34,20,.14);
+  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1),
+             width var(--slide,.42s) cubic-bezier(.62,.02,.32,1),
+             height var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
+
+/* ---- page-to-page travel ---- */
+/* The sections sit side by side on one strip. Moving between two of them
+   slides the strip, so the pages in between are genuinely passed rather than
+   skipped over. */
+.stage { position:relative; }
+.slide { will-change:transform; }
+.stage.moving { overflow:hidden; }
+.stage.moving .slide {
+  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
+.flip { position:absolute; inset:0; pointer-events:none;
+  transition:transform var(--slide,.42s) cubic-bezier(.62,.02,.32,1); }
+.fpanel { position:absolute; top:0; width:100%; }
+.fsheet { background:var(--paper); border:1px solid var(--edge);
+  box-shadow:var(--lift); padding:40px 46px 38px; min-height:340px; }
+.fsheet h1 { margin:0; }
+.fsheet .sub { margin-top:7px; max-width:60ch; }
+.fsheet .dblrule { margin-top:26px; }
+.enter .slide { animation:settle .34s cubic-bezier(.22,.7,.3,1) both; }
+@keyframes settle {
+  from { opacity:0; transform:translateY(8px) scale(.994); }
+  to   { opacity:1; transform:none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav.js .tabmark, .stage.moving .slide, .flip { transition:none; }
+  .enter .slide { animation:none; }
+}
+
+.hlv { max-width:60ch; }
 
 /* ---- sheet ---- */
 .sheetwrap { position:relative; }
@@ -85,12 +129,70 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   border-bottom:1px solid var(--edge); height:3px; margin:20px 0 0; }
 
 /* ---- home ---- */
-.highlights { margin-top:26px; border-top:1px solid var(--hair); }
-.hl { display:flex; gap:20px; padding:13px 0; border-bottom:1px solid var(--hair);
-  align-items:baseline; }
-.hlk { min-width:88px; color:var(--muted); font-size:12.5px;
+/* The seal: an engine-turned rosette, sunk into the paper behind the name. */
+.rosette { position:absolute; top:18px; right:22px; width:132px; height:132px;
+  opacity:.20; pointer-events:none; }
+.rosette path { fill:none; stroke:var(--accent); stroke-width:.55;
+  vector-effect:non-scaling-stroke; }
+
+/* Numbers, struck into the page. Actuaries lead with figures; so does this. */
+.numbers { display:grid; grid-template-columns:repeat(3,1fr);
+  gap:1px; background:var(--edge); border:1px solid var(--edge); border-radius:4px;
+  margin-top:28px; overflow:hidden; box-shadow:inset 0 1px 0 var(--emboss); }
+.num { background:var(--paper); padding:15px 14px 13px; text-align:center; }
+.numv { display:block;
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:29px; font-weight:600; color:var(--ink); letter-spacing:-0.02em;
+  line-height:1.05; text-shadow:0 1px 0 var(--emboss); }
+.numk { display:block; font-size:11.5px; color:var(--muted); margin-top:5px;
+  line-height:1.35; }
+@media (max-width:560px) { .numbers { grid-template-columns:repeat(2,1fr); } }
+/* The seal sits in the margin beside the name. On a phone there is no margin
+   to sit in, so it would print straight through the subtitle. */
+@media (max-width:700px) { .rosette { display:none; } }
+
+.nowlist { border-top:1px solid var(--hair); }
+.nowrow { display:flex; gap:20px; padding:14px 0;
+  border-bottom:1px solid var(--hair); align-items:baseline; }
+.nowk { min-width:92px; color:var(--accent); font-size:12.5px; font-weight:650;
   text-transform:uppercase; letter-spacing:.09em; }
-.hlv { max-width:60ch; }
+.nowv { max-width:60ch; }
+.nowlist.wide .nowk { min-width:230px; }
+@media (max-width:620px) {
+  .nowrow { display:block; }
+  .nowlist.wide .nowk, .nowk { min-width:0; margin-bottom:4px; }
+}
+
+/* The featured project: a card raised off the sheet it sits on. */
+.feature { display:block; margin-top:30px; padding:22px 24px; border-radius:5px;
+  border:1px solid var(--edge); background:var(--tab); position:relative;
+  box-shadow:inset 0 1px 0 var(--emboss), 0 2px 3px rgba(40,34,20,.07),
+             0 14px 28px -14px rgba(40,34,20,.42);
+  transition:transform .14s ease, box-shadow .18s ease; }
+.feature:hover { transform:translateY(-3px);
+  box-shadow:inset 0 1px 0 var(--emboss), 0 4px 6px rgba(40,34,20,.09),
+             0 22px 40px -16px rgba(40,34,20,.5); border-color:var(--accent); }
+.ftag { display:block; font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.14em; color:var(--muted); font-weight:650; }
+.fname { display:block; margin-top:7px;
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:22px; font-weight:600; color:var(--ink); letter-spacing:-0.015em;
+  text-shadow:0 1px 0 var(--emboss); }
+.fblurb { display:block; margin-top:8px; color:var(--body); max-width:56ch; }
+.fgo { display:block; margin-top:12px; font-size:13.5px; font-weight:600;
+  color:var(--accent); }
+
+/* Voice. Set larger and looser than body copy, because it is the one place
+   the page is allowed to sound like a person rather than a document. */
+.beliefs { list-style:none; margin:0; padding:0; }
+.beliefs li { position:relative; padding:11px 0 11px 30px; max-width:60ch;
+  font-size:16.5px; line-height:1.5; color:var(--ink);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  border-bottom:1px solid var(--hair); }
+.beliefs li:last-child { border-bottom:0; }
+.beliefs li::before { content:"“"; position:absolute; left:1px; top:21px;
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:34px; line-height:0; color:var(--edge); }
 .sechead { font-size:11.5px; text-transform:uppercase; letter-spacing:.13em;
   color:var(--muted); font-weight:650; margin:30px 0 12px;
   padding-bottom:8px; border-bottom:1px solid var(--edge); }
@@ -178,8 +280,9 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 <body>
 <div class="shell">
 
-<nav class="nav"><a href="https://actuallyactuary.com/" class="">Home</a><a href="https://projects.actuallyactuary.com/" class="on">Projects</a><a href="https://resume.actuallyactuary.com/" class="">Résumé</a><a href="https://exams.actuallyactuary.com/" class="">Exams</a><a href="https://content.actuallyactuary.com/" class="">Content</a><a href="https://apparel.actuallyactuary.com/" class="">Apparel</a><a href="https://support.actuallyactuary.com/" class="">Support</a><a href="https://business.actuallyactuary.com/" class="">Business</a></nav>
+<nav class="nav" data-here="1"><span class="tabmark" aria-hidden="true"></span><a href="https://actuallyactuary.com/" class="tab" data-i="0" data-sub="www" data-t="Carter Matherne" data-l="Actuarial Science student · University of Wisconsin–Eau Claire">Home</a><a href="https://projects.actuallyactuary.com/" class="tab on" data-i="1" data-sub="projects" data-t="Projects" data-l="Things I have built, and what testing them actually showed.">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab" data-i="2" data-sub="resume" data-t="Résumé" data-l="Education, experience and awards. The PDF is the same thing on one page.">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab" data-i="3" data-sub="exams" data-t="Actuarial Exams" data-l="Where I am in the actuarial exams, and what I learn preparing for each one.">Exams</a><a href="https://content.actuallyactuary.com/" class="tab" data-i="4" data-sub="content" data-t="Content" data-l="Actually Actuary on YouTube, and where else to find me.">Content</a><a href="https://apparel.actuallyactuary.com/" class="tab" data-i="5" data-sub="apparel" data-t="Apparel" data-l="Actually Actuary merchandise.">Apparel</a><a href="https://support.actuallyactuary.com/" class="tab" data-i="6" data-sub="support" data-t="Support" data-l="Questions, or help with anything here. Ask and I will answer.">Support</a><a href="https://business.actuallyactuary.com/" class="tab" data-i="7" data-sub="business" data-t="Business Inquiries" data-l="Sponsorships, tutoring, and freelance quantitative work.">Business</a></nav>
 
+<div class="stage"><div class="slide">
 <div class="sheetwrap"><div class="sheet inner">
   <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <span>Projects</span></div>
   <h1>Projects</h1>
@@ -187,6 +290,7 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <p class="sub thin" style="font-size:14px;margin-top:3px"></p>
   <p class="tagline">Things I have built, and what testing them actually showed.</p>
   <div class="links"></div>
+  
   
   <hr class="dblrule">
   <div class="entry"><div class="entry-head"><div><span class="strong">Systematic AGPU Trading Strategy</span></div><div class="when">August 2026 – Present</div></div><p class="blurb">A rules-based strategy separating a long-term core holding from a tactical position, with defined entry thresholds, position sizing, average-cost tracking, staged profit-taking and drawdown triggers.</p><ul class="notes"><li>Built a Python backtesting framework (pandas, yfinance) to test it, then revised the thresholds across iterations as results came back.</li><li>Fills simulated trades at observed market prices rather than the theoretical threshold, using minute-level data, so execution assumptions are tested rather than assumed.</li><li>The framework scores every result against ten index funds and re-runs it on data the settings never saw — it is built to tell me when a strategy is not actually working.</li></ul><a class="demo" href="backtester/">Read more <span aria-hidden="true">&rarr;</span></a></div><div class="entry"><div class="entry-head"><div><span class="strong">Personal Investment Research &amp; Portfolio Management</span></div><div class="when">September 2025 – Present</div></div><p class="blurb">Ongoing research into individual equities and ETFs, and the management of my own brokerage accounts.</p><ul class="notes"><li>Built an Excel and Google Sheets tracker comparing mega-cap equity performance against the S&amp;P 500 to measure relative return.</li><li>Research through filings, market data and charting platforms to weigh risk and allocation.</li></ul></div>
@@ -196,6 +300,149 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <span>Carter Matherne · Cadott, Wisconsin</span>
   <span><a href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com</a></span>
 </footer>
+</div></div>
 
 </div>
+<script>
+/* Moving between sections slides one strip of pages sideways, so going from
+   Home to Resume genuinely passes Projects instead of cutting to it. The tab
+   plate travels with it and lights each tab it crosses.
+
+   Pages live on separate subdomains, so there is no shared document to
+   animate across. The outgoing page plays the whole journey and ends holding
+   a panel that looks like the destination; the arriving page recognises where
+   it came from via document.referrer and settles in from there. The seam
+   lands while the destination panel is on screen. */
+(function () {
+  var nav = document.querySelector('.nav');
+  if (!nav || !window.requestAnimationFrame) return;
+  var tabs = [].slice.call(nav.querySelectorAll('a.tab'));
+  var mark = nav.querySelector('.tabmark');
+  if (!tabs.length || !mark) return;
+
+  var here = parseInt(nav.getAttribute('data-here'), 10) || 0;
+  var stage = document.querySelector('.stage');
+  var slide = stage && stage.querySelector('.slide');
+  var reduce = window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  nav.classList.add('js');
+
+  function place(i, animate) {
+    var t = tabs[i];
+    if (!t) return;
+    var cs = getComputedStyle(nav);
+    var bl = parseFloat(cs.borderLeftWidth) || 0;
+    var bt = parseFloat(cs.borderTopWidth) || 0;
+    if (!animate) mark.style.transition = 'none';
+    mark.style.width = t.offsetWidth + 'px';
+    mark.style.height = t.offsetHeight + 'px';
+    mark.style.transform = 'translate(' + (t.offsetLeft - bl) + 'px,'
+      + (t.offsetTop - bt) + 'px)';
+    if (!animate) { void mark.offsetWidth; mark.style.transition = ''; }
+  }
+
+  place(here, false);
+  window.addEventListener('resize', function () { place(here, false); });
+
+  /* Match a URL to a tab by host AND path, so this works whether the sections
+     are subdomains or plain folders. */
+  function indexOf(url) {
+    if (!url) return -1;
+    var a;
+    try { a = new URL(url, location.href); } catch (e) { return -1; }
+    var ap = a.pathname.replace(/\/+$/, '');
+    for (var i = 0; i < tabs.length; i++) {
+      var b = new URL(tabs[i].getAttribute('href'), location.href);
+      if (b.host === a.host && b.pathname.replace(/\/+$/, '') === ap) return i;
+    }
+    return -1;
+  }
+
+  function travel(to, href) {
+    var steps = Math.abs(to - here);
+    var dir = to > here ? 1 : -1;
+    /* Long jumps speed up per step, or crossing seven tabs would crawl. */
+    var dur = Math.min(880, Math.max(320, steps * (steps > 3 ? 155 : 215)));
+    stage.style.setProperty('--slide', dur + 'ms');
+    nav.style.setProperty('--slide', dur + 'ms');
+
+    var strip = document.createElement('div');
+    strip.className = 'flip';
+    /* Draw the ghosts where the reader is actually looking, not at the top of
+       a page they may have scrolled halfway down. */
+    var top = Math.max(0, (window.pageYOffset || 0) - stage.offsetTop);
+    for (var k = 1; k <= steps; k++) {
+      var t = tabs[here + dir * k];
+      var p = document.createElement('div');
+      p.className = 'fpanel';
+      p.style.left = (dir * k * 100) + '%';
+      p.style.top = top + 'px';
+      p.innerHTML = '<div class="fsheet"><h1></h1><p class="sub"></p>'
+        + '<hr class="dblrule"></div>';
+      p.querySelector('h1').textContent =
+        t.getAttribute('data-t') || t.textContent;
+      p.querySelector('.sub').textContent = t.getAttribute('data-l') || '';
+      strip.appendChild(p);
+    }
+    stage.style.height = stage.offsetHeight + 'px';
+    stage.appendChild(strip);
+    stage.classList.add('moving');
+
+    for (var j = 1; j < steps; j++) {
+      (function (tab, at, hold) {
+        setTimeout(function () {
+          tab.classList.add('lit');
+          setTimeout(function () { tab.classList.remove('lit'); }, hold);
+        }, at);
+      })(tabs[here + dir * j], dur * (j - 0.5) / steps, dur / steps);
+    }
+
+    tabs[here].classList.remove('on');
+    tabs[to].classList.add('on');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        var x = 'translateX(' + (-dir * steps * 100) + '%)';
+        slide.style.transform = x;
+        strip.style.transform = x;
+        place(to, true);
+      });
+    });
+    setTimeout(function () { location.href = href; }, dur);
+  }
+
+  nav.addEventListener('click', function (e) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest ? e.target.closest('a.tab') : null;
+    if (!a) return;
+    var to = parseInt(a.getAttribute('data-i'), 10);
+    if (to === here) { e.preventDefault(); return; }
+    if (reduce || !stage || !slide) return;
+    e.preventDefault();
+    travel(to, a.href);
+  });
+
+  /* Arriving. Pick the motion up where the previous page left it. */
+  var from = indexOf(document.referrer);
+  if (!reduce && from !== -1 && from !== here) {
+    nav.style.setProperty('--slide', '360ms');
+    document.body.classList.add('enter');
+    place(from, false);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { place(here, true); });
+    });
+  }
+
+  /* Coming back through history restores the mid-slide state; undo it. */
+  window.addEventListener('pageshow', function (ev) {
+    if (!ev.persisted || !stage) return;
+    var old = stage.querySelector('.flip');
+    if (old) old.parentNode.removeChild(old);
+    stage.classList.remove('moving');
+    stage.style.height = '';
+    if (slide) slide.style.transform = '';
+    place(here, false);
+  });
+})();
+</script>
 </body></html>
