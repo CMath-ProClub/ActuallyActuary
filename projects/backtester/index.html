@@ -189,6 +189,36 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 .faqa { padding:0 8px 20px 0; max-width:66ch;
   animation:unfold .26s cubic-bezier(.22,.7,.3,1) both; }
 .faqa p { margin:0 0 11px; color:var(--body); }
+
+/* Figures get a ruled table rather than a paragraph of numbers. It scrolls
+   inside its own box so a phone never gets a sideways page. */
+.tablewrap { overflow-x:auto; margin:4px 0 12px;
+  border:1px solid var(--edge); border-radius:4px;
+  box-shadow:inset 0 1px 0 var(--emboss); }
+.paytable { border-collapse:collapse; width:100%; min-width:430px;
+  font-size:13.5px; }
+.paytable th, .paytable td { text-align:right; padding:9px 13px;
+  border-bottom:1px solid var(--hair); white-space:nowrap; }
+.paytable thead th { font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.09em; color:var(--muted); font-weight:650;
+  background:var(--tab); border-bottom:1px solid var(--edge); }
+.paytable tbody th { text-align:left; font-weight:600; color:var(--ink);
+  white-space:normal; }
+.paytable td { color:var(--body); font-variant-numeric:tabular-nums; }
+.paytable tbody tr:last-child th,
+.paytable tbody tr:last-child td { border-bottom:0; }
+.paytable tbody tr:hover th, .paytable tbody tr:hover td {
+  background:var(--tab); }
+.tnote { font-size:12.5px; color:var(--muted); margin:0 0 12px;
+  max-width:62ch; }
+/* On a phone the ceiling column is the one worth seeing, and it is the one
+   that falls off the right edge. Tighten everything until all four fit. */
+@media (max-width:620px) {
+  .paytable { min-width:0; font-size:11.5px; }
+  .paytable th, .paytable td { padding:7px 6px; }
+  .paytable thead th { font-size:9.5px; letter-spacing:.05em;
+    white-space:normal; }
+}
 .faqa p:last-child { margin-bottom:0; }
 @keyframes unfold {
   from { opacity:0; transform:translateY(-5px); }
