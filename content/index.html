@@ -53,6 +53,15 @@ a { color:var(--accent); text-decoration:none;
   border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 a:hover { border-bottom-color:var(--accent); }
 
+/* Keyboard users get a way past the tab strip; everyone else never sees it. */
+.skip { position:absolute; left:-9999px; top:0; z-index:100;
+  background:var(--paper); color:var(--accent); padding:11px 18px;
+  border:1px solid var(--accent); border-radius:0 0 4px 0; font-weight:650;
+  font-size:14px; }
+.skip:focus { left:0; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px;
+  border-radius:2px; }
+
 /* ---- top nav ---- */
 .nav { display:flex; gap:2px; flex-wrap:wrap; margin-bottom:14px;
   padding:5px; background:var(--tab); border:1px solid var(--edge);
@@ -563,9 +572,11 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 }
 </style></head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="shell">
 
-<nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab on">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav>
+<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab on">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav></header>
+<main id="main">
 
 <div class="sheetwrap"><div class="sheet inner">
   <span class="corner c1"></span><span class="corner c2"></span>
@@ -584,6 +595,8 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <hr class="dblrule">
   <div class="nowlist wide"><div class="nowrow"><div class="nowk">What it is</div><div class="nowv">Actually Actuary: the maths behind finance, explained for people who were told at some point that they were bad at maths and believed it.</div></div><div class="nowrow"><div class="nowk">Why bother</div><div class="nowv">Most finance explainers either assume you already know the vocabulary or refuse to use any. I want the version that respects that you can follow an argument if somebody actually makes one.</div></div><div class="nowrow"><div class="nowk">What is up so far</div><div class="nowv">Nothing. The channel exists, the first video does not. I would rather say that here than imply a back catalogue that is not there.</div></div><div class="nowrow"><div class="nowk">What is planned first</div><div class="nowv">The questions on the Support page, which are already written in roughly the shape of a script: what an actuary actually does, what expected value really means, and why your car insurance premium moved.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Actually Actuary</span><span class="org">YouTube</span></div><div class="when">Launching</div></div><p class="blurb">Subscribe now and you will be there for the first one, which is either a compliment or a warning.</p><a class="demo" href="https://www.youtube.com/@actuallyactuary" target="_blank" rel="noopener">Visit the channel <span aria-hidden="true">&rarr;</span></a></div><div class="entry"><div class="entry-head"><div><span class="strong">LinkedIn</span></div><div class="when"></div></div><p class="blurb">Professional background, and where I post the things that are not worth a video.</p><a class="demo" href="https://www.linkedin.com/in/carter-matherne-31116a395" target="_blank" rel="noopener">Connect <span aria-hidden="true">&rarr;</span></a></div><div class="entry"><div class="entry-head"><div><span class="strong">GitHub</span></div><div class="when"></div></div><p class="blurb">Where my public code lives. The backtesting framework is not open source yet - it is still changing weekly and I would rather not publish something I am still arguing with.</p><a class="demo" href="https://github.com/CMath-ProClub" target="_blank" rel="noopener">View <span aria-hidden="true">&rarr;</span></a></div><div class="entry"><div class="entry-head"><div><span class="strong">Nowhere else, yet</span></div><div class="when"></div></div><p class="blurb">No TikTok, no Instagram, no X. If that changes it will be listed here rather than assumed.</p></div>
 </div></div>
+
+</main>
 
 <footer>
   <span>Carter Matherne · Cadott, Wisconsin</span>

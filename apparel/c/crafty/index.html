@@ -36,6 +36,14 @@ h1,h2,h3,.display { font-family:var(--display); font-weight:900;
   letter-spacing:-0.01em; line-height:.94; text-transform:uppercase;
   margin:0; }
 
+.skip { position:absolute; left:-9999px; top:0; z-index:100;
+  background:var(--yellow); color:var(--ink); padding:12px 20px;
+  border:3px solid var(--ink); font-family:var(--display); font-weight:900;
+  text-transform:uppercase; font-size:13px; }
+.skip:focus { left:0; }
+:focus-visible { outline:3px solid var(--ink); outline-offset:2px; }
+.marq.black :focus-visible, .top :focus-visible { outline-color:var(--yellow); }
+
 /* ---------- header ---------- */
 .top { position:sticky; top:0; z-index:50; background:var(--ink);
   border-bottom:4px solid var(--yellow); }
@@ -368,6 +376,7 @@ footer .logo { margin-bottom:14px; }
 </style></head>
 <body>
 
+<a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="topin">
   <a class="logo " href="/" aria-label="Actually Actuary Apparel home"><span class="mark"><b>3</b><i>A</i></span><span class="wordmark">Actually<br>Actuary<br>Apparel</span></a>
   <nav><a class="nl" href="../../shop/">Shop</a><a class="nl on" href="../../c/crafty/">Collections</a><a class="nl" href="../../about/">About</a><a class="nl" href="../../account/">Account</a></nav>
@@ -375,7 +384,7 @@ footer .logo { margin-bottom:14px; }
     <span class="n" data-cart-count style="display:none"></span></a>
 </div></header>
 
-<main>
+<main id="main">
 <section class="banner">
   <h1>Crafty Collection</h1>
   <p>Blocks, mobs, and one villager who has never heard of a demand curve. Fan art, not affiliated with anybody.</p>

@@ -53,6 +53,15 @@ a { color:var(--accent); text-decoration:none;
   border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 a:hover { border-bottom-color:var(--accent); }
 
+/* Keyboard users get a way past the tab strip; everyone else never sees it. */
+.skip { position:absolute; left:-9999px; top:0; z-index:100;
+  background:var(--paper); color:var(--accent); padding:11px 18px;
+  border:1px solid var(--accent); border-radius:0 0 4px 0; font-weight:650;
+  font-size:14px; }
+.skip:focus { left:0; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px;
+  border-radius:2px; }
+
 /* ---- top nav ---- */
 .nav { display:flex; gap:2px; flex-wrap:wrap; margin-bottom:14px;
   padding:5px; background:var(--tab); border:1px solid var(--edge);
@@ -563,9 +572,11 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 }
 </style></head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="shell">
 
-<nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab on">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav>
+<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab on">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav></header>
+<main id="main">
 
 <div class="sheetwrap"><div class="sheet inner">
   <span class="corner c1"></span><span class="corner c2"></span>
@@ -584,6 +595,8 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <hr class="dblrule">
   <p class="lead">Most backtests are built to make an idea look good. This one is built to catch me out.</p><div class="entry"><div class="entry-head"><div><span class="strong">The problem with backtests</span></div></div><div class="prose"><p>A backtest run on the same history you used to choose your settings will almost always look excellent. That is not evidence — it is the definition of fitting the past.</p><p>So the framework treats every flattering result as suspect until it survives tests designed to break it.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">What it checks</span></div></div><div class="prose"><p>Every result is scored against a fixed basket of ten index funds, chosen in advance and never reordered — picking a flattering benchmark after seeing your result is the easiest way to fool yourself.</p><p>Settings are re-chosen using only older data and then traded on stretches the strategy has never seen.</p><p>Trades are reshuffled thousands of times to separate genuine edge from the luck of the order they happened to arrive in.</p><p>Every fill pays slippage and commission, and when a stop and a target fall inside the same bar the stop is assumed to hit first, because price data cannot say which came first.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">The strategy I killed</span></div></div><div class="prose"><p>Before this one I ran something much cruder: buy every dip. If a position dropped about 2%, I put roughly 70% of my available capital in.</p><p>It worked. That is the part worth saying out loud, because it is the reason the framework exists.</p><p>It worked because the market I ran it in went up, and because I got lucky about which dips kept dipping. Nothing about the rule made it good - concentrating that much capital into one falling position on a 2% trigger is a bet that the fall stops, and over decades that bet does not have to be wrong very often to end badly.</p><p>So I killed a strategy that was making me money, which is a harder thing to do than killing one that is not, and built something that would have told me the first one was fragile before the market did.</p></div></div><div class="entry"><div class="entry-head"><div><span class="strong">How it is built</span></div></div><div class="prose"><p>Python, pandas and yfinance, with no paid data feeds.</p><p>Three strategy engines: a plain-English plan builder, a YAML rule engine, and a dedicated simulator for the ladder strategy itself.</p><p>280+ automated checks across five test suites, including two that verify no trade can ever use information from the future.</p></div></div>
 </div></div>
+
+</main>
 
 <footer>
   <span>Carter Matherne · Cadott, Wisconsin</span>

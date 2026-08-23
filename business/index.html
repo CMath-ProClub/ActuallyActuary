@@ -53,6 +53,15 @@ a { color:var(--accent); text-decoration:none;
   border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 a:hover { border-bottom-color:var(--accent); }
 
+/* Keyboard users get a way past the tab strip; everyone else never sees it. */
+.skip { position:absolute; left:-9999px; top:0; z-index:100;
+  background:var(--paper); color:var(--accent); padding:11px 18px;
+  border:1px solid var(--accent); border-radius:0 0 4px 0; font-weight:650;
+  font-size:14px; }
+.skip:focus { left:0; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px;
+  border-radius:2px; }
+
 /* ---- top nav ---- */
 .nav { display:flex; gap:2px; flex-wrap:wrap; margin-bottom:14px;
   padding:5px; background:var(--tab); border:1px solid var(--edge);
@@ -563,9 +572,11 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 }
 </style></head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="shell">
 
-<nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab on">Business</a></nav>
+<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab on">Business</a></nav></header>
+<main id="main">
 
 <div class="sheetwrap"><div class="sheet inner">
   <span class="corner c1"></span><span class="corner c2"></span>
@@ -584,6 +595,8 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <hr class="dblrule">
   <p class="lead">Email is the fastest route and I answer everything, including the enquiries I have to turn down.</p><h2 class="sechead">Available now</h2><div class="nowlist wide"><div class="nowrow"><div class="nowk">Sponsorships (from launch)</div><div class="nowv">Actually Actuary has no published videos yet and therefore no audience to sell, and I am not going to pretend otherwise. Get in touch if you want to talk about the channel once it launches - the audience it is aimed at is finance and maths students, and I will only run a product I would actually use.</div></div><div class="nowrow"><div class="nowk">Tutoring — $20/hour</div><div class="nowv">High-school and early-undergraduate mathematics, plus accounting: the accounting equation, journal entries, trial balances and the three statements. Calculus and probability at the level I have covered them. Reach out to check availability - I am carrying a full course load, so it depends on the week.</div></div><div class="nowrow"><div class="nowk">Data and analysis</div><div class="nowv">Cleaning a messy dataset, building the model on top of it, and writing up what it does and does not support. Python and pandas. I will tell you where the analysis stops being able to answer the question.</div></div><div class="nowrow"><div class="nowk">Backtesting and portfolio analysis</div><div class="nowv">Testing an investment rule honestly - out of sample, against buy-and-hold and against a fixed basket of index funds - and reporting it when the rule does not work.</div></div></div><h2 class="sechead">As I qualify</h2><p class="note">Listed so you know where this is going, not so you can hire me for it today. I will say plainly if something you need sits here rather than above.</p><div class="nowlist wide"><div class="nowrow"><div class="nowk">Actuarial work</div><div class="nowv">Pricing, reserving and experience studies, as I clear exams and the coursework behind them.</div></div><div class="nowrow"><div class="nowk">Asset-liability management</div><div class="nowv">Matching an asset portfolio to a liability stream, and stress testing it.</div></div><div class="nowrow"><div class="nowk">Consulting</div><div class="nowv">Longer engagements once there is credentialed work behind me to justify the word.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Enquiries</span></div><div class="when"></div></div><p class="blurb">Include what you have in mind, the scope, and a rough timeline. If it is not something I can do well, I will tell you that instead of taking it on.</p><a class="demo" href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com <span aria-hidden="true">&rarr;</span></a></div>
 </div></div>
+
+</main>
 
 <footer>
   <span>Carter Matherne · Cadott, Wisconsin</span>

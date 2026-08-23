@@ -53,6 +53,15 @@ a { color:var(--accent); text-decoration:none;
   border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 a:hover { border-bottom-color:var(--accent); }
 
+/* Keyboard users get a way past the tab strip; everyone else never sees it. */
+.skip { position:absolute; left:-9999px; top:0; z-index:100;
+  background:var(--paper); color:var(--accent); padding:11px 18px;
+  border:1px solid var(--accent); border-radius:0 0 4px 0; font-weight:650;
+  font-size:14px; }
+.skip:focus { left:0; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px;
+  border-radius:2px; }
+
 /* ---- top nav ---- */
 .nav { display:flex; gap:2px; flex-wrap:wrap; margin-bottom:14px;
   padding:5px; background:var(--tab); border:1px solid var(--edge);
@@ -563,9 +572,11 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 }
 </style></head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="shell">
 
-<nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav>
+<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav></header>
+<main id="main">
 
 <div class="sheetwrap"><div class="sheet inner">
   <span class="corner c1"></span><span class="corner c2"></span>
@@ -584,6 +595,8 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <hr class="dblrule">
   <p class="joke" data-joke>Two standard deviations from where you expected to be.</p><p class="lead">That page is not here. Either it moved, the link was wrong, or I deleted it without thinking about who might still be holding a link to it.</p><div class="whoami" style="margin-top:22px"><a href="https://actuallyactuary.com/">Go to the home page <span aria-hidden="true">&rarr;</span></a><button type="button" class="again" data-again>Another one</button></div><script>(function(){var j=["The null hypothesis was that this page exists. We reject it at the 1% level.","This page is in the 5% we were never confident about.","The expected value of this URL was high. The realised value was 404.","Past performance of this link is not indicative of future results.","This page failed its out-of-sample test.","We found the tail. It was fatter than expected.","Correlation does not imply causation, and this link does not imply a page.","This page defaulted. Recovery value: nil.","Our confidence interval for the location of this page is the entire internet.","Everything reverts to the mean eventually. This page overshot.","This asset is illiquid. There is no market for it and never was.","Two standard deviations from where you expected to be.","The page was fully hedged against every risk except being deleted.","n = 0."],e=document.querySelector('[data-joke]'),b=document.querySelector('[data-again]'),i=-1;function n(){var k;do{k=Math.floor(Math.random()*j.length);}while(j.length>1&&k===i);i=k;e.style.opacity=0;setTimeout(function(){e.textContent=j[k];e.style.opacity=1;},140);}n();if(b)b.addEventListener('click',n);})();</script>
 </div></div>
+
+</main>
 
 <footer>
   <span>Carter Matherne · Cadott, Wisconsin</span>
