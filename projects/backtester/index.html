@@ -412,18 +412,27 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
 .sig { display:block; width:236px; height:49px; margin:18px 0 0; }
-.signame { font-family:"Segoe Script","Bradley Hand","Brush Script MT",
-  "Lucida Handwriting","Apple Chancery","Snell Roundhand",cursive;
-  font-size:34px; fill:var(--ink);
+.signame { font-family:"Snell Roundhand","Apple Chancery","Brush Script MT",
+  "Lucida Handwriting","Monotype Corsiva","Segoe Script","Bradley Hand",
+  cursive;
+  font-size:35px; font-style:italic; fill:var(--ink);
+  /* A little slant, because nobody signs bolt upright. */
+  transform:skewX(-6deg); transform-origin:0 43px;
   /* The pen moves left to right rather than the whole thing fading up. */
   animation:write 1.25s cubic-bezier(.42,0,.35,1) .35s both; }
+
+/* Crossed after the name is written, then the underline. */
+.sig .tbar { fill:none; stroke:var(--ink); stroke-width:2.1;
+  stroke-linecap:round;
+  stroke-dasharray:260; stroke-dashoffset:260;
+  animation:ink .55s cubic-bezier(.3,.1,.3,1) 1.5s forwards; }
 @keyframes write {
   from { clip-path:inset(0 100% 0 0); }
   to   { clip-path:inset(0 -2% 0 0); } }
 .sig .flourish { fill:none; stroke:var(--ink); stroke-width:1.8;
   stroke-linecap:round; opacity:.7;
   stroke-dasharray:320; stroke-dashoffset:320;
-  animation:ink .8s cubic-bezier(.4,.1,.3,1) 1.35s forwards; }
+  animation:ink .8s cubic-bezier(.4,.1,.3,1) 1.95s forwards; }
 @keyframes ink { to { stroke-dashoffset:0; } }
 
 /* The guilloche band draws itself in, like a security print being struck. */
