@@ -89,6 +89,67 @@ footer { animation:settle .4s cubic-bezier(.22,.7,.3,1) 220ms both; }
 @media (prefers-reduced-motion: reduce) {
   .nav, .sheetwrap, footer { animation:none; } }
 
+/* ---- engraved detail ---- */
+/* Corner ornaments, struck into each corner of the sheet the way a printed
+   certificate is bounded. Drawn with borders rather than images so they take
+   the theme with them. */
+.sheet { position:relative; }
+.sheet .corner { position:absolute; width:26px; height:26px;
+  border:2px solid var(--accent); opacity:.30; pointer-events:none; }
+.sheet .c1 { top:16px; left:16px; border-right:0; border-bottom:0; }
+.sheet .c2 { top:16px; right:16px; border-left:0; border-bottom:0; }
+.sheet .c3 { bottom:16px; left:16px; border-right:0; border-top:0; }
+.sheet .c4 { bottom:16px; right:16px; border-left:0; border-top:0; }
+
+/* Section rules draw themselves out from the left as the page settles. */
+.sechead { position:relative; border-bottom:0; }
+.sechead::after { content:""; position:absolute; left:0; right:0; bottom:0;
+  height:1px; background:var(--edge); transform-origin:left;
+  animation:rule .7s cubic-bezier(.22,.7,.3,1) both; }
+@keyframes rule { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+
+/* The figures land one after another rather than all at once. */
+.num { animation:tile .5s cubic-bezier(.22,.7,.3,1) both; }
+.num:nth-child(1) { animation-delay:.30s; }
+.num:nth-child(2) { animation-delay:.36s; }
+.num:nth-child(3) { animation-delay:.42s; }
+.num:nth-child(4) { animation-delay:.48s; }
+.num:nth-child(5) { animation-delay:.54s; }
+.num:nth-child(6) { animation-delay:.60s; }
+@keyframes tile {
+  from { opacity:0; transform:translateY(9px); }
+  to   { opacity:1; transform:none; } }
+
+/* The timeline rule grows downward, so the story reads as accumulating. */
+.tl::before { transform-origin:top;
+  animation:grow 1.1s cubic-bezier(.3,.7,.3,1) .2s both; }
+@keyframes grow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
+
+/* Inner pages get a small turning seal too, so the craft is not only on the
+   front page. */
+.inner .minirose { position:absolute; top:14px; right:16px; width:62px;
+  height:62px; opacity:.14; pointer-events:none;
+  animation:turn 120s linear infinite; transform-origin:50% 50%; }
+.inner .minirose path { fill:none; stroke:var(--accent); stroke-width:.6;
+  vector-effect:non-scaling-stroke; }
+
+/* ---- 404 ---- */
+.joke { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  font-size:20px; line-height:1.45; color:var(--ink); max-width:44ch;
+  margin:0 0 18px; min-height:2.9em; transition:opacity .14s ease;
+  text-shadow:0 1px 0 var(--emboss); }
+.again { border:1px solid var(--edge); border-radius:4px; padding:8px 13px;
+  font:inherit; font-size:13px; font-weight:600; color:var(--accent);
+  background:var(--tab); cursor:pointer;
+  box-shadow:inset 0 1px 0 var(--emboss);
+  transition:border-color .14s ease, transform .14s ease; }
+.again:hover { border-color:var(--accent); transform:translateY(-1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sechead::after, .num, .tl::before, .inner .minirose { animation:none; }
+  .num { opacity:1; transform:none; }
+}
+
 /* ---- sheet ---- */
 .sheetwrap { position:relative; }
 .sheet { background:var(--paper); border:1px solid var(--edge);
@@ -350,13 +411,19 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:210px; height:44px; margin:16px 0 0; }
-.sig path { fill:none; stroke:var(--ink); stroke-width:2.4;
-  stroke-linecap:round; stroke-linejoin:round;
-  stroke-dasharray:900; stroke-dashoffset:900;
-  animation:ink 1.5s cubic-bezier(.5,.1,.3,1) .35s forwards; }
-.sig .flourish { stroke-width:1.7; opacity:.72;
-  animation-delay:1.1s; animation-duration:.9s; }
+.sig { display:block; width:236px; height:49px; margin:18px 0 0; }
+.signame { font-family:"Segoe Script","Bradley Hand","Brush Script MT",
+  "Lucida Handwriting","Apple Chancery","Snell Roundhand",cursive;
+  font-size:34px; fill:var(--ink);
+  /* The pen moves left to right rather than the whole thing fading up. */
+  animation:write 1.25s cubic-bezier(.42,0,.35,1) .35s both; }
+@keyframes write {
+  from { clip-path:inset(0 100% 0 0); }
+  to   { clip-path:inset(0 -2% 0 0); } }
+.sig .flourish { fill:none; stroke:var(--ink); stroke-width:1.8;
+  stroke-linecap:round; opacity:.7;
+  stroke-dasharray:320; stroke-dashoffset:320;
+  animation:ink .8s cubic-bezier(.4,.1,.3,1) 1.35s forwards; }
 @keyframes ink { to { stroke-dashoffset:0; } }
 
 /* The guilloche band draws itself in, like a security print being struck. */
@@ -492,6 +559,9 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 <nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab on">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav>
 
 <div class="sheetwrap"><div class="sheet inner">
+  <span class="corner c1"></span><span class="corner c2"></span>
+  <span class="corner c3"></span><span class="corner c4"></span>
+  <svg class="minirose" viewBox="0 0 62 62" aria-hidden="true"><path d="M93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0L50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7Z"/><path d="M74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0L58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1Z"/><path d="M50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7L93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0Z"/><path d="M58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1L74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0Z"/></svg>
   <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <span>Projects</span></div>
   <h1>Projects</h1>
   <p class="sub"></p>
