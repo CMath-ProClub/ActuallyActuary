@@ -420,31 +420,31 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:250px; height:53px; margin:18px 0 0; }
+.sig { display:block; width:262px; height:59px; margin:18px 0 0; }
 .signame { font-family:"Snell Roundhand","Apple Chancery","Brush Script MT",
   "Lucida Handwriting","Monotype Corsiva","Segoe Script","Bradley Hand",
   cursive;
   font-size:35px; font-style:italic; fill:var(--ink);
-  animation:write 1.15s cubic-bezier(.42,0,.35,1) .35s both; }
-/* The forename carries a hair more ink than the surname, the way a signature
-   that starts confident and speeds up actually looks. */
+  animation:write 1.05s cubic-bezier(.42,0,.35,1) .35s both; }
 .signame.first { stroke:var(--ink); stroke-width:.5;
-  transform:skewX(-7deg) rotate(-.8deg); transform-origin:8px 44px; }
+  transform:skewX(-7deg) rotate(-.8deg); transform-origin:8px 46px; }
 .signame.last { stroke:none;
-  transform:skewX(-5deg) rotate(.6deg); transform-origin:130px 42px;
-  animation-delay:.62s; animation-duration:.95s; }
+  transform:skewX(-5deg) rotate(.6deg); transform-origin:130px 44px;
+  animation-delay:.55s; animation-duration:.75s; }
 
-/* Crossed after the name, then the tail, then the underline. */
-.sig .tbar, .sig .tail, .sig .flourish { fill:none; stroke:var(--ink);
+.sig .scrawl, .sig .tbar, .sig .flourish { fill:none; stroke:var(--ink);
   stroke-linecap:round; stroke-linejoin:round; }
-.sig .tbar { stroke-width:2; stroke-dasharray:44; stroke-dashoffset:44;
-  animation:ink .3s ease-out 1.5s forwards; }
-.sig .tbar + .tbar { animation-delay:1.66s; }
-.sig .tail { stroke-width:1.9; stroke-dasharray:110; stroke-dashoffset:110;
-  animation:ink .5s cubic-bezier(.3,.1,.3,1) 1.8s forwards; }
-.sig .flourish { stroke-width:1.8; opacity:.72;
-  stroke-dasharray:340; stroke-dashoffset:340;
-  animation:ink .75s cubic-bezier(.4,.1,.3,1) 2.15s forwards; }
+/* Thinner than the letters and drawn fast, the way the tail of a signature
+   is. It picks up exactly where "Mathe" stops. */
+.sig .scrawl { stroke-width:3.4;
+  transform:skewX(-11deg); transform-origin:232px 44px; stroke-dasharray:300; stroke-dashoffset:300;
+  animation:ink .62s cubic-bezier(.35,.05,.3,1) 1.18s forwards; }
+.sig .tbar { stroke-width:1.9; stroke-dasharray:120; stroke-dashoffset:120;
+  animation:ink .34s ease-out 1.86s forwards; }
+.sig .tbar + .tbar { animation-delay:2.04s; }
+.sig .flourish { stroke-width:1.9; opacity:.75;
+  stroke-dasharray:360; stroke-dashoffset:360;
+  animation:ink .7s cubic-bezier(.4,.1,.3,1) 2.3s forwards; }
 
 @keyframes ink { to { stroke-dashoffset:0; } }
 
