@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Systematic AGPU Trading Strategy — Carter Matherne</title>
-<meta name="description" content="A rules-based strategy, and the framework built to disprove it.">
+<title>Rule-Based Swing Trading Strategy, Backtested — Carter Matherne</title>
+<meta name="description" content="An objective, mathematical set of entry and exit rules — and the framework built to disprove it.">
 <meta name="author" content="Carter Matherne">
 <meta property="og:type" content="profile">
-<meta property="og:title" content="Systematic AGPU Trading Strategy — Carter Matherne">
-<meta property="og:description" content="A rules-based strategy, and the framework built to disprove it.">
+<meta property="og:title" content="Rule-Based Swing Trading Strategy, Backtested — Carter Matherne">
+<meta property="og:description" content="An objective, mathematical set of entry and exit rules — and the framework built to disprove it.">
 <meta property="og:url" content="https://projects.actuallyactuary.com/backtester/">
 <link rel="canonical" href="https://projects.actuallyactuary.com/backtester/">
 <meta property="og:image" content="https://actuallyactuary.com/og.png">
@@ -15,8 +15,8 @@
 <meta property="og:site_name" content="Carter Matherne">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://actuallyactuary.com/og.png">
-<meta name="twitter:title" content="Systematic AGPU Trading Strategy — Carter Matherne">
-<meta name="twitter:description" content="A rules-based strategy, and the framework built to disprove it.">
+<meta name="twitter:title" content="Rule-Based Swing Trading Strategy, Backtested — Carter Matherne">
+<meta name="twitter:description" content="An objective, mathematical set of entry and exit rules — and the framework built to disprove it.">
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231f3a5f'/%3E%3Cpath d='M3 24.5h26' stroke='%23fffdf8' stroke-width='2' stroke-linecap='round' opacity='.5'/%3E%3Cpath d='M4 24.5C10 24.5 10.5 7 16 7s6 17.5 12 17.5' stroke='%23fffdf8' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 7v17.5' stroke='%23fffdf8' stroke-width='1.6' opacity='.55'/%3E%3C/svg%3E">
 <style>
@@ -420,28 +420,32 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:236px; height:49px; margin:18px 0 0; }
+.sig { display:block; width:250px; height:53px; margin:18px 0 0; }
 .signame { font-family:"Snell Roundhand","Apple Chancery","Brush Script MT",
   "Lucida Handwriting","Monotype Corsiva","Segoe Script","Bradley Hand",
   cursive;
   font-size:35px; font-style:italic; fill:var(--ink);
-  /* A little slant, because nobody signs bolt upright. */
-  transform:skewX(-6deg); transform-origin:0 43px;
-  /* The pen moves left to right rather than the whole thing fading up. */
-  animation:write 1.25s cubic-bezier(.42,0,.35,1) .35s both; }
+  animation:write 1.15s cubic-bezier(.42,0,.35,1) .35s both; }
+/* The forename carries a hair more ink than the surname, the way a signature
+   that starts confident and speeds up actually looks. */
+.signame.first { stroke:var(--ink); stroke-width:.5;
+  transform:skewX(-7deg) rotate(-.8deg); transform-origin:8px 44px; }
+.signame.last { stroke:none;
+  transform:skewX(-5deg) rotate(.6deg); transform-origin:130px 42px;
+  animation-delay:.62s; animation-duration:.95s; }
 
-/* Crossed after the name is written, then the underline. */
-.sig .tbar { fill:none; stroke:var(--ink); stroke-width:2.1;
-  stroke-linecap:round;
-  stroke-dasharray:260; stroke-dashoffset:260;
-  animation:ink .55s cubic-bezier(.3,.1,.3,1) 1.5s forwards; }
-@keyframes write {
-  from { clip-path:inset(0 100% 0 0); }
-  to   { clip-path:inset(0 -2% 0 0); } }
-.sig .flourish { fill:none; stroke:var(--ink); stroke-width:1.8;
-  stroke-linecap:round; opacity:.7;
-  stroke-dasharray:320; stroke-dashoffset:320;
-  animation:ink .8s cubic-bezier(.4,.1,.3,1) 1.95s forwards; }
+/* Crossed after the name, then the tail, then the underline. */
+.sig .tbar, .sig .tail, .sig .flourish { fill:none; stroke:var(--ink);
+  stroke-linecap:round; stroke-linejoin:round; }
+.sig .tbar { stroke-width:2; stroke-dasharray:44; stroke-dashoffset:44;
+  animation:ink .3s ease-out 1.5s forwards; }
+.sig .tbar + .tbar { animation-delay:1.66s; }
+.sig .tail { stroke-width:1.9; stroke-dasharray:110; stroke-dashoffset:110;
+  animation:ink .5s cubic-bezier(.3,.1,.3,1) 1.8s forwards; }
+.sig .flourish { stroke-width:1.8; opacity:.72;
+  stroke-dasharray:340; stroke-dashoffset:340;
+  animation:ink .75s cubic-bezier(.4,.1,.3,1) 2.15s forwards; }
+
 @keyframes ink { to { stroke-dashoffset:0; } }
 
 /* The guilloche band draws itself in, like a security print being struck. */
@@ -582,11 +586,11 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <span class="corner c1"></span><span class="corner c2"></span>
   <span class="corner c3"></span><span class="corner c4"></span>
   <svg class="minirose" viewBox="0 0 62 62" aria-hidden="true"><path d="M93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0L50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7Z"/><path d="M74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0L58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1Z"/><path d="M50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7L93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0Z"/><path d="M58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1L74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0Z"/></svg>
-  <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <a href="https://projects.actuallyactuary.com/">Projects</a> <span class="sep">/</span> <span>Systematic AGPU Trading Strategy</span></div>
-  <h1>Systematic AGPU Trading Strategy</h1>
+  <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <a href="https://projects.actuallyactuary.com/">Projects</a> <span class="sep">/</span> <span>Rule-Based Swing Trading Strategy, Backtested</span></div>
+  <h1>Rule-Based Swing Trading Strategy, Backtested</h1>
   <p class="sub"></p>
   <p class="sub thin" style="font-size:14px;margin-top:3px"></p>
-  <p class="tagline">A rules-based strategy, and the framework built to disprove it.</p>
+  <p class="tagline">An objective, mathematical set of entry and exit rules — and the framework built to disprove it.</p>
   
   <div class="links"></div>
   

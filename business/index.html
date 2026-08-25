@@ -420,28 +420,32 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:236px; height:49px; margin:18px 0 0; }
+.sig { display:block; width:250px; height:53px; margin:18px 0 0; }
 .signame { font-family:"Snell Roundhand","Apple Chancery","Brush Script MT",
   "Lucida Handwriting","Monotype Corsiva","Segoe Script","Bradley Hand",
   cursive;
   font-size:35px; font-style:italic; fill:var(--ink);
-  /* A little slant, because nobody signs bolt upright. */
-  transform:skewX(-6deg); transform-origin:0 43px;
-  /* The pen moves left to right rather than the whole thing fading up. */
-  animation:write 1.25s cubic-bezier(.42,0,.35,1) .35s both; }
+  animation:write 1.15s cubic-bezier(.42,0,.35,1) .35s both; }
+/* The forename carries a hair more ink than the surname, the way a signature
+   that starts confident and speeds up actually looks. */
+.signame.first { stroke:var(--ink); stroke-width:.5;
+  transform:skewX(-7deg) rotate(-.8deg); transform-origin:8px 44px; }
+.signame.last { stroke:none;
+  transform:skewX(-5deg) rotate(.6deg); transform-origin:130px 42px;
+  animation-delay:.62s; animation-duration:.95s; }
 
-/* Crossed after the name is written, then the underline. */
-.sig .tbar { fill:none; stroke:var(--ink); stroke-width:2.1;
-  stroke-linecap:round;
-  stroke-dasharray:260; stroke-dashoffset:260;
-  animation:ink .55s cubic-bezier(.3,.1,.3,1) 1.5s forwards; }
-@keyframes write {
-  from { clip-path:inset(0 100% 0 0); }
-  to   { clip-path:inset(0 -2% 0 0); } }
-.sig .flourish { fill:none; stroke:var(--ink); stroke-width:1.8;
-  stroke-linecap:round; opacity:.7;
-  stroke-dasharray:320; stroke-dashoffset:320;
-  animation:ink .8s cubic-bezier(.4,.1,.3,1) 1.95s forwards; }
+/* Crossed after the name, then the tail, then the underline. */
+.sig .tbar, .sig .tail, .sig .flourish { fill:none; stroke:var(--ink);
+  stroke-linecap:round; stroke-linejoin:round; }
+.sig .tbar { stroke-width:2; stroke-dasharray:44; stroke-dashoffset:44;
+  animation:ink .3s ease-out 1.5s forwards; }
+.sig .tbar + .tbar { animation-delay:1.66s; }
+.sig .tail { stroke-width:1.9; stroke-dasharray:110; stroke-dashoffset:110;
+  animation:ink .5s cubic-bezier(.3,.1,.3,1) 1.8s forwards; }
+.sig .flourish { stroke-width:1.8; opacity:.72;
+  stroke-dasharray:340; stroke-dashoffset:340;
+  animation:ink .75s cubic-bezier(.4,.1,.3,1) 2.15s forwards; }
+
 @keyframes ink { to { stroke-dashoffset:0; } }
 
 /* The guilloche band draws itself in, like a security print being struck. */
@@ -593,7 +597,7 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   
   
   <hr class="dblrule">
-  <p class="lead">Email is the fastest route and I answer everything, including the enquiries I have to turn down.</p><h2 class="sechead">Available now</h2><div class="nowlist wide"><div class="nowrow"><div class="nowk">Sponsorships (from launch)</div><div class="nowv">Actually Actuary has no published videos yet and therefore no audience to sell, and I am not going to pretend otherwise. Get in touch if you want to talk about the channel once it launches - the audience it is aimed at is finance and maths students, and I will only run a product I would actually use.</div></div><div class="nowrow"><div class="nowk">Tutoring — $20/hour</div><div class="nowv">High-school and early-undergraduate mathematics, plus accounting: the accounting equation, journal entries, trial balances and the three statements. Calculus and probability at the level I have covered them. Reach out to check availability - I am carrying a full course load, so it depends on the week.</div></div><div class="nowrow"><div class="nowk">Data and analysis</div><div class="nowv">Cleaning a messy dataset, building the model on top of it, and writing up what it does and does not support. Python and pandas. I will tell you where the analysis stops being able to answer the question.</div></div><div class="nowrow"><div class="nowk">Backtesting and portfolio analysis</div><div class="nowv">Testing an investment rule honestly - out of sample, against buy-and-hold and against a fixed basket of index funds - and reporting it when the rule does not work.</div></div></div><h2 class="sechead">As I qualify</h2><p class="note">Listed so you know where this is going, not so you can hire me for it today. I will say plainly if something you need sits here rather than above.</p><div class="nowlist wide"><div class="nowrow"><div class="nowk">Actuarial work</div><div class="nowv">Pricing, reserving and experience studies, as I clear exams and the coursework behind them.</div></div><div class="nowrow"><div class="nowk">Asset-liability management</div><div class="nowv">Matching an asset portfolio to a liability stream, and stress testing it.</div></div><div class="nowrow"><div class="nowk">Consulting</div><div class="nowv">Longer engagements once there is credentialed work behind me to justify the word.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Enquiries</span></div><div class="when"></div></div><p class="blurb">Include what you have in mind, the scope, and a rough timeline. If it is not something I can do well, I will tell you that instead of taking it on.</p><a class="demo" href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com <span aria-hidden="true">&rarr;</span></a></div>
+  <p class="lead">Email is the fastest route and I answer everything, including the enquiries I have to turn down.</p><h2 class="sechead">Available now</h2><div class="nowlist wide"><div class="nowrow"><div class="nowk">Sponsorships (from launch)</div><div class="nowv">Actually Actuary has no published videos yet and therefore no audience to sell, and I am not going to pretend otherwise. Get in touch if you want to talk about the channel once it launches - the audience it is aimed at is finance and maths students, and I will only run a product I would actually use.</div></div><div class="nowrow"><div class="nowk">Tutoring — $20/hour</div><div class="nowv">High-school and early-undergraduate mathematics, plus accounting: the accounting equation, journal entries, trial balances and the three statements. Calculus and probability at the level I have covered them. Reach out to check availability - I am carrying a full course load, so it depends on the week.</div></div></div><h2 class="sechead">As I qualify</h2><p class="note">Listed so you know where this is going, not so you can hire me for it today. I will say plainly if something you need sits here rather than above.</p><div class="nowlist wide"><div class="nowrow"><div class="nowk">Data and analysis</div><div class="nowv">Cleaning a messy dataset, building the model on top of it, and writing up what it does and does not support — including where the analysis stops being able to answer the question.</div></div><div class="nowrow"><div class="nowk">Backtesting and portfolio analysis</div><div class="nowv">Testing an investment rule honestly: out of sample, against buy-and-hold and against a fixed basket of index funds, and reporting it when the rule does not work.</div></div><div class="nowrow"><div class="nowk">Actuarial work</div><div class="nowv">Pricing, reserving and experience studies, as I clear exams and the coursework behind them.</div></div><div class="nowrow"><div class="nowk">Asset-liability management</div><div class="nowv">Matching an asset portfolio to a liability stream, and stress testing it.</div></div><div class="nowrow"><div class="nowk">Consulting</div><div class="nowv">Longer engagements once there is credentialed work behind me to justify the word.</div></div></div><div class="entry"><div class="entry-head"><div><span class="strong">Enquiries</span></div><div class="when"></div></div><p class="blurb">Include what you have in mind, the scope, and a rough timeline. If it is not something I can do well, I will tell you that instead of taking it on.</p><a class="demo" href="mailto:carter@actuallyactuary.com">carter@actuallyactuary.com <span aria-hidden="true">&rarr;</span></a></div>
 </div></div>
 
 </main>
