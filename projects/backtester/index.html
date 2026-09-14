@@ -209,6 +209,19 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   .portrait ~ .rosette { display:none; }
 }
 
+/* Photographs, set like plates tipped into a printed book: a hairline rule,
+   a tight shadow, and a caption in small type beneath. */
+.fig { margin:22px 0 6px; }
+.fig img { display:block; width:100%; height:auto; border:1px solid var(--edge);
+  border-radius:3px; background:var(--tab);
+  box-shadow:0 1px 2px rgba(40,34,20,.12),
+             0 12px 26px -14px rgba(40,34,20,.5); }
+.fig figcaption { margin-top:9px; font-size:12.5px; color:var(--muted);
+  line-height:1.5; max-width:60ch; }
+/* On the résumé the photographs sit beside their entry rather than dominating
+   it, so they are capped and pulled in from the margin. */
+.sheet.inner .fig { max-width:420px; margin:14px 0 20px; }
+
 /* Numbers, struck into the page. Actuaries lead with figures; so does this. */
 .numbers { display:grid; grid-template-columns:repeat(3,1fr);
   gap:1px; background:var(--edge); border:1px solid var(--edge); border-radius:4px;
@@ -420,27 +433,16 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:252px; height:54px; margin:18px 0 0; }
-.signame { font-family:"Snell Roundhand","Apple Chancery","Brush Script MT",
-  "Lucida Handwriting","Monotype Corsiva","Segoe Script","Bradley Hand",
-  cursive;
-  font-size:35px; font-style:italic; fill:var(--ink);
-  animation:write 1.15s cubic-bezier(.42,0,.35,1) .35s both; }
-.signame.first { stroke:var(--ink); stroke-width:.5;
-  transform:skewX(-7deg) rotate(-.8deg); transform-origin:8px 46px; }
-.signame.last { stroke:none;
-  transform:skewX(-5deg) rotate(.5deg); transform-origin:130px 44px;
-  animation-delay:.58s; animation-duration:.9s; }
-
-/* Crossed after the name, then the line under it. */
-.sig .tbar, .sig .flourish { fill:none; stroke:var(--ink);
-  stroke-linecap:round; }
-.sig .tbar { stroke-width:1.9; stroke-dasharray:120; stroke-dashoffset:120;
-  animation:ink .36s ease-out 1.55s forwards; }
-.sig .tbar + .tbar { animation-delay:1.75s; }
-.sig .flourish { stroke-width:1.8; opacity:.7;
-  stroke-dasharray:330; stroke-dashoffset:330;
-  animation:ink .7s cubic-bezier(.4,.1,.3,1) 2.0s forwards; }
+.sig { display:block; width:250px; max-width:100%; aspect-ratio:715/156;
+  margin:16px 0 0; background:var(--ink);
+  -webkit-mask:var(--sig) no-repeat left center / contain;
+  mask:var(--sig) no-repeat left center / contain;
+  /* The pen moves left to right across the real ink. */
+  animation:sigwrite 1.7s cubic-bezier(.45,.05,.35,1) .35s both; }
+@keyframes sigwrite {
+  from { clip-path:inset(0 100% 0 0); }
+  to   { clip-path:inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .sig { animation:none; } }
 
 @keyframes ink { to { stroke-dashoffset:0; } }
 
@@ -582,6 +584,7 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <span class="corner c1"></span><span class="corner c2"></span>
   <span class="corner c3"></span><span class="corner c4"></span>
   <svg class="minirose" viewBox="0 0 62 62" aria-hidden="true"><path d="M93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0L50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7Z"/><path d="M74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0L58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1Z"/><path d="M50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7L93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0Z"/><path d="M58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1L74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0Z"/></svg>
+  
   <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <a href="https://projects.actuallyactuary.com/">Projects</a> <span class="sep">/</span> <span>Rule-Based Swing Trading Strategy, Backtested</span></div>
   <h1>Rule-Based Swing Trading Strategy, Backtested</h1>
   <p class="sub"></p>
@@ -589,7 +592,6 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <p class="tagline">An objective, mathematical set of entry and exit rules — and the framework built to disprove it.</p>
   
   <div class="links"></div>
-  
   
   
   <hr class="dblrule">
