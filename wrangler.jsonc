@@ -1,0 +1,13 @@
+{
+  // A static site: no Worker script, only files. These are the settings
+  // Cloudflare reads when it deploys this repository.
+  "name": "aaweb",
+  "compatibility_date": "2026-08-25",
+  "assets": {
+    "directory": "./",
+    // Serve the nearest 404.html (the store has its own under apparel/)
+    // instead of an empty 404 response.
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}
