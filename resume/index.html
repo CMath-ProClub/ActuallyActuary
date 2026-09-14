@@ -1,24 +1,30 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Résumé — Carter Matherne</title>
-<meta name="description" content="Education, experience, leadership and awards - with more detail than fits on the one-page PDF.">
+<title>Résumé | Carter Matherne</title>
+<meta name="description" content="Résumé of Carter Matherne, actuarial science student at UW-Eau Claire: Honors College, 34 dual-enrollment credits, work experience, leadership and awards.">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="author" content="Carter Matherne">
-<meta property="og:type" content="profile">
-<meta property="og:title" content="Résumé — Carter Matherne">
-<meta property="og:description" content="Education, experience, leadership and awards - with more detail than fits on the one-page PDF.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Résumé | Carter Matherne">
+<meta property="og:description" content="Résumé of Carter Matherne, actuarial science student at UW-Eau Claire: Honors College, 34 dual-enrollment credits, work experience, leadership and awards.">
 <meta property="og:url" content="https://resume.actuallyactuary.com/">
 <link rel="canonical" href="https://resume.actuallyactuary.com/">
 <meta property="og:image" content="https://actuallyactuary.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Carter Matherne, Actuarial Science student at UW-Eau Claire">
+<meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="Carter Matherne">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://actuallyactuary.com/og.png">
-<meta name="twitter:title" content="Résumé — Carter Matherne">
-<meta name="twitter:description" content="Education, experience, leadership and awards - with more detail than fits on the one-page PDF.">
+<meta name="twitter:title" content="Résumé | Carter Matherne">
+<meta name="twitter:description" content="Résumé of Carter Matherne, actuarial science student at UW-Eau Claire: Honors College, 34 dual-enrollment credits, work experience, leadership and awards.">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://actuallyactuary.com/"},{"@type":"ListItem","position":2,"name":"Résumé","item":"https://resume.actuallyactuary.com/"}]},{"@type":"WebSite","url":"https://resume.actuallyactuary.com/","name":"Carter Matherne","publisher":{"@type":"Person","@id":"https://actuallyactuary.com/#carter","name":"Carter Matherne","url":"https://actuallyactuary.com/"},"inLanguage":"en-US"},{"@type":"ProfilePage","url":"https://resume.actuallyactuary.com/","name":"Résumé of Carter Matherne","mainEntity":{"@type":"Person","@id":"https://actuallyactuary.com/#carter","name":"Carter Matherne","url":"https://actuallyactuary.com/","image":"https://actuallyactuary.com/portrait.jpg"}}]}</script>
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231f3a5f'/%3E%3Cpath d='M3 24.5h26' stroke='%23fffdf8' stroke-width='2' stroke-linecap='round' opacity='.5'/%3E%3Cpath d='M4 24.5C10 24.5 10.5 7 16 7s6 17.5 12 17.5' stroke='%23fffdf8' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 7v17.5' stroke='%23fffdf8' stroke-width='1.6' opacity='.55'/%3E%3C/svg%3E">
+<link rel="icon" href="https://actuallyactuary.com/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="https://actuallyactuary.com/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="https://actuallyactuary.com/apple-touch-icon.png">
 <style>
 /* Security printing, not software: bond paper on a desk, engraved headings,
    a guilloché band. Depth from tight shadows and letterpress. */
@@ -52,6 +58,12 @@ body {
 a { color:var(--accent); text-decoration:none;
   border-bottom:1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
 a:hover { border-bottom-color:var(--accent); }
+/* Inside running text a link needs an underline you can actually see,
+   not just a change of ink colour. */
+.notes li a, .tlnote a, .tnote a, .faqa a, .prose a {
+  border-bottom-color:color-mix(in srgb, var(--accent) 55%, transparent); }
+.notes li a:hover, .tlnote a:hover, .tnote a:hover, .faqa a:hover,
+.prose a:hover { border-bottom-color:var(--accent); }
 
 /* Keyboard users get a way past the tab strip; everyone else never sees it. */
 .skip { position:absolute; left:-9999px; top:0; z-index:100;
@@ -118,7 +130,7 @@ footer { animation:settle .4s cubic-bezier(.22,.7,.3,1) 220ms both; }
 @keyframes rule { from { transform:scaleX(0); } to { transform:scaleX(1); } }
 
 /* The figures land one after another rather than all at once. */
-.num { animation:tile .5s cubic-bezier(.22,.7,.3,1) both; }
+.num { animation:tile .5s cubic-bezier(.22,.7,.3,1) backwards; }
 .num:nth-child(1) { animation-delay:.30s; }
 .num:nth-child(2) { animation-delay:.36s; }
 .num:nth-child(3) { animation-delay:.42s; }
@@ -221,6 +233,21 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 /* On the résumé the photographs sit beside their entry rather than dominating
    it, so they are capped and pulled in from the margin. */
 .sheet.inner .fig { max-width:420px; margin:14px 0 20px; }
+.fig { scroll-margin-top:24px; }
+/* Names sit on the photograph itself. Fixed colors rather than theme
+   tokens, because they are read against the picture, not the page. */
+.photo { position:relative; }
+.ptag { position:absolute; transform:translate(-50%,-50%); padding:3px 9px;
+  border-radius:999px; font-size:11.5px; font-weight:650; line-height:1.3;
+  white-space:nowrap; color:#141821; background:rgba(255,253,248,.93);
+  box-shadow:0 1px 3px rgba(0,0,0,.35); pointer-events:none; }
+.ptag.me { color:#fffdf8; background:#1f3a5f; }
+.pring { position:absolute; border:2.5px solid #f2c94c; border-radius:50%;
+  box-shadow:0 0 0 1.5px rgba(0,0,0,.3); pointer-events:none; }
+.fig:target img { outline:2px solid var(--accent); outline-offset:3px; }
+@media (max-width:640px) {
+  .ptag { font-size:10px; padding:2px 7px; }
+}
 
 /* Numbers, struck into the page. Actuaries lead with figures; so does this. */
 .numbers { display:grid; grid-template-columns:repeat(3,1fr);
@@ -359,7 +386,7 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 @media (prefers-reduced-motion: reduce) { .subin { animation:none; } }
 /* Four columns will not survive a phone, and squeezing them turns the seat
    names into one word per line. Below 620px each row becomes a block: name,
-   what it is, then the figures as labelled lines. */
+   what it is, then the figures as labeled lines. */
 @media (max-width:620px) {
   .subin { padding:4px 9px 12px; }
   .paytable.roles { min-width:0; }
@@ -433,16 +460,16 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:34px; line-height:0; color:var(--edge); }
 /* The signature. Drawn on as the page settles, the way a pen moves - the
    one place the paper is allowed to look handmade. */
-.sig { display:block; width:250px; max-width:100%; aspect-ratio:715/156;
-  margin:16px 0 0; background:var(--ink);
-  -webkit-mask:var(--sig) no-repeat left center / contain;
-  mask:var(--sig) no-repeat left center / contain;
-  /* The pen moves left to right across the real ink. */
-  animation:sigwrite 1.7s cubic-bezier(.45,.05,.35,1) .35s both; }
-@keyframes sigwrite {
-  from { clip-path:inset(0 100% 0 0); }
-  to   { clip-path:inset(0 0 0 0); } }
-@media (prefers-reduced-motion: reduce) { .sig { animation:none; } }
+/* The signature is signed, not wiped. Each stroke starts when the pen
+   reaches it, so it writes in the order it was written. */
+.sig { display:block; width:252px; max-width:100%; height:auto;
+  margin:14px 0 0; color:var(--ink); overflow:visible; }
+.sig path { fill:none; stroke:currentColor; stroke-linecap:round;
+  stroke-linejoin:round; animation-name:pen;
+  animation-timing-function:linear; animation-fill-mode:both; }
+@keyframes pen { to { stroke-dashoffset:0; } }
+@media (prefers-reduced-motion: reduce) {
+  .sig path { animation:none; stroke-dashoffset:0 !important; } }
 
 @keyframes ink { to { stroke-dashoffset:0; } }
 
@@ -457,6 +484,10 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 /* Numbers lift when you point at them. */
 .num { transition:background .16s ease, transform .16s ease; }
 .num:hover { background:var(--tab); transform:translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .feature, .card, .whoami a, .again, .num { transition:none; }
+  .feature:hover, .card:hover, .whoami a:hover, .num:hover { transform:none; }
+}
 
 /* ---- the story so far ---- */
 /* A ruled line with the dates hung off it. The point is the slope, so the
@@ -513,6 +544,7 @@ h1 { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 .strong { font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   font-size:18px; color:var(--ink); font-weight:600; letter-spacing:-0.01em;
   text-shadow:0 1px 0 var(--emboss); }
+h2.strong { margin:0; }
 .org { color:var(--body); font-size:14.5px; }
 .org::before { content:"·"; color:var(--edge); margin:0 7px; }
 .when { color:var(--muted); font-size:13px; white-space:nowrap; }
@@ -540,6 +572,13 @@ a.demo:hover { border-color:var(--accent); }
 .pill.passed { color:var(--good); border-color:currentColor; }
 .pill.scheduled, .pill.studying, .pill.soon { color:var(--warn);
   border-color:currentColor; }
+/* The status pill never wraps, so on a phone the row stacks instead of
+   pushing it past the edge of the sheet. */
+@media (max-width:560px) {
+  .examrow { flex-wrap:wrap; gap:4px 16px; }
+  .examcode, .examname { flex:1 0 100%; min-width:0; }
+  .examrow .pill { margin-top:6px; }
+}
 
 /* ---- skills ---- */
 .skillrow { display:flex; gap:20px; padding:13px 0;
@@ -556,7 +595,7 @@ a.demo:hover { border-color:var(--accent); }
 .pending p { margin:0 0 8px; }
 .muted { color:var(--muted); }
 
-footer { margin:20px 0 0; color:var(--muted); font-size:13px;
+footer { margin:20px 0 0; color:var(--body); font-size:13px;
   display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
   padding:0 6px; }
 
@@ -577,7 +616,7 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
 <a class="skip" href="#main">Skip to content</a>
 <div class="shell">
 
-<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab on">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav></header>
+<header><nav class="nav"><a href="https://actuallyactuary.com/" class="tab">Home</a><a href="https://projects.actuallyactuary.com/" class="tab">Projects</a><a href="https://resume.actuallyactuary.com/" class="tab on" aria-current="page">Résumé</a><a href="https://exams.actuallyactuary.com/" class="tab">Exams</a><a href="https://content.actuallyactuary.com/" class="tab">Content</a><a href="https://support.actuallyactuary.com/" class="tab">Support</a><a href="https://business.actuallyactuary.com/" class="tab">Business</a></nav></header>
 <main id="main">
 
 <div class="sheetwrap"><div class="sheet inner">
@@ -585,17 +624,17 @@ footer { margin:20px 0 0; color:var(--muted); font-size:13px;
   <span class="corner c3"></span><span class="corner c4"></span>
   <svg class="minirose" viewBox="0 0 62 62" aria-hidden="true"><path d="M93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0L50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7Z"/><path d="M74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0L58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1Z"/><path d="M50.0,37.2L48.8,51.3L53.7,63.8L63.0,71.4L73.3,72.5L81.2,67.4L83.5,58.5L79.3,48.9L69.2,42.5L55.8,41.6L42.8,47.2L33.4,57.9L30.1,70.9L33.1,82.5L40.9,89.5L50.2,90.0L57.4,84.1L59.5,73.9L55.1,62.7L44.8,54.2L31.0,51.0L17.2,54.2L6.9,62.7L2.5,73.9L4.6,84.1L11.8,90.0L21.1,89.5L28.9,82.5L31.9,70.9L28.6,57.9L19.2,47.2L6.2,41.6L-7.2,42.5L-17.3,48.9L-21.5,58.5L-19.2,67.4L-11.3,72.5L-1.0,71.4L8.3,63.8L13.2,51.3L12.0,37.2L4.7,25.0L-6.6,17.8L-18.6,17.1L-27.6,22.3L-31.0,31.0L-27.6,39.7L-18.6,44.9L-6.6,44.2L4.7,37.0L12.0,24.8L13.2,10.7L8.3,-1.8L-1.0,-9.4L-11.3,-10.5L-19.2,-5.4L-21.5,3.5L-17.3,13.1L-7.2,19.5L6.2,20.4L19.2,14.8L28.6,4.1L31.9,-8.9L28.9,-20.5L21.1,-27.5L11.8,-28.0L4.6,-22.1L2.5,-11.9L6.9,-0.7L17.2,7.8L31.0,11.0L44.8,7.8L55.1,-0.7L59.5,-11.9L57.4,-22.1L50.2,-28.0L40.9,-27.5L33.1,-20.5L30.1,-8.9L33.4,4.1L42.8,14.8L55.8,20.4L69.2,19.5L79.3,13.1L83.5,3.5L81.2,-5.4L73.3,-10.5L63.0,-9.4L53.7,-1.8L48.8,10.7L50.0,24.8L57.3,37.0L68.6,44.2L80.6,44.9L89.6,39.7L93.0,31.0L89.6,22.3L80.6,17.1L68.6,17.8L57.3,25.0Z"/><path d="M58.0,68.3L68.3,72.8L77.8,70.6L83.2,63.2L82.2,53.5L74.8,45.1L62.7,41.3L49.0,43.6L37.5,52.0L31.0,64.3L30.9,77.1L36.6,86.7L45.5,90.6L54.2,87.7L59.2,79.4L58.2,68.2L50.6,57.9L38.1,51.8L23.9,51.8L11.4,57.9L3.8,68.2L2.8,79.4L7.8,87.7L16.5,90.6L25.4,86.7L31.1,77.1L31.0,64.3L24.5,52.0L13.0,43.6L-0.7,41.3L-12.8,45.1L-20.2,53.5L-21.2,63.2L-15.8,70.6L-6.3,72.8L4.0,68.3L11.4,58.0L13.4,44.2L9.0,30.6L-0.7,20.7L-12.8,16.7L-23.7,19.1L-30.1,26.4L-30.1,35.6L-23.7,42.9L-12.8,45.3L-0.7,41.3L9.0,31.4L13.4,17.8L11.4,4.0L4.0,-6.3L-6.3,-10.8L-15.8,-8.6L-21.2,-1.2L-20.2,8.5L-12.8,16.9L-0.7,20.7L13.0,18.4L24.5,10.0L31.0,-2.3L31.1,-15.1L25.4,-24.7L16.5,-28.6L7.8,-25.7L2.8,-17.4L3.8,-6.2L11.4,4.1L23.9,10.2L38.1,10.2L50.6,4.1L58.2,-6.2L59.2,-17.4L54.2,-25.7L45.5,-28.6L36.6,-24.7L30.9,-15.1L31.0,-2.3L37.5,10.0L49.0,18.4L62.7,20.7L74.8,16.9L82.2,8.5L83.2,-1.2L77.8,-8.6L68.3,-10.8L58.0,-6.3L50.6,4.0L48.6,17.8L53.0,31.4L62.7,41.3L74.8,45.3L85.7,42.9L92.1,35.6L92.1,26.4L85.7,19.1L74.8,16.7L62.7,20.7L53.0,30.6L48.6,44.2L50.6,58.0Z"/></svg>
   
-  <div class="crumbs"><a href="https://actuallyactuary.com/">Home</a> <span class="sep">/</span> <span>Résumé</span></div>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="https://actuallyactuary.com/">Home</a> <span class="sep" aria-hidden="true">/</span> <span aria-current="page">Résumé</span></nav>
   <h1>Résumé</h1>
-  <p class="sub"></p>
-  <p class="sub thin" style="font-size:14px;margin-top:3px"></p>
-  <p class="tagline">Education, experience, leadership and awards - with more detail than fits on the one-page PDF.</p>
+  
+  
+  <p class="tagline">Education, experience, leadership and awards, with more detail than fits on the one-page PDF.</p>
   
   <div class="links"></div>
   
   
   <hr class="dblrule">
-  <p class="lead">First-year actuarial science student at UW-Eau Claire. I came in with 34 college credits already done, a 36 on the mathematics section of the ACT, and a habit of starting things at my high school that did not exist yet - a math club, a debate club, and the school's first debate event.</p><p class="lead">What I am looking for: internships or entry-level roles in financial analysis, market analysis, asset management, or anything actuarial — work where the job is to get a number right and then explain it to somebody who has to act on it.</p><a class="demo" href="https://actuallyactuary.com/Carter_Matherne_Resume.pdf" target="_blank">Download the PDF <span aria-hidden="true">&rarr;</span></a><h2 class="sechead">Education</h2><div class="entry"><div class="entry-head"><div><span class="strong">B.S. Actuarial Science</span><span class="org">University of Wisconsin–Eau Claire</span></div><div class="when">Expected May 2029</div></div><div class="where">Eau Claire, WI</div><ul class="notes"><li>Mark Stephen Cosby Honors College</li><li>Entered with 34 dual-enrollment college credits</li><li>Dual-enrollment GPA 3.92</li><li>Certificates in progress: Advanced Business Communication, and Computer Programming</li><li>Fall 2026: Introduction to Computer Science, Calculus I, Introduction to the Actuarial Career, and Business Communication — Writing, Speaking and Collaborating</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">High School Diploma</span><span class="org">Cadott High School</span></div><div class="when">May 2026</div></div><div class="where">Cadott, WI</div><ul class="notes"><li>GPA 3.9+ unweighted, 4.25 weighted</li><li>ACT: 36 on the mathematics section</li><li>High honor roll every semester</li></ul></div><h2 class="sechead">Experience</h2><div class="entry"><div class="entry-head"><div><span class="strong">Accounting Tutor</span><span class="org">Peer tutoring</span></div><div class="when">High school</div></div><div class="where">Cadott, WI</div><ul class="notes"><li>Tutored high-school accounting: the accounting equation, journal entries, trial balances and the three financial statements.</li><li>Most of the work was finding where somebody&#x27;s mental model had gone wrong rather than re-explaining the procedure, which is roughly what I now do when a backtest disagrees with me.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Deli &amp; Food Court Clerk</span><span class="org">Festival Foods</span></div><div class="when">2024 – Present</div></div><div class="where">Chippewa Falls, WI</div><ul class="notes"><li>Forecast demand and place $3,000 to $10,000 in weekly replenishment orders across five order guides from three suppliers, some of them 36 pages long.</li><li>Improved shelf availability on high-turn snack wall items — King&#x27;s Hawaiian, naan, pretzel crisps — to the most consistent in-stock levels the department has held.</li><li>Cross-trained on all five deli and food court stations, serving 30 to 40 guests a shift across 16 to 24 hours a week.</li></ul></div><h2 class="sechead">Leadership &amp; Awards</h2><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">UWEC Actuarial Club</span></div><div class="when">September 2026 – Present</div></div><ul class="notes"><li>Chapter meetings and employer networking events with other people heading for the same exams.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Team Captain</span><span class="org">Finance &amp; Investment Challenge Bowl</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Captained a three-person team through four straight winning rounds to place first among 17 regional teams, advancing to state.</li><li>Directed preparation across personal finance, investments, economics and risk management.</li><li>Answered the majority of questions in the deciding rounds, but ran every answer past the team before buzzing — the one time I did not, it cost us the seeding round.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">House Liaison</span><span class="org">Badger Boys State</span></div><div class="when">June 2025</div></div><ul class="notes"><li>One of 700+ delegates selected for the American Legion&#x27;s Wisconsin government programme. Appointed House Liaison after campaigning for State Treasurer — recording House proceedings and briefing the Governor on legislation.</li></ul></div><figure class="fig"><img src="https://actuallyactuary.com/boys-state.jpg" alt="Badger Boys State delegates" loading="lazy" decoding="async"><figcaption>One of 700+ delegates, June 2025.</figcaption></figure><div class="entry"><div class="entry-head"><div><span class="strong">Founder &amp; President</span><span class="org">Cadott High School Math Club</span></div><div class="when">2023 – 2026</div></div><ul class="notes"><li>Founded the club with five members and grew it to roughly ten by senior year, meeting three times a month and competing in MathLeague.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Co-Founder &amp; President</span><span class="org">Cadott High School Debate Club</span></div><div class="when">2025 – 2026</div></div><ul class="notes"><li>Co-founded the club with Saibyn Will and Logan Lanou, led roughly fifteen active participants, ran practices and hosted the school&#x27;s first debate competition.</li><li>It still runs now that we have all graduated, which was the point of building it properly rather than just holding it together.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">Programming Club</span></div><div class="when">2025 – 2026</div></div><ul class="notes"><li>Built a pro-bono website for the Cadott Community Association, a local volunteerism organisation, in Go and Tailwind CSS with AI-assisted development. It is live and in use today.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">Future Business Leaders of America</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Placed 5th in Insurance &amp; Risk Management at the Wisconsin State Leadership Conference, qualifying for the National Leadership Conference.</li><li>Also competed at state level in Accounting II.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">State Solo &amp; Ensemble Performer</span><span class="org">WSMA</span></div><div class="when">2023 – 2026</div></div><ul class="notes"><li>Alto and baritone saxophone. Qualified for the state festival seven times: twice as a soloist, twice with the jazz ensemble, and three times in a small group.</li></ul></div><figure class="fig"><img src="https://actuallyactuary.com/sax.jpg" alt="Saxophone trio before a state Solo &amp; Ensemble performance" loading="lazy" decoding="async"><figcaption>Saxophone trio, Solo &amp; Ensemble.</figcaption></figure><h2 class="sechead">Skills</h2><div class="skillrow"><div class="skilllabel">Analysis</div><div class="tags"><span class="tag">Investment &amp; equity research</span><span class="tag">Backtesting &amp; simulation design</span><span class="tag">Inventory forecasting &amp; ordering systems</span></div></div><div class="skillrow"><div class="skilllabel">Technical</div><div class="tags"><span class="tag">Microsoft Excel</span><span class="tag">Google Sheets</span><span class="tag">Word &amp; PowerPoint</span><span class="tag">AI tools for analysis, research and development</span></div></div><div class="skillrow"><div class="skilllabel">Other</div><div class="tags"><span class="tag">Customer service</span><span class="tag">Typing 100–110 WPM</span></div></div><p class="note" style="margin-top:16px">On the technical work: I design the system, decide what it has to prove, and write the tests that try to break it. A lot of the Python itself I write with AI assistance — I read it, run it, debug it and can tell you why every part is there, but I am not going to claim I typed all of it from memory. The 280+ automated checks in the backtester are the part I care about, because they are what makes the results mean anything.</p><p class="note">References available on request.</p>
+  <p class="lead">First-year actuarial science student at UW-Eau Claire. I came in with 34 college credits already done, a 36 on the mathematics section of the ACT, and a habit of starting things at my high school that did not exist yet (a math club, a debate club, and the school's first debate event).</p><p class="lead">What I am looking for: internships or entry-level roles in financial analysis, market analysis, asset management, or anything actuarial, where the job is to get a number right and then explain it to somebody who has to act on it.</p><a class="demo" href="https://actuallyactuary.com/Carter_Matherne_Resume.pdf" target="_blank">Download the PDF <span aria-hidden="true">&rarr;</span></a><h2 class="sechead">Education</h2><div class="entry"><div class="entry-head"><div><span class="strong">B.S. Actuarial Science</span><span class="org">University of Wisconsin-Eau Claire</span></div><div class="when">Expected May 2029</div></div><div class="where">Eau Claire, WI</div><ul class="notes"><li>Mark Stephen Cosby Honors College</li><li>Entered with 34 dual-enrollment college credits</li><li>Dual-enrollment GPA 3.92</li><li>Certificates in progress: Advanced Business Communication, and Computer Programming</li><li>Fall 2026: Introduction to Computer Science, Calculus I, Introduction to the Actuarial Career, and Business Communication (Writing, Speaking and Collaborating)</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">High School Diploma</span><span class="org">Cadott High School</span></div><div class="when">May 2026</div></div><div class="where">Cadott, WI</div><ul class="notes"><li>GPA 3.9+ unweighted, 4.25 weighted</li><li>ACT: 36 on the mathematics section</li><li>High honor roll every semester</li></ul></div><h2 class="sechead">Experience</h2><div class="entry"><div class="entry-head"><div><span class="strong">Accounting Tutor</span><span class="org">Peer tutoring</span></div><div class="when">High school</div></div><div class="where">Cadott, WI</div><ul class="notes"><li>Tutored high-school accounting: the accounting equation, journal entries, trial balances and the three financial statements.</li><li>Most of the work was finding where somebody&#x27;s mental model had gone wrong rather than re-explaining the procedure, which is roughly what I now do when a backtest disagrees with me.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Deli &amp; Food Court Clerk</span><span class="org">Festival Foods</span></div><div class="when">2024 – Present</div></div><div class="where">Chippewa Falls, WI</div><ul class="notes"><li>Forecast demand and place $3,000 to $10,000 in weekly replenishment orders across five order guides from three suppliers, some of them 36 pages long.</li><li>Improved shelf availability on high-turn snack wall items (King&#x27;s Hawaiian, naan, pretzel crisps) to the most consistent in-stock levels the department has held.</li><li>Cross-trained on all five deli and food court stations, serving 30 to 40 guests a shift across 16 to 24 hours a week.</li></ul></div><h2 class="sechead">Leadership &amp; Awards</h2><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">UWEC Actuarial Club</span></div><div class="when">September 2026 – Present</div></div><ul class="notes"><li>Chapter meetings and employer networking events with other people heading for the same exams.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Team Captain</span><span class="org">Finance &amp; Investment Challenge Bowl</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Captained a three-person team through four straight winning rounds to place first among 17 regional teams, advancing to state.</li><li>Directed preparation across personal finance, investments, economics and risk management.</li><li>Answered the majority of questions in the deciding rounds, but ran every answer past the team before buzzing (the one time I did not, it cost us the seeding round).</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">House Liaison</span><span class="org">Badger Boys State</span></div><div class="when">June 2025</div></div><ul class="notes"><li>One of 700+ delegates selected for the American Legion&#x27;s Wisconsin government program. Campaigned for State Treasurer and was appointed House Liaison, spending the week recording House proceedings and briefing the Governor on legislation.</li></ul></div><figure class="fig"><div class="photo"><img src="https://actuallyactuary.com/boys-state.jpg" alt="Carter Matherne among Badger Boys State delegates" width="1200" height="661" loading="lazy" decoding="async"><span class="pring" aria-hidden="true" style="left:57.2%;top:29.7%;width:13.6%;height:24.7%"></span><span class="ptag me" aria-hidden="true" style="left:64%;top:58%">Me</span></div><figcaption>One of 700+ delegates, June 2025.</figcaption></figure><div class="entry"><div class="entry-head"><div><span class="strong">Founder &amp; President</span><span class="org">Cadott High School Math Club</span></div><div class="when">2023 – 2026</div></div><ul class="notes"><li>Founded the club with five members and grew it to roughly ten by senior year, meeting three times a month and competing in MathLeague.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Co-Founder &amp; President</span><span class="org">Cadott High School Debate Club</span></div><div class="when">2025 – 2026</div></div><ul class="notes"><li>Co-founded the club with <a class="person" href="https://projects.actuallyactuary.com/challenge-bowl/#team">Saibyn Will</a> and <a class="person" href="https://projects.actuallyactuary.com/challenge-bowl/#team">Logan LaNou</a>, led roughly fifteen active participants, ran practices and hosted the school&#x27;s first debate competition.</li><li>It still runs now that we have all graduated, which was the point of building it properly rather than just holding it together.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">Programming Club</span></div><div class="when">2025 – 2026</div></div><ul class="notes"><li>Built a pro bono website for the Cadott Community Association, a local volunteer organization, in Go and Tailwind CSS with AI-assisted development. It is live and in use today.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">Member</span><span class="org">Future Business Leaders of America</span></div><div class="when">2024 – 2026</div></div><ul class="notes"><li>Placed 5th in Insurance &amp; Risk Management at the Wisconsin State Leadership Conference, qualifying for the National Leadership Conference.</li><li>Also competed at state level in Accounting II.</li></ul></div><div class="entry"><div class="entry-head"><div><span class="strong">State Solo &amp; Ensemble Performer</span><span class="org">WSMA</span></div><div class="when">2023 – 2026</div></div><ul class="notes"><li>Alto and baritone saxophone. Qualified for the state festival seven times: twice as a soloist, twice with the jazz ensemble, and three times in a small group.</li></ul></div><figure class="fig"><div class="photo"><img src="https://actuallyactuary.com/sax.jpg" alt="Ryan Mathison, Saibyn Will and Carter Matherne with their saxophones" width="685" height="925" loading="lazy" decoding="async"><span class="ptag" aria-hidden="true" style="left:26%;top:93%">Ryan Mathison</span><span class="ptag" aria-hidden="true" style="left:55%;top:93%">Saibyn Will</span><span class="ptag me" aria-hidden="true" style="left:81%;top:93%">Me</span></div><figcaption>Saxophone trio at Solo &amp; Ensemble, with Ryan Mathison and Saibyn Will.</figcaption></figure><h2 class="sechead">Skills</h2><div class="skillrow"><div class="skilllabel">Analysis</div><div class="tags"><span class="tag">Investment &amp; equity research</span><span class="tag">Backtesting &amp; simulation design</span><span class="tag">Inventory forecasting &amp; ordering systems</span></div></div><div class="skillrow"><div class="skilllabel">Technical</div><div class="tags"><span class="tag">Microsoft Excel</span><span class="tag">Google Sheets</span><span class="tag">Word &amp; PowerPoint</span><span class="tag">AI tools for analysis, research and development</span></div></div><div class="skillrow"><div class="skilllabel">Other</div><div class="tags"><span class="tag">Customer service</span><span class="tag">Typing 100–110 WPM</span></div></div><p class="note" style="margin-top:16px">On the technical work: I design the system and decide what it has to prove. Most of the Python itself is written with AI assistance. I run it, check the results against the tests and push back when something does not add up, but I am not going to claim I typed it from memory. The 280+ automated checks in the backtester are the part I care about, because they are what makes the results mean anything.</p><p class="note">References available on request.</p>
 </div></div>
 
 </main>

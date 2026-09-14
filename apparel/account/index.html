@@ -1,16 +1,38 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Account — Actually Actuary Apparel</title>
+<title>Account | Actually Actuary Apparel</title>
 <meta name="description" content="Order tracking.">
+<meta name="robots" content="noindex">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Actually Actuary Apparel">
-<meta property="og:title" content="Account — Actually Actuary Apparel">
+<meta property="og:title" content="Account | Actually Actuary Apparel">
 <meta property="og:description" content="Order tracking.">
 <meta property="og:url" content="https://apparel.actuallyactuary.com/account/">
+<script>
+/* The store folder also exists on the personal host at /apparel/. Anyone who
+   lands there is sent to the store's own host, so no link on the page can
+   lead back to the personal site. */
+(function () {
+  var h = location.hostname;
+  if (h === 'actuallyactuary.com' || h === 'www.actuallyactuary.com') {
+    var p = location.pathname;
+    if (p.indexOf('/apparel') === 0) { p = p.slice(8) || '/'; }
+    location.replace('https://apparel.actuallyactuary.com' + p
+                     + location.search + location.hash);
+  }
+})();
+</script>
 <link rel="canonical" href="https://apparel.actuallyactuary.com/account/">
+<meta property="og:image" content="https://apparel.actuallyactuary.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Actually Actuary Apparel">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffe000'/%3E%3Crect x='3' y='3' width='26' height='26' fill='none' stroke='%23111' stroke-width='2.5'/%3E%3Cpath d='M3 16h26' stroke='%23111' stroke-width='2.5'/%3E%3Ctext x='16' y='14' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23111' text-anchor='middle'%3E3%3C/text%3E%3Ctext x='16' y='27' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23111' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<meta name="twitter:image" content="https://apparel.actuallyactuary.com/og.png">
+<link rel="icon" href="https://apparel.actuallyactuary.com/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="https://apparel.actuallyactuary.com/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="https://apparel.actuallyactuary.com/apple-touch-icon.png">
 <style>
 /* Loud, flat, hard-edged. No soft shadows, no rounded corners, no gradients -
    the personal site is where the restraint lives. */
@@ -25,7 +47,9 @@
   color-scheme: light;
 }
 * { box-sizing:border-box; }
-html { background:var(--paper); }
+html { background:var(--paper); scroll-padding-top:96px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; }
 body { margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:16px; line-height:1.6;
   -webkit-font-smoothing:antialiased; }
@@ -42,7 +66,7 @@ h1,h2,h3,.display { font-family:var(--display); font-weight:900;
   text-transform:uppercase; font-size:13px; }
 .skip:focus { left:0; }
 :focus-visible { outline:3px solid var(--ink); outline-offset:2px; }
-.marq.black :focus-visible, .top :focus-visible { outline-color:var(--yellow); }
+.marq.black :focus-visible, .top :focus-visible, footer :focus-visible { outline-color:var(--yellow); }
 
 /* ---------- header ---------- */
 .top { position:sticky; top:0; z-index:50; background:var(--ink);
@@ -131,9 +155,22 @@ footer .logo { margin-right:0; }
 @keyframes slide { from { transform:translateX(0); }
                     to { transform:translateX(-50%); } }
 .marq:hover .track { animation-play-state:paused; }
+.marq { position:relative; }
+.marq:focus-within .track, .marq.paused .track { animation-play-state:paused; }
+.mqp { position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:30px; height:30px; padding:0; border:2px solid var(--ink);
+  background:var(--paper); color:var(--ink); font:900 11px/1 var(--sans);
+  cursor:pointer; }
+.marq.black .mqp { background:var(--ink); color:var(--yellow);
+  border-color:var(--yellow); width:24px; height:24px; font-size:9px; }
+.mqp[aria-pressed="true"] { background:var(--yellow); color:var(--ink);
+  border-color:var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   .track { animation:none; }
   .run + .run { display:none; }
+  .mqp { display:none; }
+  .btn, .pcard, .colcard { transition:none; }
+  .pcard:hover, .colcard:hover, .btn:hover, .btn:active { transform:none; }
   .marq { overflow-x:auto; }
 }
 
@@ -235,7 +272,7 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
 .sws { display:flex; gap:9px; margin-bottom:22px; }
 .sw { width:38px; height:38px; border:3px solid var(--ink); cursor:pointer;
   background:var(--sw); padding:0; }
-.sw.on { box-shadow:0 0 0 3px var(--yellow); }
+.sw.on { box-shadow:0 0 0 3px var(--yellow), 0 0 0 6px var(--ink); }
 .szs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
 .sz { min-width:50px; padding:10px 12px; border:2px solid var(--ink);
   background:transparent; font-family:var(--display); font-weight:900;
@@ -292,7 +329,7 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
 .qlist { border-top:2px solid var(--ink); }
 .qrow { display:flex; gap:26px; padding:18px 0;
   border-bottom:2px solid rgba(0,0,0,.12); }
-.qk { min-width:190px; font-family:var(--display); font-weight:900;
+.qk { margin:0; line-height:1.3; min-width:190px; font-family:var(--display); font-weight:900;
   font-size:14px; text-transform:uppercase; letter-spacing:.03em; }
 .qv { max-width:60ch; color:#3a352f; }
 .qs { border-top:2px solid var(--ink); }
@@ -301,9 +338,9 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
   position:relative; font-family:var(--display); font-weight:900;
   font-size:17px; text-transform:uppercase; }
 .q summary::-webkit-details-marker { display:none; }
-.q summary::after { content:"+"; position:absolute; right:8px; top:14px;
+.q summary::after { content:"+"; content:"+" / ""; position:absolute; right:8px; top:14px;
   font-size:22px; line-height:1; }
-.q[open] summary::after { content:"\2013"; }
+.q[open] summary::after { content:"\2013"; content:"\2013" / ""; }
 .q summary:hover { color:#6b5f00; }
 .qa { padding:0 0 18px; max-width:62ch; color:#3a352f; }
 .qa p { margin:0; }
@@ -329,7 +366,7 @@ table.sizes tbody tr:last-child th, table.sizes tbody tr:last-child td {
 footer { background:var(--ink); color:#efece6; padding:52px 22px 26px; }
 .fgrid { max-width:1240px; margin:0 auto; display:grid;
   grid-template-columns:1.3fr 1fr 1fr; gap:36px; }
-footer h3 { color:var(--yellow); font-size:15px; margin-bottom:14px; }
+footer h2.fh { color:var(--yellow); font-size:15px; margin:0 0 14px; }
 footer .fgrid a { display:block; color:#cfcac2; font-size:14px; padding:4px 0; }
 /* The block rule above is more specific than .logo, which flattened the
    wordmark onto its own line. Put the row back. */
@@ -360,10 +397,15 @@ footer .logo { margin-bottom:14px; }
   .fgrid { grid-template-columns:1fr 1fr; }
 }
 @media (max-width:640px) {
-  .topin { padding:11px 14px; gap:12px; flex-wrap:wrap; }
+  /* Logo and cart share the first row, the nav gets the second, so the
+     sticky header stays about 100px tall instead of stacking three rows. */
+  .topin { padding:10px 14px; gap:8px 12px; flex-wrap:wrap; }
   .wordmark { display:none; }
+  html { scroll-padding-top:124px; }
+  .cartbtn { order:2; padding:8px 12px; font-size:12.5px; }
+  .topin nav { order:3; flex:1 0 100%; justify-content:space-between;
+    gap:8px; }
   .nl { font-size:12.5px; padding:6px 2px; }
-  .cartbtn { padding:8px 12px; font-size:12.5px; }
   .wrap { padding:40px 14px; }
   .hero { padding:32px 14px 22px; }
   .pdp { padding:28px 14px; }
@@ -373,13 +415,18 @@ footer .logo { margin-bottom:14px; }
   .line { grid-template-columns:1fr auto; row-gap:10px; }
   .ltot { grid-column:1; }
 }
+@media (max-width:370px) {
+  .topin nav { gap:4px; flex-wrap:wrap; }
+  .nl { font-size:11px; letter-spacing:.01em; }
+  .hero h1 { font-size:38px; }
+}
 </style></head>
 <body>
 
 <a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="topin">
   <a class="logo " href="/" aria-label="Actually Actuary Apparel home"><span class="mark"><b>3</b><i>A</i></span><span class="wordmark">Actually<br>Actuary<br>Apparel</span></a>
-  <nav><a class="nl" href="../shop/">Shop</a><a class="nl" href="../c/crafty/">Collections</a><a class="nl" href="../about/">About</a><a class="nl on" href="../account/">Account</a></nav>
+  <nav><a class="nl" href="../shop/">Shop</a><a class="nl" href="../c/crafty/">Collections</a><a class="nl" href="../about/">About</a><a class="nl on" aria-current="page" href="../account/">Account</a></nav>
   <a class="cartbtn" href="../cart/">Cart
     <span class="n" data-cart-count style="display:none"></span></a>
 </div></header>
@@ -409,7 +456,7 @@ footer .logo { margin-bottom:14px; }
       <span class="stamp">Actuary Approved&trade;</span>
     </div>
     <div>
-      <h3>Navigate</h3>
+      <h2 class="fh">Navigate</h2>
       <a href="../shop/">Shop all tees</a>
       <a href="../c/crafty/">Crafty Collection</a>
       <a href="../about/">Our dumb story</a>
@@ -417,9 +464,9 @@ footer .logo { margin-bottom:14px; }
       <a href="../faq/">FAQ / Returns</a>
     </div>
     <div>
-      <h3>Follow the chaos</h3>
-      <div class="socs"><a class="soc" href="https://www.youtube.com/@actuallyactuary" target="_blank" rel="noopener">YouTube</a></div>
-      <p class="fline">Tag us in your fits.<br>We'll repost. Probably.</p>
+      <h2 class="fh">Follow the chaos</h2>
+      <div class="socs"><span class="fline">Nothing to follow yet.</span></div>
+      
     </div>
   </div>
   <div class="fbar">
@@ -444,7 +491,12 @@ window.__AAA_FREE_OVER = 50;
   var FREE = window.__AAA_FREE_OVER || 0;
 
   function read() {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY));
+      return Array.isArray(v) ? v.filter(function (l) {
+        return l && CAT[l.id] && l.qty > 0;
+      }) : [];
+    }
     catch (e) { return []; }
   }
   function write(c) {
@@ -483,24 +535,25 @@ window.__AAA_FREE_OVER = 50;
     if (!c.length) {
       box.innerHTML = '<div class="empty"><p class="ebig">Your cart is empty</p>'
         + '<p>Nothing in here. The variance is zero.</p>'
-        + '<a class="btn" href="' + (box.getAttribute('data-shop') || 'shop/')
+        + '<a class="btn" href="' + (box.getAttribute('data-shop') || '../shop/')
         + '">Browse the drop</a></div>';
     } else {
       box.innerHTML = c.map(function (l, i) {
         var p = CAT[l.id] || {name: l.id, price: 0};
         var lineTotal = p.price * l.qty;
+        var who = esc(p.name) + ', ' + esc(l.color) + ', ' + esc(l.size);
         sub += lineTotal;
         return '<div class="line">'
           + '<div class="lname"><b>' + esc(p.name) + '</b>'
           + '<span>' + esc(l.color) + ' &middot; ' + esc(l.size) + '</span></div>'
           + '<div class="qty">'
-          + '<button type="button" data-dec="' + i + '" aria-label="One fewer">&minus;</button>'
+          + '<button type="button" data-dec="' + i + '" aria-label="Decrease quantity of ' + who + '">&minus;</button>'
           + '<span>' + l.qty + '</span>'
-          + '<button type="button" data-inc="' + i + '" aria-label="One more">+</button>'
+          + '<button type="button" data-inc="' + i + '" aria-label="Increase quantity of ' + who + '">+</button>'
           + '</div>'
           + '<div class="ltot">' + money(lineTotal) + '</div>'
           + '<button type="button" class="rm" data-rm="' + i + '" '
-          + 'aria-label="Remove">&times;</button>'
+          + 'aria-label="Remove ' + who + ' from cart">&times;</button>'
           + '</div>';
       }).join('');
     }
@@ -539,9 +592,9 @@ window.__AAA_FREE_OVER = 50;
       var sw = ev.target.closest && ev.target.closest('.sw');
       if (sw) {
         [].forEach.call(pdp.querySelectorAll('.sw'), function (b) {
-          b.classList.remove('on');
+          b.classList.remove('on'); b.setAttribute('aria-pressed', 'false');
         });
-        sw.classList.add('on');
+        sw.classList.add('on'); sw.setAttribute('aria-pressed', 'true');
         chosen.color = sw.getAttribute('data-color');
         [].forEach.call(pdp.querySelectorAll('.shot'), function (s) {
           s.classList.toggle('on', s.getAttribute('data-color') === chosen.color);
@@ -551,9 +604,9 @@ window.__AAA_FREE_OVER = 50;
       var sz = ev.target.closest && ev.target.closest('.sz');
       if (sz) {
         [].forEach.call(pdp.querySelectorAll('.sz'), function (b) {
-          b.classList.remove('on');
+          b.classList.remove('on'); b.setAttribute('aria-pressed', 'false');
         });
-        sz.classList.add('on');
+        sz.classList.add('on'); sz.setAttribute('aria-pressed', 'true');
         chosen.size = sz.getAttribute('data-size');
         return;
       }
@@ -561,8 +614,12 @@ window.__AAA_FREE_OVER = 50;
         add({id: pdp.getAttribute('data-id'), size: chosen.size,
              color: chosen.color, qty: 1});
         var btn = ev.target.closest('[data-add]');
-        var was = btn.textContent;
+        var was = btn.getAttribute('data-label') || btn.textContent;
+        btn.setAttribute('data-label', was);
         btn.textContent = 'Added';
+        var said = pdp.querySelector('[data-add-status]');
+        if (said) said.textContent = 'Added ' + pdp.getAttribute('data-name')
+          + ', ' + chosen.color + ', size ' + chosen.size + ', to your cart.';
         btn.classList.add('done');
         setTimeout(function () {
           btn.textContent = was; btn.classList.remove('done');
@@ -577,15 +634,34 @@ window.__AAA_FREE_OVER = 50;
     if (!t.closest) return;
     var b = t.closest('button');
     if (!b) return;
+    if (b.classList.contains('mqp')) {
+      var paused = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      b.setAttribute('aria-label', paused ? 'Play scrolling text'
+                                          : 'Pause scrolling text');
+      b.closest('.marq').classList.toggle('paused', paused);
+      b.firstChild.textContent = paused ? '\u25B6' : '\u275A\u275A';
+      return;
+    }
     var c = read(), i;
-    if (b.hasAttribute('data-inc')) {
-      i = +b.getAttribute('data-inc'); c[i].qty++; write(c);
-    } else if (b.hasAttribute('data-dec')) {
-      i = +b.getAttribute('data-dec');
-      c[i].qty--; if (c[i].qty < 1) c.splice(i, 1);
+    var attr = b.hasAttribute('data-inc') ? 'data-inc'
+      : b.hasAttribute('data-dec') ? 'data-dec'
+      : b.hasAttribute('data-rm') ? 'data-rm' : '';
+    if (attr) {
+      i = +b.getAttribute(attr);
+      /* The cart may have changed in another tab since this was drawn. */
+      if (!c[i]) { paint(); return; }
+      if (attr === 'data-inc') { c[i].qty++; }
+      else if (attr === 'data-dec') { c[i].qty--; if (c[i].qty < 1) c.splice(i, 1); }
+      else { c.splice(i, 1); }
+      /* Redrawing the lines destroys the focused button, so focus its
+         replacement, or the list itself when that line is gone. */
+      var again = c[i] ? '[' + attr + '="' + i + '"]' : '';
       write(c);
-    } else if (b.hasAttribute('data-rm')) {
-      i = +b.getAttribute('data-rm'); c.splice(i, 1); write(c);
+      var box = document.querySelector('[data-cart-lines]');
+      var target = (again && document.querySelector(again)) || box;
+      if (target === box && box) box.setAttribute('tabindex', '-1');
+      if (target) target.focus();
     } else if (b.hasAttribute('data-clear')) {
       write([]);
     } else if (b.hasAttribute('data-checkout')) {

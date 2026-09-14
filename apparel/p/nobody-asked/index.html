@@ -1,16 +1,38 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>People Who Asked — Actually Actuary Apparel</title>
-<meta name="description" content="A survey of everyone, all years. n = 0.">
+<title>People Who Asked T-Shirt | Actually Actuary Apparel</title>
+<meta name="description" content="A survey of everyone, all years. n = 0. A graphic tee in sizes S to 4XL from Actually Actuary Apparel.">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Actually Actuary Apparel">
-<meta property="og:title" content="People Who Asked — Actually Actuary Apparel">
-<meta property="og:description" content="A survey of everyone, all years. n = 0.">
+<meta property="og:title" content="People Who Asked T-Shirt | Actually Actuary Apparel">
+<meta property="og:description" content="A survey of everyone, all years. n = 0. A graphic tee in sizes S to 4XL from Actually Actuary Apparel.">
 <meta property="og:url" content="https://apparel.actuallyactuary.com/p/nobody-asked/">
+<script>
+/* The store folder also exists on the personal host at /apparel/. Anyone who
+   lands there is sent to the store's own host, so no link on the page can
+   lead back to the personal site. */
+(function () {
+  var h = location.hostname;
+  if (h === 'actuallyactuary.com' || h === 'www.actuallyactuary.com') {
+    var p = location.pathname;
+    if (p.indexOf('/apparel') === 0) { p = p.slice(8) || '/'; }
+    location.replace('https://apparel.actuallyactuary.com' + p
+                     + location.search + location.hash);
+  }
+})();
+</script>
 <link rel="canonical" href="https://apparel.actuallyactuary.com/p/nobody-asked/">
+<meta property="og:image" content="https://apparel.actuallyactuary.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Actually Actuary Apparel">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffe000'/%3E%3Crect x='3' y='3' width='26' height='26' fill='none' stroke='%23111' stroke-width='2.5'/%3E%3Cpath d='M3 16h26' stroke='%23111' stroke-width='2.5'/%3E%3Ctext x='16' y='14' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23111' text-anchor='middle'%3E3%3C/text%3E%3Ctext x='16' y='27' font-family='Georgia,serif' font-size='13' font-weight='700' fill='%23111' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<meta name="twitter:image" content="https://apparel.actuallyactuary.com/og.png">
+<link rel="icon" href="https://apparel.actuallyactuary.com/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="https://apparel.actuallyactuary.com/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="https://apparel.actuallyactuary.com/apple-touch-icon.png">
 <style>
 /* Loud, flat, hard-edged. No soft shadows, no rounded corners, no gradients -
    the personal site is where the restraint lives. */
@@ -25,7 +47,9 @@
   color-scheme: light;
 }
 * { box-sizing:border-box; }
-html { background:var(--paper); }
+html { background:var(--paper); scroll-padding-top:96px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; }
 body { margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--sans); font-size:16px; line-height:1.6;
   -webkit-font-smoothing:antialiased; }
@@ -42,7 +66,7 @@ h1,h2,h3,.display { font-family:var(--display); font-weight:900;
   text-transform:uppercase; font-size:13px; }
 .skip:focus { left:0; }
 :focus-visible { outline:3px solid var(--ink); outline-offset:2px; }
-.marq.black :focus-visible, .top :focus-visible { outline-color:var(--yellow); }
+.marq.black :focus-visible, .top :focus-visible, footer :focus-visible { outline-color:var(--yellow); }
 
 /* ---------- header ---------- */
 .top { position:sticky; top:0; z-index:50; background:var(--ink);
@@ -131,9 +155,22 @@ footer .logo { margin-right:0; }
 @keyframes slide { from { transform:translateX(0); }
                     to { transform:translateX(-50%); } }
 .marq:hover .track { animation-play-state:paused; }
+.marq { position:relative; }
+.marq:focus-within .track, .marq.paused .track { animation-play-state:paused; }
+.mqp { position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:30px; height:30px; padding:0; border:2px solid var(--ink);
+  background:var(--paper); color:var(--ink); font:900 11px/1 var(--sans);
+  cursor:pointer; }
+.marq.black .mqp { background:var(--ink); color:var(--yellow);
+  border-color:var(--yellow); width:24px; height:24px; font-size:9px; }
+.mqp[aria-pressed="true"] { background:var(--yellow); color:var(--ink);
+  border-color:var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   .track { animation:none; }
   .run + .run { display:none; }
+  .mqp { display:none; }
+  .btn, .pcard, .colcard { transition:none; }
+  .pcard:hover, .colcard:hover, .btn:hover, .btn:active { transform:none; }
   .marq { overflow-x:auto; }
 }
 
@@ -235,7 +272,7 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
 .sws { display:flex; gap:9px; margin-bottom:22px; }
 .sw { width:38px; height:38px; border:3px solid var(--ink); cursor:pointer;
   background:var(--sw); padding:0; }
-.sw.on { box-shadow:0 0 0 3px var(--yellow); }
+.sw.on { box-shadow:0 0 0 3px var(--yellow), 0 0 0 6px var(--ink); }
 .szs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
 .sz { min-width:50px; padding:10px 12px; border:2px solid var(--ink);
   background:transparent; font-family:var(--display); font-weight:900;
@@ -292,7 +329,7 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
 .qlist { border-top:2px solid var(--ink); }
 .qrow { display:flex; gap:26px; padding:18px 0;
   border-bottom:2px solid rgba(0,0,0,.12); }
-.qk { min-width:190px; font-family:var(--display); font-weight:900;
+.qk { margin:0; line-height:1.3; min-width:190px; font-family:var(--display); font-weight:900;
   font-size:14px; text-transform:uppercase; letter-spacing:.03em; }
 .qv { max-width:60ch; color:#3a352f; }
 .qs { border-top:2px solid var(--ink); }
@@ -301,9 +338,9 @@ h2.big { font-size:clamp(34px,5.2vw,60px); margin-bottom:30px; }
   position:relative; font-family:var(--display); font-weight:900;
   font-size:17px; text-transform:uppercase; }
 .q summary::-webkit-details-marker { display:none; }
-.q summary::after { content:"+"; position:absolute; right:8px; top:14px;
+.q summary::after { content:"+"; content:"+" / ""; position:absolute; right:8px; top:14px;
   font-size:22px; line-height:1; }
-.q[open] summary::after { content:"\2013"; }
+.q[open] summary::after { content:"\2013"; content:"\2013" / ""; }
 .q summary:hover { color:#6b5f00; }
 .qa { padding:0 0 18px; max-width:62ch; color:#3a352f; }
 .qa p { margin:0; }
@@ -329,7 +366,7 @@ table.sizes tbody tr:last-child th, table.sizes tbody tr:last-child td {
 footer { background:var(--ink); color:#efece6; padding:52px 22px 26px; }
 .fgrid { max-width:1240px; margin:0 auto; display:grid;
   grid-template-columns:1.3fr 1fr 1fr; gap:36px; }
-footer h3 { color:var(--yellow); font-size:15px; margin-bottom:14px; }
+footer h2.fh { color:var(--yellow); font-size:15px; margin:0 0 14px; }
 footer .fgrid a { display:block; color:#cfcac2; font-size:14px; padding:4px 0; }
 /* The block rule above is more specific than .logo, which flattened the
    wordmark onto its own line. Put the row back. */
@@ -360,10 +397,15 @@ footer .logo { margin-bottom:14px; }
   .fgrid { grid-template-columns:1fr 1fr; }
 }
 @media (max-width:640px) {
-  .topin { padding:11px 14px; gap:12px; flex-wrap:wrap; }
+  /* Logo and cart share the first row, the nav gets the second, so the
+     sticky header stays about 100px tall instead of stacking three rows. */
+  .topin { padding:10px 14px; gap:8px 12px; flex-wrap:wrap; }
   .wordmark { display:none; }
+  html { scroll-padding-top:124px; }
+  .cartbtn { order:2; padding:8px 12px; font-size:12.5px; }
+  .topin nav { order:3; flex:1 0 100%; justify-content:space-between;
+    gap:8px; }
   .nl { font-size:12.5px; padding:6px 2px; }
-  .cartbtn { padding:8px 12px; font-size:12.5px; }
   .wrap { padding:40px 14px; }
   .hero { padding:32px 14px 22px; }
   .pdp { padding:28px 14px; }
@@ -372,6 +414,11 @@ footer .logo { margin-bottom:14px; }
   .qk { min-width:0; }
   .line { grid-template-columns:1fr auto; row-gap:10px; }
   .ltot { grid-column:1; }
+}
+@media (max-width:370px) {
+  .topin nav { gap:4px; flex-wrap:wrap; }
+  .nl { font-size:11px; letter-spacing:.01em; }
+  .hero h1 { font-size:38px; }
 }
 </style></head>
 <body>
@@ -398,14 +445,15 @@ footer .logo { margin-bottom:14px; }
     <p class="lede">A survey of everyone, all years. n = 0.</p>
     <p class="price big">$28.00</p>
 
-    <p class="lbl">Colour</p>
-    <div class="sws"><button type="button" class="sw on" data-color="White" style="--sw:#f4f2ee" aria-label="White"></button><button type="button" class="sw" data-color="Black" style="--sw:#16161a" aria-label="Black"></button><button type="button" class="sw" data-color="Butter" style="--sw:#f2dfa0" aria-label="Butter"></button></div>
+    <p class="lbl">Color</p>
+    <div class="sws" role="group" aria-label="Color"><button type="button" class="sw on" data-color="White" style="--sw:#f4f2ee" aria-label="White" aria-pressed="true"></button><button type="button" class="sw" data-color="Black" style="--sw:#16161a" aria-label="Black" aria-pressed="false"></button><button type="button" class="sw" data-color="Butter" style="--sw:#f2dfa0" aria-label="Butter" aria-pressed="false"></button></div>
 
-    <p class="lbl">Size <a class="tiny" href="../../faq/">Size guide</a></p>
-    <div class="szs"><button type="button" class="sz" data-size="S">S</button><button type="button" class="sz" data-size="M">M</button><button type="button" class="sz on" data-size="L">L</button><button type="button" class="sz" data-size="XL">XL</button><button type="button" class="sz" data-size="2XL">2XL</button><button type="button" class="sz" data-size="3XL">3XL</button><button type="button" class="sz" data-size="4XL">4XL</button></div>
+    <p class="lbl">Size <a class="tiny" href="../../faq/#size-guide">Size guide</a></p>
+    <div class="szs" role="group" aria-label="Size"><button type="button" class="sz" data-size="S" aria-pressed="false">S</button><button type="button" class="sz" data-size="M" aria-pressed="false">M</button><button type="button" class="sz on" data-size="L" aria-pressed="true">L</button><button type="button" class="sz" data-size="XL" aria-pressed="false">XL</button><button type="button" class="sz" data-size="2XL" aria-pressed="false">2XL</button><button type="button" class="sz" data-size="3XL" aria-pressed="false">3XL</button><button type="button" class="sz" data-size="4XL" aria-pressed="false">4XL</button></div>
 
     <button type="button" class="btn big add" data-add>Add to cart</button>
-    <p class="note">Properly labelled axes, gridlines, a tick scale running to ten, and one bar with no height at all. The methodology is sound. The finding is that nobody asked.</p>
+    <p class="sr-only" role="status" data-add-status></p>
+    <p class="note">Properly labeled axes, gridlines, a tick scale running to ten, and one bar with no height at all. The methodology is sound. The finding is that nobody asked.</p>
     <ul class="ticks">
       <li>Comfort Colors 1717 garment-dyed cotton</li>
       <li>Printed for your order, then shipped direct</li>
@@ -416,7 +464,7 @@ footer .logo { margin-bottom:14px; }
 <section class="wrap">
   <p class="eyebrow"><span class="dash"></span> Also</p>
   <h2 class="big">You might also regret</h2>
-  <div class="grid"><article class="pcard"><a class="pshot" href="../../p/beer-chart/"><span class="badge">BEST SELLER</span><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Global Beer Consumption t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><text x="260" y="172" text-anchor="middle" font-size="15" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.5">GLOBAL BEER CONSUMPTION</text><line x1="150" y1="190" x2="370" y2="190" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="228" x2="370" y2="228" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="265" x2="370" y2="265" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="302" x2="370" y2="302" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="340" x2="370" y2="340" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="190" x2="150" y2="340" stroke="#111111" stroke-width="2.4"/><line x1="150" y1="340" x2="370" y2="340" stroke="#111111" stroke-width="2.4"/><path d="M150,308L168,311L186,306L204,312L222,309L240,314L258,310L276,315L294,311L312,316L326,312" stroke="#111111" stroke-width="2.6" fill="none" stroke-linejoin="round"/><path d="M326,312 L346,198" stroke="#111111" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="346" cy="198" r="5" fill="#111111"/><text x="356" y="204" text-anchor="start" font-size="15" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="1.5">ME</text><text x="142" y="265.0" text-anchor="middle" transform="rotate(-90 142 265.0)" font-size="8" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.6">LITRES PER CAPITA</text><text x="158" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">1990</text><text x="214" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2000</text><text x="270" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2010</text><text x="326" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2020</text></g></svg></a><div class="pbody"><h3><a href="../../p/beer-chart/">Global Beer Consumption</a></h3><p>A serious chart with one deeply unserious observation in it.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/beer-chart/">Pick a size</a></div></div></article><article class="pcard"><a class="pshot" href="../../p/confidence-curve/"><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Confidence vs Competence t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><text x="260" y="170" text-anchor="middle" font-size="16" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.6">CONFIDENCE</text><line x1="150" y1="196" x2="150" y2="328" stroke="#111111" stroke-width="2.4"/><line x1="150" y1="328" x2="370" y2="328" stroke="#111111" stroke-width="2.4"/><path d="M154,316 C168,238 178,198 196,200 C216,202 224,302 246,310 C290,322 326,248 366,226" stroke="#111111" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="196" cy="200" r="4.2" fill="#111111"/><circle cx="246" cy="310" r="4.2" fill="#111111"/><text x="188" y="184" text-anchor="end" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">READ ONE</text><text x="188" y="193" text-anchor="end" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">ARTICLE</text><text x="246" y="324" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">OH</text><text x="260" y="348" text-anchor="middle" font-size="9" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="1.6">COMPETENCE</text></g></svg></a><div class="pbody"><h3><a href="../../p/confidence-curve/">Confidence vs Competence</a></h3><p>Straight up the mountain, off the cliff, then the long walk.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/confidence-curve/">Pick a size</a></div></div></article><article class="pcard"><a class="pshot" href="../../p/enderman/"><span class="badge">NEW DROP</span><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Enderman No-Look t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><rect x="228" y="152" width="64" height="46" fill="#111111"/><rect x="234" y="170" width="20" height="9" fill="#c17fe8"/><rect x="258" y="170" width="20" height="9" fill="#c17fe8"/><rect x="243" y="198" width="34" height="104" fill="#111111"/><rect x="215" y="206" width="12" height="70" fill="#111111"/><rect x="215" y="264" width="30" height="12" fill="#111111"/><rect x="293" y="206" width="12" height="46" fill="#111111"/><rect x="293" y="240" width="66" height="12" fill="#111111"/><rect x="245" y="302" width="12" height="86" fill="#111111"/><rect x="263" y="302" width="12" height="86" fill="#111111"/><circle cx="371" cy="246" r="17" fill="none" stroke="#111111" stroke-width="3.5"/><path d="M354,246 h34 M371,229 v34" stroke="#111111" stroke-width="2.4" fill="none"/><path d="M359,234 q12,12 0,24 M383,234 q-12,12 0,24" stroke="#111111" stroke-width="2" fill="none"/><text x="260" y="418" text-anchor="middle" font-size="20" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="2.5">NO LOOK</text><text x="260" y="438" text-anchor="middle" font-size="9" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="1.6">DIDN’T EVEN CHECK</text></g></svg></a><div class="pbody"><h3><a href="../../p/enderman/">Enderman No-Look</a></h3><p>Didn&#x27;t even check. Still landed it.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/enderman/">Pick a size</a></div></div></article></div>
+  <div class="grid"><article class="pcard"><a class="pshot" href="../../p/beer-chart/"><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Global Beer Consumption t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><text x="260" y="172" text-anchor="middle" font-size="15" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.5">GLOBAL BEER CONSUMPTION</text><line x1="150" y1="190" x2="370" y2="190" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="228" x2="370" y2="228" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="265" x2="370" y2="265" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="302" x2="370" y2="302" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="340" x2="370" y2="340" stroke="#111111" stroke-width="0.6" opacity="0.28"/><line x1="150" y1="190" x2="150" y2="340" stroke="#111111" stroke-width="2.4"/><line x1="150" y1="340" x2="370" y2="340" stroke="#111111" stroke-width="2.4"/><path d="M150,308L168,311L186,306L204,312L222,309L240,314L258,310L276,315L294,311L312,316L326,312" stroke="#111111" stroke-width="2.6" fill="none" stroke-linejoin="round"/><path d="M326,312 L346,198" stroke="#111111" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="346" cy="198" r="5" fill="#111111"/><text x="356" y="204" text-anchor="start" font-size="15" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="1.5">ME</text><text x="142" y="265.0" text-anchor="middle" transform="rotate(-90 142 265.0)" font-size="8" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.6">LITERS PER CAPITA</text><text x="158" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">1990</text><text x="214" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2000</text><text x="270" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2010</text><text x="326" y="356" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="0.4">2020</text></g></svg></a><div class="pbody"><h3><a href="../../p/beer-chart/">Global Beer Consumption</a></h3><p>A serious chart with one deeply unserious observation in it.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/beer-chart/">Pick a size</a></div></div></article><article class="pcard"><a class="pshot" href="../../p/confidence-curve/"><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Confidence vs Competence t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><text x="260" y="170" text-anchor="middle" font-size="16" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.6">CONFIDENCE</text><line x1="150" y1="196" x2="150" y2="328" stroke="#111111" stroke-width="2.4"/><line x1="150" y1="328" x2="370" y2="328" stroke="#111111" stroke-width="2.4"/><path d="M154,316 C168,238 178,198 196,200 C216,202 224,302 246,310 C290,322 326,248 366,226" stroke="#111111" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="196" cy="200" r="4.2" fill="#111111"/><circle cx="246" cy="310" r="4.2" fill="#111111"/><text x="188" y="184" text-anchor="end" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">READ ONE</text><text x="188" y="193" text-anchor="end" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">ARTICLE</text><text x="246" y="324" text-anchor="middle" font-size="8.5" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="0.4">OH</text><text x="260" y="348" text-anchor="middle" font-size="9" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="1.6">COMPETENCE</text></g></svg></a><div class="pbody"><h3><a href="../../p/confidence-curve/">Confidence vs Competence</a></h3><p>Straight up the mountain, off the cliff, then the long walk.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/confidence-curve/">Pick a size</a></div></div></article><article class="pcard"><a class="pshot" href="../../p/enderman/"><span class="badge">NEW DROP</span><svg class="tee" viewBox="0 0 520 540" width="520" role="img" aria-label="Enderman No-Look t-shirt"><g fill="#f4f2ee" stroke="rgba(0,0,0,.30)" stroke-width="2" stroke-linejoin="round"><path d="M92 96 L38 132 L18 196 L74 224 L92 168 Z"/><path d="M428 96 L482 132 L502 196 L446 224 L428 168 Z"/><path d="M92 96 C132 70 168 62 190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C352 62 388 70 428 96 L412 470 C412 484 402 492 388 492 L132 492 C118 492 108 484 108 470 Z"/><path d="M190 60 C200 88 232 104 260 104 C288 104 320 88 330 60 C312 50 286 46 260 46 C234 46 208 50 190 60 Z"/></g><g opacity="0.94"><rect x="228" y="152" width="64" height="46" fill="#111111"/><rect x="234" y="170" width="20" height="9" fill="#c17fe8"/><rect x="258" y="170" width="20" height="9" fill="#c17fe8"/><rect x="243" y="198" width="34" height="104" fill="#111111"/><rect x="215" y="206" width="12" height="70" fill="#111111"/><rect x="215" y="264" width="30" height="12" fill="#111111"/><rect x="293" y="206" width="12" height="46" fill="#111111"/><rect x="293" y="240" width="66" height="12" fill="#111111"/><rect x="245" y="302" width="12" height="86" fill="#111111"/><rect x="263" y="302" width="12" height="86" fill="#111111"/><circle cx="371" cy="246" r="17" fill="none" stroke="#111111" stroke-width="3.5"/><path d="M354,246 h34 M371,229 v34" stroke="#111111" stroke-width="2.4" fill="none"/><path d="M359,234 q12,12 0,24 M383,234 q-12,12 0,24" stroke="#111111" stroke-width="2" fill="none"/><text x="260" y="418" text-anchor="middle" font-size="20" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="700" letter-spacing="2.5">NO LOOK</text><text x="260" y="438" text-anchor="middle" font-size="9" fill="#111111" font-family="Rockwell,Georgia,serif" font-weight="400" letter-spacing="1.6">DIDN’T EVEN CHECK</text></g></svg></a><div class="pbody"><h3><a href="../../p/enderman/">Enderman No-Look</a></h3><p>Didn&#x27;t even check. Still landed it.</p><div class="prow"><span class="price">$28.00</span><a class="btn sm" href="../../p/enderman/">Pick a size</a></div></div></article></div>
 </section>
 </main>
 
@@ -429,7 +477,7 @@ footer .logo { margin-bottom:14px; }
       <span class="stamp">Actuary Approved&trade;</span>
     </div>
     <div>
-      <h3>Navigate</h3>
+      <h2 class="fh">Navigate</h2>
       <a href="../../shop/">Shop all tees</a>
       <a href="../../c/crafty/">Crafty Collection</a>
       <a href="../../about/">Our dumb story</a>
@@ -437,9 +485,9 @@ footer .logo { margin-bottom:14px; }
       <a href="../../faq/">FAQ / Returns</a>
     </div>
     <div>
-      <h3>Follow the chaos</h3>
-      <div class="socs"><a class="soc" href="https://www.youtube.com/@actuallyactuary" target="_blank" rel="noopener">YouTube</a></div>
-      <p class="fline">Tag us in your fits.<br>We'll repost. Probably.</p>
+      <h2 class="fh">Follow the chaos</h2>
+      <div class="socs"><span class="fline">Nothing to follow yet.</span></div>
+      
     </div>
   </div>
   <div class="fbar">
@@ -464,7 +512,12 @@ window.__AAA_FREE_OVER = 50;
   var FREE = window.__AAA_FREE_OVER || 0;
 
   function read() {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY));
+      return Array.isArray(v) ? v.filter(function (l) {
+        return l && CAT[l.id] && l.qty > 0;
+      }) : [];
+    }
     catch (e) { return []; }
   }
   function write(c) {
@@ -503,24 +556,25 @@ window.__AAA_FREE_OVER = 50;
     if (!c.length) {
       box.innerHTML = '<div class="empty"><p class="ebig">Your cart is empty</p>'
         + '<p>Nothing in here. The variance is zero.</p>'
-        + '<a class="btn" href="' + (box.getAttribute('data-shop') || 'shop/')
+        + '<a class="btn" href="' + (box.getAttribute('data-shop') || '../shop/')
         + '">Browse the drop</a></div>';
     } else {
       box.innerHTML = c.map(function (l, i) {
         var p = CAT[l.id] || {name: l.id, price: 0};
         var lineTotal = p.price * l.qty;
+        var who = esc(p.name) + ', ' + esc(l.color) + ', ' + esc(l.size);
         sub += lineTotal;
         return '<div class="line">'
           + '<div class="lname"><b>' + esc(p.name) + '</b>'
           + '<span>' + esc(l.color) + ' &middot; ' + esc(l.size) + '</span></div>'
           + '<div class="qty">'
-          + '<button type="button" data-dec="' + i + '" aria-label="One fewer">&minus;</button>'
+          + '<button type="button" data-dec="' + i + '" aria-label="Decrease quantity of ' + who + '">&minus;</button>'
           + '<span>' + l.qty + '</span>'
-          + '<button type="button" data-inc="' + i + '" aria-label="One more">+</button>'
+          + '<button type="button" data-inc="' + i + '" aria-label="Increase quantity of ' + who + '">+</button>'
           + '</div>'
           + '<div class="ltot">' + money(lineTotal) + '</div>'
           + '<button type="button" class="rm" data-rm="' + i + '" '
-          + 'aria-label="Remove">&times;</button>'
+          + 'aria-label="Remove ' + who + ' from cart">&times;</button>'
           + '</div>';
       }).join('');
     }
@@ -559,9 +613,9 @@ window.__AAA_FREE_OVER = 50;
       var sw = ev.target.closest && ev.target.closest('.sw');
       if (sw) {
         [].forEach.call(pdp.querySelectorAll('.sw'), function (b) {
-          b.classList.remove('on');
+          b.classList.remove('on'); b.setAttribute('aria-pressed', 'false');
         });
-        sw.classList.add('on');
+        sw.classList.add('on'); sw.setAttribute('aria-pressed', 'true');
         chosen.color = sw.getAttribute('data-color');
         [].forEach.call(pdp.querySelectorAll('.shot'), function (s) {
           s.classList.toggle('on', s.getAttribute('data-color') === chosen.color);
@@ -571,9 +625,9 @@ window.__AAA_FREE_OVER = 50;
       var sz = ev.target.closest && ev.target.closest('.sz');
       if (sz) {
         [].forEach.call(pdp.querySelectorAll('.sz'), function (b) {
-          b.classList.remove('on');
+          b.classList.remove('on'); b.setAttribute('aria-pressed', 'false');
         });
-        sz.classList.add('on');
+        sz.classList.add('on'); sz.setAttribute('aria-pressed', 'true');
         chosen.size = sz.getAttribute('data-size');
         return;
       }
@@ -581,8 +635,12 @@ window.__AAA_FREE_OVER = 50;
         add({id: pdp.getAttribute('data-id'), size: chosen.size,
              color: chosen.color, qty: 1});
         var btn = ev.target.closest('[data-add]');
-        var was = btn.textContent;
+        var was = btn.getAttribute('data-label') || btn.textContent;
+        btn.setAttribute('data-label', was);
         btn.textContent = 'Added';
+        var said = pdp.querySelector('[data-add-status]');
+        if (said) said.textContent = 'Added ' + pdp.getAttribute('data-name')
+          + ', ' + chosen.color + ', size ' + chosen.size + ', to your cart.';
         btn.classList.add('done');
         setTimeout(function () {
           btn.textContent = was; btn.classList.remove('done');
@@ -597,15 +655,34 @@ window.__AAA_FREE_OVER = 50;
     if (!t.closest) return;
     var b = t.closest('button');
     if (!b) return;
+    if (b.classList.contains('mqp')) {
+      var paused = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      b.setAttribute('aria-label', paused ? 'Play scrolling text'
+                                          : 'Pause scrolling text');
+      b.closest('.marq').classList.toggle('paused', paused);
+      b.firstChild.textContent = paused ? '\u25B6' : '\u275A\u275A';
+      return;
+    }
     var c = read(), i;
-    if (b.hasAttribute('data-inc')) {
-      i = +b.getAttribute('data-inc'); c[i].qty++; write(c);
-    } else if (b.hasAttribute('data-dec')) {
-      i = +b.getAttribute('data-dec');
-      c[i].qty--; if (c[i].qty < 1) c.splice(i, 1);
+    var attr = b.hasAttribute('data-inc') ? 'data-inc'
+      : b.hasAttribute('data-dec') ? 'data-dec'
+      : b.hasAttribute('data-rm') ? 'data-rm' : '';
+    if (attr) {
+      i = +b.getAttribute(attr);
+      /* The cart may have changed in another tab since this was drawn. */
+      if (!c[i]) { paint(); return; }
+      if (attr === 'data-inc') { c[i].qty++; }
+      else if (attr === 'data-dec') { c[i].qty--; if (c[i].qty < 1) c.splice(i, 1); }
+      else { c.splice(i, 1); }
+      /* Redrawing the lines destroys the focused button, so focus its
+         replacement, or the list itself when that line is gone. */
+      var again = c[i] ? '[' + attr + '="' + i + '"]' : '';
       write(c);
-    } else if (b.hasAttribute('data-rm')) {
-      i = +b.getAttribute('data-rm'); c.splice(i, 1); write(c);
+      var box = document.querySelector('[data-cart-lines]');
+      var target = (again && document.querySelector(again)) || box;
+      if (target === box && box) box.setAttribute('tabindex', '-1');
+      if (target) target.focus();
     } else if (b.hasAttribute('data-clear')) {
       write([]);
     } else if (b.hasAttribute('data-checkout')) {
