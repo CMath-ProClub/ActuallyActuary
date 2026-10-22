@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Actually Actuary Study</title>
+<meta name="description" content="Practice problems, mock tests and a dashboard that tells you what you are actually getting wrong.">
+<!-- A private study tool, not part of the public site. Keep it out of search. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fffdf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161a21" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="app.css">
+<link rel="modulepreload" href="math.js">
+<link rel="modulepreload" href="topics.js">
+<link rel="modulepreload" href="gen-algebra.js">
+<link rel="modulepreload" href="gen-calculus.js">
+<link rel="modulepreload" href="gen-actuarial.js">
+<link rel="modulepreload" href="gen-cs.js">
+<link rel="modulepreload" href="generators.js">
+<link rel="modulepreload" href="store.js">
+<link rel="modulepreload" href="scheduler.js">
+<link rel="modulepreload" href="charts.js">
+<link rel="modulepreload" href="ollama.js">
+<link rel="modulepreload" href="app.js">
+</head>
+<body>
+<a class="skip" href="#view">Skip to content</a>
+
+<header class="topbar"><div class="topinner">
+  <a class="brand" href="#/dashboard">Actually <span>Study</span></a>
+  <nav id="nav" aria-label="Sections"><a href="#/dashboard">Dashboard</a><a href="#/practice">Practice</a><a href="#/test">Mock test</a><a href="#/sets">Sets</a><a href="#/settings">Settings</a></nav>
+  <div id="profswitch"></div>
+</div></header>
+
+<main id="view" tabindex="-1">
+  <noscript>
+    <section class="card">
+      <h1>This one needs JavaScript</h1>
+      <p>The whole tool runs in your browser: it generates the problems, grades
+      them, and keeps your history locally. There is no server doing the work,
+      so with scripting off there is nothing to show.</p>
+    </section>
+  </noscript>
+  <section class="card" id="booting">
+    <p class="muted">Loading...</p>
+  </section>
+</main>
+
+<footer>
+  <p>Built for two people. Your work stays in this browser unless you turn on
+  sync, and the optional model runs on your own machine.</p>
+</footer>
+
+<script type="module">
+import { boot } from './app.js';
+const el = document.getElementById('booting');
+try {
+  boot();
+  if (el) el.remove();
+} catch (err) {
+  console.error(err);
+  if (el) {
+    el.innerHTML = '<h1>The app did not start</h1>'
+      + '<p>Something went wrong loading it. The browser console has the detail, '
+      + 'and nothing you have saved is affected.</p>'
+      + '<pre class="code"></pre>';
+    el.querySelector('pre').textContent = String(err && err.stack || err);
+  }
+}
+</script>
+</body></html>

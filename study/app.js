@@ -1,0 +1,1517 @@
+/* The study app: routing, views and the practice/test state machines.
+
+   One page, hash-routed, no framework. The DOM is small enough that rebuilding
+   a view on change is simpler and faster than diffing, and it keeps every view
+   a pure function of state. */
+
+import MathKit from './math.js';
+import { COURSES, TOPIC_BY_ID, COURSE_BY_ID, topicsIn, unitsIn, searchTopics } from './topics.js';
+import { generate, grade, inputHint, hasGenerator, generatableTopics } from './generators.js';
+import * as store from './store.js';
+import * as sched from './scheduler.js';
+import * as charts from './charts.js';
+import * as ollama from './ollama.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+function h(tag, attrs = {}, children = []) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
+    else if (k === 'dataset') Object.assign(n.dataset, v);
+    else n.setAttribute(k, v === true ? '' : String(v));
+  }
+  for (const c of [].concat(children)) {
+    if (c == null || c === false) continue;
+    n.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  }
+  return n;
+}
+
+const esc = MathKit.esc;
+
+/* ===================================================================== state */
+
+let session = null;     /* the live practice session, if any */
+let testRun = null;     /* the live test, if any */
+
+const ALL_TOPIC_IDS = generatableTopics();
+
+/* ==================================================================== router */
+
+const ROUTES = {
+  '': renderDashboard,
+  dashboard: renderDashboard,
+  practice: renderPractice,
+  test: renderTest,
+  sets: renderSets,
+  settings: renderSettings,
+};
+
+function currentRoute() {
+  const raw = location.hash.replace(/^#\/?/, '');
+  const [name, ...rest] = raw.split('/');
+  return { name: name || 'dashboard', args: rest };
+}
+
+function go(path) {
+  location.hash = `#/${path}`;
+}
+
+function router() {
+  const { name, args } = currentRoute();
+  const view = ROUTES[name] || renderDashboard;
+  /* Leaving practice or a test mid-way abandons it rather than silently
+     keeping it alive behind another screen. A half-finished test that
+     reappears later with a stale clock is worse than losing it. */
+  if (name !== 'practice' && session) session = null;
+  if (name !== 'test' && testRun && testRun.phase === 'running') {
+    if (!confirm('Leave the test? Your answers so far will be discarded.')) {
+      location.hash = '#/test';
+      return;
+    }
+    testRun = null;
+  }
+  paintNav(name);
+  const main = $('#view');
+  main.innerHTML = '';
+  main.scrollTop = 0;
+  try {
+    view(main, args);
+  } catch (err) {
+    console.error(err);
+    main.appendChild(h('div', { class: 'card error' }, [
+      h('h2', { text: 'Something broke rendering this page' }),
+      h('p', { text: String(err && err.message || err) }),
+      h('p', { class: 'muted', text: 'The console has the full trace. Your saved data is untouched.' }),
+    ]));
+  }
+  window.scrollTo(0, 0);
+}
+
+function paintNav(active) {
+  for (const a of $$('#nav a')) {
+    const target = a.getAttribute('href').replace(/^#\/?/, '') || 'dashboard';
+    a.classList.toggle('on', target === (active || 'dashboard'));
+    if (target === (active || 'dashboard')) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
+}
+
+/* ================================================================= dashboard */
+
+function renderDashboard(root) {
+  const p = store.activeProfile();
+  const stats = sched.overallStats(p);
+
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: `${greeting()}, ${p.name}` }),
+    h('p', { class: 'lead', text: 'What to work on, and how it is going.' }),
+  ]));
+
+  /* Stat tiles. One number each, so not a chart. */
+  const tiles = h('div', { class: 'tiles' }, [
+    charts.statTile(String(stats.today), 'answered today',
+      stats.today ? `${stats.todayCorrect} correct` : `goal ${p.settings.dailyGoal}`),
+    charts.statTile(stats.streak ? `${stats.streak}` : '0', stats.streak === 1 ? 'day streak' : 'day streak',
+      stats.streak ? '' : 'answer one question to start'),
+    charts.statTile(stats.accuracy == null ? '—' : `${Math.round(stats.accuracy * 100)}%`,
+      'accuracy, all time', `${stats.correct} of ${stats.total}`),
+    charts.statTile(String(stats.topicsTouched), 'topics started', `of ${ALL_TOPIC_IDS.length} available`),
+  ]);
+  root.appendChild(tiles);
+
+  /* Start practicing, prominently. */
+  root.appendChild(h('div', { class: 'cta' }, [
+    h('button', { class: 'btn big', onclick: () => startSession({ pool: ALL_TOPIC_IDS, label: 'Everything' }) },
+      'Practice now'),
+    h('a', { class: 'btn ghost', href: '#/test' }, 'Build a mock test'),
+  ]));
+
+  /* What to work on. */
+  const weak = sched.weakTopics(ALL_TOPIC_IDS, p, 5);
+  const due = sched.dueTopics(ALL_TOPIC_IDS, p, 6);
+
+  const focus = h('section', { class: 'card' }, [h('h2', { text: 'Work on these' })]);
+  if (weak.length) {
+    focus.appendChild(h('p', { class: 'muted', text: 'Lowest recent accuracy, among topics you have answered at least four times.' }));
+    const list = h('ul', { class: 'focuslist' });
+    for (const w of weak) {
+      const rem = sched.remediationFor(w.topicId, p);
+      const li = h('li', {}, [
+        h('button', {
+          class: 'linkish', onclick: () => startSession({ pool: [w.topicId], label: w.name }),
+        }, w.name),
+        h('span', { class: 'pill warn', text: `${Math.round(w.accuracy * 100)}%` }),
+        h('span', { class: 'muted small', text: `${w.correct}/${w.seen}` }),
+      ]);
+      if (rem) {
+        li.appendChild(h('p', { class: 'remnote', text: sched.remediationMessage(rem) }));
+        li.appendChild(h('button', {
+          class: 'linkish small',
+          onclick: () => startSession({ pool: [rem.topicId], label: TOPIC_BY_ID[rem.topicId].name }),
+        }, `Practice ${TOPIC_BY_ID[rem.topicId].name} instead`));
+      }
+      list.appendChild(li);
+    }
+    focus.appendChild(list);
+  } else if (stats.total < 10) {
+    focus.appendChild(h('p', { text: 'Nothing to report yet. Answer a few questions and this fills in with whatever you are actually getting wrong.' }));
+  } else {
+    focus.appendChild(h('p', { text: 'No topic is currently under 70% with enough attempts to say so. Either things are going well, or you have not touched the harder topics yet.' }));
+  }
+  root.appendChild(focus);
+
+  if (due.length) {
+    const dueCard = h('section', { class: 'card' }, [
+      h('h2', { text: 'Due for review' }),
+      h('p', { class: 'muted', text: 'Spaced out so they come back just as they are starting to fade.' }),
+    ]);
+    const chips = h('div', { class: 'chips' });
+    for (const d of due) {
+      chips.appendChild(h('button', {
+        class: 'chip', onclick: () => startSession({ pool: [d.topicId], label: d.name }),
+      }, d.name));
+    }
+    dueCard.appendChild(chips);
+    dueCard.appendChild(h('button', {
+      class: 'btn small', onclick: () => startSession({ pool: due.map((d) => d.topicId), label: 'Review' }),
+    }, `Review all ${due.length}`));
+    root.appendChild(dueCard);
+  }
+
+  /* Charts. */
+  const act = h('section', { class: 'card' }, [
+    h('h2', { text: 'Problems answered per day' }),
+    h('p', { class: 'muted', text: 'Last 30 days.' }),
+  ]);
+  act.appendChild(charts.activityChart(sched.dailyActivity(p, 30)));
+  root.appendChild(act);
+
+  const trend = h('section', { class: 'card' }, [
+    h('h2', { text: 'Accuracy trend' }),
+    h('p', { class: 'muted', text: 'Rolling average over the last 20 attempts at each point.' }),
+  ]);
+  trend.appendChild(charts.accuracyChart(sched.accuracyTrend(p)));
+  root.appendChild(trend);
+
+  const mast = h('section', { class: 'card' }, [
+    h('h2', { text: 'Accuracy by topic' }),
+    h('p', { class: 'muted', text: 'Weakest first. Click a row to practice it.' }),
+  ]);
+  mast.appendChild(charts.masteryChart(sched.topicStats(ALL_TOPIC_IDS, p), {
+    limit: 12,
+    onPick: (id) => startSession({ pool: [id], label: TOPIC_BY_ID[id].name }),
+  }));
+  root.appendChild(mast);
+
+  /* The honesty note. Not dismissible, same as the leaderboard caveat on the
+     backtester: a number that looks like a grade will be read as one. */
+  root.appendChild(h('aside', { class: 'caveat' }, [
+    h('strong', { text: 'What these numbers are, and are not. ' }),
+    'They measure how you did on questions this app generated, which is a useful signal for what to study next '
+    + 'and nothing more. They are not a grade, not a predicted exam score, and not proof a topic is learned. '
+    + 'Practicing the same generated pattern until the percentage goes up is the easiest way to fool yourself here.',
+  ]));
+
+  /* Browse everything. */
+  const browse = h('section', { class: 'card' }, [h('h2', { text: 'All topics' })]);
+  for (const c of COURSES) {
+    const topics = topicsIn(c.id).filter((t) => hasGenerator(t.id));
+    if (!topics.length) continue;
+    const det = h('details', { class: 'course' }, [
+      h('summary', {}, [
+        h('span', { class: 'cname', text: c.name }),
+        h('span', { class: 'muted small', text: `${topics.length} topics` }),
+      ]),
+    ]);
+    for (const u of unitsIn(c.id)) {
+      const avail = u.topics.filter((t) => hasGenerator(t.id));
+      if (!avail.length) continue;
+      det.appendChild(h('h3', { class: 'unit', text: u.name }));
+      const chips = h('div', { class: 'chips' });
+      for (const t of avail) {
+        const m = store.masteryOf(t.id, p);
+        const acc = m && m.seen >= sched.MIN_ATTEMPTS ? store.recentAccuracy(t.id, 20, p) : null;
+        const chip = h('button', {
+          class: 'chip', title: t.blurb || t.name,
+          onclick: () => startSession({ pool: [t.id], label: t.name }),
+        }, [
+          t.name,
+          acc != null ? h('span', {
+            class: `dot ${acc >= 0.8 ? 'good' : acc >= 0.6 ? 'mid' : 'bad'}`,
+            'aria-hidden': 'true',
+          }) : null,
+        ]);
+        if (acc != null) chip.setAttribute('aria-label', `${t.name}, ${Math.round(acc * 100)} percent correct`);
+        chips.appendChild(chip);
+      }
+      det.appendChild(chips);
+      det.appendChild(h('button', {
+        class: 'btn small ghost',
+        onclick: () => startSession({ pool: avail.map((t) => t.id), label: `${c.name}: ${u.name}` }),
+      }, `Practice this unit`));
+    }
+    browse.appendChild(det);
+  }
+  root.appendChild(browse);
+}
+
+function greeting() {
+  const hr = new Date().getHours();
+  if (hr < 5) return 'Still up';
+  if (hr < 12) return 'Morning';
+  if (hr < 18) return 'Afternoon';
+  return 'Evening';
+}
+
+/* ================================================================== practice */
+
+function startSession({ pool, label, items = null, setId = null }) {
+  session = {
+    pool: pool && pool.length ? pool : ALL_TOPIC_IDS,
+    label: label || 'Practice',
+    items,                 /* fixed list (a custom set), or null for adaptive */
+    setId,
+    index: 0,
+    answered: 0,
+    correct: 0,
+    current: null,
+    startedAt: Date.now(),
+    lastTopicId: null,
+    history: [],
+  };
+  /* Assigning the SAME hash fires no hashchange event, so the router would
+     never run; assigning a different one fires it and running router() here
+     as well would build the first problem twice and throw one away. Decide
+     from whether the hash actually changed. */
+  const before = location.hash;
+  go('practice');
+  if (location.hash === before) router();
+}
+
+function renderPractice(root) {
+  if (!session) {
+    root.appendChild(h('div', { class: 'card' }, [
+      h('h2', { text: 'Nothing in progress' }),
+      h('p', { text: 'Pick something to practice.' }),
+      h('div', { class: 'cta' }, [
+        h('button', { class: 'btn', onclick: () => startSession({ pool: ALL_TOPIC_IDS, label: 'Everything' }) }, 'Practice everything'),
+        h('a', { class: 'btn ghost', href: '#/dashboard' }, 'Back to the dashboard'),
+      ]),
+    ]));
+    return;
+  }
+
+  const bar = h('div', { class: 'sessionbar' }, [
+    h('div', {}, [
+      h('strong', { text: session.label }),
+      h('span', { class: 'muted small', text: session.answered
+        ? ` · ${session.correct}/${session.answered} correct` : ' · just started' }),
+    ]),
+    h('button', { class: 'btn small ghost', onclick: endSession }, 'End session'),
+  ]);
+  root.appendChild(bar);
+
+  const stage = h('div', { id: 'stage' });
+  root.appendChild(stage);
+  nextProblem(stage);
+}
+
+function endSession() {
+  const s = session;
+  session = null;
+  if (!s || !s.answered) { go('dashboard'); return; }
+  const main = $('#view');
+  main.innerHTML = '';
+  paintNav('practice');
+  const pct = Math.round((s.correct / s.answered) * 100);
+  const mins = Math.max(1, Math.round((Date.now() - s.startedAt) / 60000));
+  main.appendChild(h('section', { class: 'card result' }, [
+    h('h1', { text: 'Session finished' }),
+    h('p', { class: 'bignum', text: `${s.correct} / ${s.answered}` }),
+    h('p', { class: 'lead', text: `${pct}% correct over about ${mins} minute${mins === 1 ? '' : 's'}.` }),
+    s.answered < 10
+      ? h('p', { class: 'muted', text: 'That is a short session, so the percentage does not mean much on its own.' })
+      : null,
+    h('div', { class: 'cta' }, [
+      h('button', { class: 'btn', onclick: () => startSession({ pool: s.pool, label: s.label }) }, 'Go again'),
+      h('a', { class: 'btn ghost', href: '#/dashboard' }, 'Dashboard'),
+    ]),
+  ]));
+}
+
+function nextProblem(stage) {
+  const p = store.activeProfile();
+  stage.innerHTML = '';
+
+  let problem = null;
+  let remediation = null;
+
+  if (session.items) {
+    /* A fixed set: walk it in order, then stop. */
+    if (session.index >= session.items.length) { endSession(); return; }
+    problem = customToProblem(session.items[session.index], session.setId);
+    session.index++;
+  } else {
+    const spec = sched.nextProblemSpec(session.pool, p, { lastTopicId: session.lastTopicId });
+    if (!spec) {
+      stage.appendChild(h('p', { class: 'muted', text: 'No practicable topics in this selection.' }));
+      return;
+    }
+    remediation = spec.remediation;
+    problem = generate(spec.topicId, spec.difficulty);
+    if (!problem) {
+      /* One bad draw should not end the session. */
+      session.lastTopicId = spec.topicId;
+      nextProblem(stage);
+      return;
+    }
+  }
+
+  session.current = problem;
+  session.lastTopicId = problem.topicId;
+  renderProblem(stage, problem, { remediation, mode: 'practice' });
+}
+
+/* Turn a stored custom/AI item into the same shape the generators produce, so
+   one renderer handles both. */
+function customToProblem(item, setId) {
+  return {
+    ...item,
+    topicId: `custom:${setId || 'adhoc'}`,
+    topicName: item.concept || 'Custom',
+    courseId: 'custom',
+    difficulty: item.difficulty || 2,
+    seed: 0,
+    key: item.id,
+    untrusted: item.source === 'ollama',
+  };
+}
+
+/* The one problem renderer, used by practice, custom sets and test review. */
+function renderProblem(stage, problem, { remediation, mode }) {
+  const p = store.activeProfile();
+  const started = Date.now();
+  let hintsShown = 0;
+  let settled = false;
+
+  const card = h('section', { class: 'card problem' });
+
+  if (remediation) {
+    card.appendChild(h('div', { class: 'rembanner' }, [
+      h('strong', { text: 'Stepping back a moment. ' }),
+      sched.remediationMessage(remediation),
+    ]));
+  }
+
+  card.appendChild(h('div', { class: 'ptop' }, [
+    h('span', { class: 'ptopic', text: problem.topicName }),
+    h('span', { class: 'plevel', text: `level ${problem.difficulty}` }),
+    problem.untrusted
+      ? h('span', { class: 'pill ai', title: 'Written by your local model, not verified by the app.', text: 'AI-written' })
+      : null,
+  ]));
+
+  card.appendChild(h('div', { class: 'stem', html: problem.stem }));
+
+  const form = h('form', { class: 'answerform' });
+  let getResponse;
+
+  if (problem.kind === 'choice') {
+    const group = h('div', { class: 'choices', role: 'radiogroup' });
+    problem.choices.forEach((c, i) => {
+      const id = `ch${i}`;
+      const lab = h('label', { class: 'choice', for: id }, [
+        h('input', { type: 'radio', name: 'choice', id, value: String(i) }),
+        h('span', { class: 'cbody', html: c.html }),
+      ]);
+      group.appendChild(lab);
+    });
+    form.appendChild(group);
+    getResponse = () => {
+      const sel = form.querySelector('input[name=choice]:checked');
+      return sel ? sel.value : '';
+    };
+  } else {
+    const input = h('input', {
+      type: 'text', class: 'answerinput', autocomplete: 'off', autocapitalize: 'off',
+      spellcheck: 'false', placeholder: inputHint(problem), 'aria-label': 'Your answer',
+    });
+    form.appendChild(input);
+    getResponse = () => input.value;
+    setTimeout(() => input.focus(), 30);
+  }
+
+  const actions = h('div', { class: 'actions' });
+  const checkBtn = h('button', { class: 'btn', type: 'submit' }, 'Check');
+  actions.appendChild(checkBtn);
+
+  const guidance = p.settings.guidance;
+  const hintBtn = (problem.hints && problem.hints.length && mode === 'practice' && guidance !== 'answer')
+    ? h('button', { class: 'btn ghost', type: 'button' }, 'Hint')
+    : null;
+  if (hintBtn) actions.appendChild(hintBtn);
+
+  const skipBtn = h('button', { class: 'btn ghost', type: 'button' }, 'Skip');
+  actions.appendChild(skipBtn);
+  form.appendChild(actions);
+
+  const hintBox = h('div', { class: 'hints', hidden: true });
+  const feedback = h('div', { class: 'feedback', hidden: true });
+  const solution = h('div', { class: 'solution', hidden: true });
+
+  card.append(form, hintBox, feedback, solution);
+  stage.appendChild(card);
+
+  if (hintBtn) {
+    hintBtn.addEventListener('click', () => {
+      if (hintsShown >= problem.hints.length) return;
+      hintBox.hidden = false;
+      hintBox.appendChild(h('p', { class: 'hint', html: `<b>Hint ${hintsShown + 1}.</b> ${problem.hints[hintsShown]}` }));
+      hintsShown++;
+      if (hintsShown >= problem.hints.length) {
+        hintBtn.disabled = true;
+        hintBtn.textContent = 'No more hints';
+      }
+    });
+  }
+
+  skipBtn.addEventListener('click', () => settle('', true));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (settled) { advance(); return; }
+    settle(getResponse(), false);
+  });
+
+  function settle(response, skipped) {
+    if (settled) return;
+    const res = skipped ? { correct: false, detail: 'Skipped.' } : grade(problem, response);
+    settled = true;
+    checkBtn.textContent = 'Next';
+    if (hintBtn) hintBtn.disabled = true;
+    skipBtn.hidden = true;
+    for (const inp of $$('input', form)) inp.disabled = true;
+
+    feedback.hidden = false;
+    feedback.className = `feedback ${res.correct ? 'right' : 'wrong'}`;
+    feedback.innerHTML = '';
+    feedback.appendChild(h('p', { class: 'verdict', text: res.correct ? 'Correct' : skipped ? 'Skipped' : 'Not quite' }));
+    if (!res.correct) {
+      feedback.appendChild(h('p', { class: 'answerline', html: `The answer is <b>${problem.answerHtml || ''}</b>` }));
+      if (res.detail) feedback.appendChild(h('p', { class: 'muted small', text: res.detail }));
+    }
+    if (problem.note) feedback.appendChild(h('p', { class: 'pnote', text: problem.note }));
+
+    /* Worked solution: always available, shown automatically on a miss. */
+    if (problem.steps && problem.steps.length) {
+      solution.hidden = false;
+      solution.innerHTML = '';
+      const det = h('details', { class: 'steps', open: !res.correct });
+      det.appendChild(h('summary', { text: res.correct ? 'See the worked solution' : 'How to get there' }));
+      const ol = h('ol');
+      for (const st of problem.steps) {
+        ol.appendChild(h('li', {}, [
+          h('span', { class: 'sttitle', text: st.title }),
+          h('span', { class: 'sthtml', html: st.html }),
+        ]));
+      }
+      det.appendChild(ol);
+      solution.appendChild(det);
+    }
+
+    /* Ask the local model to explain, but only for a verified problem where
+       the correct answer is already known - see the note in ollama.js. */
+    if (!res.correct && !problem.untrusted && p.settings.ollamaModel) {
+      const explainBtn = h('button', { class: 'btn ghost small', type: 'button' }, 'Explain this to me');
+      const out = h('div', { class: 'explain', hidden: true });
+      explainBtn.addEventListener('click', async () => {
+        explainBtn.disabled = true;
+        explainBtn.textContent = 'Thinking...';
+        out.hidden = false;
+        out.innerHTML = '<p class="muted">Asking your local model...</p>';
+        try {
+          const text = await ollama.explain(p.settings.ollamaUrl, p.settings.ollamaModel, {
+            stem: problem.stem,
+            answer: problem.answerHtml,
+            wrongAnswer: skipped ? '' : response,
+            topic: problem.topicName,
+          });
+          out.innerHTML = '';
+          out.append(
+            h('p', { class: 'aitag', text: `Explained by ${p.settings.ollamaModel}, running on this machine.` }),
+            h('p', { html: text }),
+          );
+        } catch (err) {
+          out.innerHTML = '';
+          out.appendChild(h('p', { class: 'muted', text: err.message }));
+          if (err.hint) out.appendChild(h('p', { class: 'muted small', text: err.hint }));
+        } finally {
+          explainBtn.textContent = 'Explain this to me';
+          explainBtn.disabled = false;
+        }
+      });
+      solution.append(explainBtn, out);
+      solution.hidden = false;
+    }
+
+    /* Record it, including skips. Skipping IS the information: not being
+       able to start a question is exactly what the weak list should know
+       about. Custom items carry their own synthetic topic id, so they can
+       never move a curriculum number. */
+    store.recordAttempt({
+      topicId: problem.topicId,
+      correct: res.correct,
+      ms: Date.now() - started,
+      difficulty: problem.difficulty,
+      hintsUsed: hintsShown,
+      seed: problem.seed,
+      mode: skipped ? 'skip' : mode,
+    });
+    session.answered++;
+    if (res.correct) session.correct++;
+    session.history.push({ topicId: problem.topicId, correct: res.correct });
+
+    const bar = $('.sessionbar strong');
+    if (bar && bar.nextSibling) {
+      bar.nextSibling.textContent = ` · ${session.correct}/${session.answered} correct`;
+    }
+    checkBtn.focus();
+  }
+
+  function advance() {
+    if (!session) return;
+    nextProblem(stage);
+  }
+}
+
+/* ====================================================================== test */
+
+function renderTest(root) {
+  if (testRun && testRun.phase === 'running') { paintTestRunning(root); return; }
+  if (testRun && testRun.phase === 'done') { paintTestResults(root); return; }
+
+  const p = store.activeProfile();
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: 'Build a mock test' }),
+    h('p', { class: 'lead', text: 'Pick what it covers, how long it is, and whether it is timed. Everything is graded at the end, with a breakdown by topic.' }),
+  ]));
+
+  const form = h('form', { class: 'card testbuilder' });
+  const selected = new Set();
+
+  /* Scope: by course, by unit, or by search. */
+  form.appendChild(h('h2', { text: 'What should it cover?' }));
+  const search = h('input', { type: 'search', class: 'searchbox', placeholder: 'Search topics, e.g. "quadratic" or "annuity"' });
+  const searchOut = h('div', { class: 'chips' });
+  search.addEventListener('input', () => {
+    searchOut.innerHTML = '';
+    const hits = searchTopics(search.value).filter((t) => hasGenerator(t.id)).slice(0, 12);
+    for (const t of hits) {
+      searchOut.appendChild(topicChip(t, selected, updateCount));
+    }
+  });
+  form.append(search, searchOut);
+
+  for (const c of COURSES) {
+    const avail = topicsIn(c.id).filter((t) => hasGenerator(t.id));
+    if (!avail.length) continue;
+    const det = h('details', { class: 'course' }, [
+      h('summary', {}, [
+        h('span', { class: 'cname', text: c.name }),
+        h('button', {
+          class: 'linkish small', type: 'button',
+          onclick: (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const allOn = avail.every((t) => selected.has(t.id));
+            for (const t of avail) { if (allOn) selected.delete(t.id); else selected.add(t.id); }
+            for (const b of $$(`[data-topic]`, det)) {
+              b.classList.toggle('on', selected.has(b.dataset.topic));
+            }
+            updateCount();
+          },
+        }, 'toggle all'),
+      ]),
+    ]);
+    for (const u of unitsIn(c.id)) {
+      const ua = u.topics.filter((t) => hasGenerator(t.id));
+      if (!ua.length) continue;
+      det.appendChild(h('h3', { class: 'unit', text: u.name }));
+      const chips = h('div', { class: 'chips' });
+      for (const t of ua) chips.appendChild(topicChip(t, selected, updateCount));
+      det.appendChild(chips);
+    }
+    form.appendChild(det);
+  }
+
+  /* Options. */
+  form.appendChild(h('h2', { text: 'How long?' }));
+  const opts = h('div', { class: 'optgrid' });
+  const countSel = labelled('Questions', h('select', { name: 'count' },
+    [5, 10, 15, 20, 25, 30, 40].map((n) => h('option', { value: String(n), selected: n === 15 }, String(n)))));
+  const diffSel = labelled('Difficulty', h('select', { name: 'difficulty' }, [
+    h('option', { value: 'adaptive', selected: true }, 'Match my level'),
+    h('option', { value: '1' }, 'Introductory'),
+    h('option', { value: '2' }, 'Moderate'),
+    h('option', { value: '3' }, 'Challenging'),
+    h('option', { value: 'mixed' }, 'Mixed'),
+  ]));
+  const timeSel = labelled('Time limit', h('select', { name: 'minutes' }, [
+    h('option', { value: '0', selected: true }, 'No limit'),
+    ...[10, 15, 20, 30, 45, 60, 90].map((m) => h('option', { value: String(m) }, `${m} minutes`)),
+  ]));
+  opts.append(countSel, diffSel, timeSel);
+  form.appendChild(opts);
+
+  const countNote = h('p', { class: 'muted', text: 'No topics selected: the test will draw from everything, weighted toward what you get wrong.' });
+  form.appendChild(countNote);
+
+  function updateCount() {
+    countNote.textContent = selected.size
+      ? `${selected.size} topic${selected.size === 1 ? '' : 's'} selected.`
+      : 'No topics selected: the test will draw from everything, weighted toward what you get wrong.';
+  }
+
+  form.appendChild(h('div', { class: 'cta' }, [
+    h('button', { class: 'btn big', type: 'submit' }, 'Start the test'),
+  ]));
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const count = Number($('[name=count]', form).value);
+    const diff = $('[name=difficulty]', form).value;
+    const minutes = Number($('[name=minutes]', form).value);
+    const pool = selected.size ? [...selected] : ALL_TOPIC_IDS;
+    buildTest({ pool, count, diff, minutes, label: describeScope(selected) });
+  });
+
+  root.appendChild(form);
+
+  /* Past tests. */
+  if (p.tests.length) {
+    const past = h('section', { class: 'card' }, [h('h2', { text: 'Past tests' })]);
+    const list = h('ul', { class: 'testlist' });
+    for (const t of p.tests.slice().reverse().slice(0, 12)) {
+      list.appendChild(h('li', {}, [
+        h('span', { class: 'tname', text: t.name }),
+        h('span', { class: 'tscore', text: `${t.score}/${t.total}` }),
+        h('span', { class: 'muted small', text: new Date(t.ts).toLocaleDateString() }),
+        h('button', { class: 'linkish small', onclick: () => { testRun = reopenTest(t); router(); } }, 'review'),
+        h('button', { class: 'linkish small danger', onclick: () => { store.deleteTest(t.id); router(); } }, 'delete'),
+      ]));
+    }
+    past.appendChild(list);
+    root.appendChild(past);
+  }
+}
+
+function topicChip(t, selected, onChange) {
+  const b = h('button', {
+    class: `chip${selected.has(t.id) ? ' on' : ''}`, type: 'button',
+    dataset: { topic: t.id }, title: t.blurb || '',
+    'aria-pressed': selected.has(t.id) ? 'true' : 'false',
+  }, t.name);
+  b.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (selected.has(t.id)) selected.delete(t.id); else selected.add(t.id);
+    b.classList.toggle('on', selected.has(t.id));
+    b.setAttribute('aria-pressed', selected.has(t.id) ? 'true' : 'false');
+    onChange();
+  });
+  return b;
+}
+
+function labelled(text, control) {
+  const id = `f${Math.random().toString(36).slice(2, 8)}`;
+  control.id = id;
+  return h('div', { class: 'field' }, [h('label', { for: id, text }), control]);
+}
+
+function describeScope(selected) {
+  if (!selected.size) return 'Everything';
+  if (selected.size === 1) return TOPIC_BY_ID[[...selected][0]].name;
+  const courses = new Set([...selected].map((id) => TOPIC_BY_ID[id].course));
+  if (courses.size === 1) return COURSE_BY_ID[[...courses][0]].name;
+  return `${selected.size} topics`;
+}
+
+function buildTest({ pool, count, diff, minutes, label }) {
+  const p = store.activeProfile();
+  const topics = sched.pickTopics(pool, count, p);
+  /* pickTopics draws without replacement, so a short pool gives a short test.
+     Top it back up by cycling rather than silently handing over 3 questions. */
+  while (topics.length < count && pool.length) topics.push(pool[topics.length % pool.length]);
+
+  const items = [];
+  for (const tid of topics.slice(0, count)) {
+    const level = diff === 'adaptive' ? sched.difficultyFor(tid, p)
+      : diff === 'mixed' ? 1 + Math.floor(Math.random() * 3)
+        : Number(diff);
+    const prob = generate(tid, level);
+    if (prob) items.push({ topicId: tid, difficulty: level, seed: prob.seed });
+  }
+
+  testRun = {
+    phase: 'running',
+    id: null,
+    name: `${label} · ${items.length} questions`,
+    items,
+    responses: new Array(items.length).fill(''),
+    index: 0,
+    startedAt: Date.now(),
+    deadline: minutes ? Date.now() + minutes * 60000 : 0,
+    minutes,
+  };
+  router();
+}
+
+function reopenTest(saved) {
+  return {
+    phase: 'done',
+    id: saved.id,
+    name: saved.name,
+    items: saved.items,
+    responses: saved.responses || new Array(saved.items.length).fill(''),
+    index: 0,
+    startedAt: saved.ts,
+    deadline: 0,
+    minutes: 0,
+    savedScore: saved.score,
+    reopened: true,
+  };
+}
+
+let tickTimer = null;
+
+function paintTestRunning(root) {
+  const t = testRun;
+  const problems = t.items.map((it) => generate(it.topicId, it.difficulty, it.seed));
+
+  const head = h('div', { class: 'sessionbar' }, [
+    h('div', {}, [
+      h('strong', { text: t.name }),
+      h('span', { class: 'muted small', id: 'tprog', text: ` · ${t.index + 1} of ${t.items.length}` }),
+    ]),
+    h('div', { class: 'tbarright' }, [
+      t.deadline ? h('span', { class: 'clock', id: 'tclock' }, '--:--') : null,
+      h('button', { class: 'btn small', onclick: () => finishTest(problems) }, 'Submit'),
+    ]),
+  ]);
+  root.appendChild(head);
+
+  root.appendChild(h('p', { class: 'muted testhint', text: 'No hints or solutions until you submit. That is the point of a test.' }));
+
+  const stage = h('div', { id: 'tstage' });
+  root.appendChild(stage);
+
+  const nav = h('div', { class: 'qnav' });
+  root.appendChild(nav);
+
+  function paintNavDots() {
+    nav.innerHTML = '';
+    t.items.forEach((_, i) => {
+      nav.appendChild(h('button', {
+        class: `qdot${i === t.index ? ' on' : ''}${t.responses[i] ? ' done' : ''}`,
+        title: `Question ${i + 1}${t.responses[i] ? ' (answered)' : ''}`,
+        'aria-label': `Go to question ${i + 1}${t.responses[i] ? ', answered' : ', not answered'}`,
+        onclick: () => { t.index = i; paint(); },
+      }, String(i + 1)));
+    });
+  }
+
+  function paint() {
+    const i = t.index;
+    const prob = problems[i];
+    stage.innerHTML = '';
+    $('#tprog').textContent = ` · ${i + 1} of ${t.items.length}`;
+    paintNavDots();
+    if (!prob) {
+      stage.appendChild(h('p', { class: 'muted', text: 'This question could not be rebuilt and will be skipped in grading.' }));
+      return;
+    }
+
+    const card = h('section', { class: 'card problem' }, [
+      h('div', { class: 'ptop' }, [
+        h('span', { class: 'ptopic', text: prob.topicName }),
+        h('span', { class: 'plevel', text: `level ${prob.difficulty}` }),
+      ]),
+      h('div', { class: 'stem', html: prob.stem }),
+    ]);
+
+    const form = h('form', { class: 'answerform' });
+    if (prob.kind === 'choice') {
+      const group = h('div', { class: 'choices', role: 'radiogroup' });
+      prob.choices.forEach((c, ci) => {
+        const id = `tc${ci}`;
+        const input = h('input', {
+          type: 'radio', name: 'choice', id, value: String(ci),
+          checked: t.responses[i] === String(ci),
+        });
+        input.addEventListener('change', () => { t.responses[i] = String(ci); paintNavDots(); });
+        group.appendChild(h('label', { class: 'choice', for: id }, [input, h('span', { class: 'cbody', html: c.html })]));
+      });
+      form.appendChild(group);
+    } else {
+      const input = h('input', {
+        type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
+        value: t.responses[i] || '', placeholder: inputHint(prob), 'aria-label': 'Your answer',
+      });
+      input.addEventListener('input', () => { t.responses[i] = input.value; paintNavDots(); });
+      form.appendChild(input);
+      setTimeout(() => input.focus(), 30);
+    }
+
+    form.appendChild(h('div', { class: 'actions' }, [
+      h('button', {
+        class: 'btn ghost', type: 'button', disabled: i === 0,
+        onclick: () => { t.index = Math.max(0, i - 1); paint(); },
+      }, 'Back'),
+      i < t.items.length - 1
+        ? h('button', { class: 'btn', type: 'submit' }, 'Next')
+        : h('button', { class: 'btn', type: 'button', onclick: () => finishTest(problems) }, 'Submit test'),
+    ]));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (i < t.items.length - 1) { t.index = i + 1; paint(); }
+    });
+    card.appendChild(form);
+    stage.appendChild(card);
+  }
+
+  paint();
+
+  if (tickTimer) clearInterval(tickTimer);
+  if (t.deadline) {
+    const tick = () => {
+      const left = t.deadline - Date.now();
+      const clock = $('#tclock');
+      if (!clock) { clearInterval(tickTimer); return; }
+      if (left <= 0) {
+        clearInterval(tickTimer);
+        clock.textContent = '0:00';
+        finishTest(problems, true);
+        return;
+      }
+      const m = Math.floor(left / 60000);
+      const s = Math.floor((left % 60000) / 1000);
+      clock.textContent = `${m}:${String(s).padStart(2, '0')}`;
+      clock.classList.toggle('low', left < 120000);
+    };
+    tick();
+    tickTimer = setInterval(tick, 1000);
+  }
+}
+
+function finishTest(problems, timedOut = false) {
+  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  const t = testRun;
+  if (!t || t.phase !== 'running') return;
+  const unanswered = t.responses.filter((r) => !r).length;
+  if (!timedOut && unanswered) {
+    if (!confirm(`${unanswered} question${unanswered === 1 ? ' is' : 's are'} unanswered. Submit anyway?`)) return;
+  }
+
+  let score = 0;
+  const byTopic = new Map();
+  t.graded = problems.map((prob, i) => {
+    if (!prob) return null;
+    const res = grade(prob, t.responses[i]);
+    if (res.correct) score++;
+    const row = byTopic.get(prob.topicId) || { name: prob.topicName, correct: 0, total: 0 };
+    row.total++;
+    if (res.correct) row.correct++;
+    byTopic.set(prob.topicId, row);
+    store.recordAttempt({
+      topicId: prob.topicId,
+      correct: res.correct,
+      ms: 0,
+      difficulty: prob.difficulty,
+      hintsUsed: 0,
+      seed: prob.seed,
+      mode: 'test',
+    });
+    return { prob, response: t.responses[i], result: res };
+  });
+
+  t.phase = 'done';
+  t.score = score;
+  t.total = problems.filter(Boolean).length;
+  t.timedOut = timedOut;
+  t.breakdown = [...byTopic.entries()].map(([topicId, r]) => ({ topicId, ...r }))
+    .sort((a, b) => (a.correct / a.total) - (b.correct / b.total));
+
+  t.id = store.saveTest({
+    id: t.id,
+    name: t.name,
+    ts: Date.now(),
+    items: t.items,
+    responses: t.responses,
+    score,
+    total: t.total,
+    breakdown: t.breakdown,
+  });
+  router();
+}
+
+function paintTestResults(root) {
+  const t = testRun;
+  const pct = t.total ? Math.round((t.score / t.total) * 100) : 0;
+
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: t.reopened ? 'Test review' : 'Test finished' }),
+    t.timedOut ? h('p', { class: 'lead warn', text: 'Time ran out. Unanswered questions were marked wrong.' }) : null,
+  ]));
+
+  root.appendChild(h('section', { class: 'card result' }, [
+    h('p', { class: 'bignum', text: `${t.score} / ${t.total}` }),
+    h('p', { class: 'lead', text: `${pct}% correct.` }),
+    t.total < 20
+      ? h('p', { class: 'muted', text: `Over ${t.total} questions, the margin of error on that percentage is large. One lucky guess moves it by ${Math.round(100 / t.total)} points.` })
+      : null,
+  ]));
+
+  if (t.breakdown && t.breakdown.length > 1) {
+    const bd = h('section', { class: 'card' }, [
+      h('h2', { text: 'By topic' }),
+      h('p', { class: 'muted', text: 'Weakest first.' }),
+    ]);
+    bd.appendChild(charts.breakdownChart(t.breakdown));
+    const weak = t.breakdown.filter((b) => b.correct < b.total);
+    if (weak.length) {
+      bd.appendChild(h('button', {
+        class: 'btn', onclick: () => {
+          const pool = weak.map((w) => w.topicId).filter((id) => !String(id).startsWith('custom:'));
+          testRun = null;
+          startSession({ pool, label: 'What you missed' });
+        },
+      }, `Practice the ${weak.length} topic${weak.length === 1 ? '' : 's'} you missed`));
+    }
+    root.appendChild(bd);
+  }
+
+  if (t.graded) {
+    const rev = h('section', { class: 'card' }, [h('h2', { text: 'Every question' })]);
+    t.graded.forEach((g, i) => {
+      if (!g) return;
+      const det = h('details', { class: `qreview ${g.result.correct ? 'right' : 'wrong'}` });
+      det.appendChild(h('summary', {}, [
+        h('span', { class: 'qnum', text: `${i + 1}` }),
+        h('span', { class: 'qmark', text: g.result.correct ? 'correct' : 'wrong' }),
+        h('span', { class: 'qtopic', text: g.prob.topicName }),
+      ]));
+      det.appendChild(h('div', { class: 'stem', html: g.prob.stem }));
+      det.appendChild(h('p', { class: 'answerline', html: `Your answer: <b>${esc(responseLabel(g))}</b>` }));
+      if (!g.result.correct) {
+        det.appendChild(h('p', { class: 'answerline', html: `Correct answer: <b>${g.prob.answerHtml || ''}</b>` }));
+      }
+      if (g.prob.steps && g.prob.steps.length) {
+        const ol = h('ol', { class: 'steplist' });
+        for (const st of g.prob.steps) {
+          ol.appendChild(h('li', {}, [
+            h('span', { class: 'sttitle', text: st.title }),
+            h('span', { class: 'sthtml', html: st.html }),
+          ]));
+        }
+        det.appendChild(ol);
+      }
+      rev.appendChild(det);
+    });
+    root.appendChild(rev);
+  }
+
+  root.appendChild(h('div', { class: 'cta' }, [
+    h('button', { class: 'btn', onclick: () => { testRun = null; router(); } }, 'Build another'),
+    h('a', { class: 'btn ghost', href: '#/dashboard' }, 'Dashboard'),
+  ]));
+}
+
+function responseLabel(g) {
+  if (!g.response) return '(blank)';
+  if (g.prob.kind === 'choice') {
+    const c = g.prob.choices[Number(g.response)];
+    return c ? String(c.html).replace(/<[^>]+>/g, '') : '(blank)';
+  }
+  return g.response;
+}
+
+/* ====================================================================== sets */
+
+function renderSets(root) {
+  const p = store.activeProfile();
+
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: 'Study sets' }),
+    h('p', { class: 'lead', text: 'Saved selections of topics, and question sets written by your local model for anything the built-in curriculum does not cover.' }),
+  ]));
+
+  /* Build a set from topics. */
+  const mk = h('section', { class: 'card' }, [h('h2', { text: 'New set from topics' })]);
+  const selected = new Set();
+  const nameInput = h('input', { type: 'text', class: 'textinput', placeholder: 'Set name, e.g. "Calc exam 2"' });
+  const search = h('input', { type: 'search', class: 'searchbox', placeholder: 'Search topics to add' });
+  const hits = h('div', { class: 'chips' });
+  const chosen = h('div', { class: 'chips chosen' });
+
+  function repaintChosen() {
+    chosen.innerHTML = '';
+    for (const id of selected) {
+      chosen.appendChild(h('button', {
+        class: 'chip on', type: 'button',
+        onclick: () => { selected.delete(id); repaintChosen(); },
+      }, [TOPIC_BY_ID[id].name, h('span', { class: 'x', text: '×' })]));
+    }
+  }
+  search.addEventListener('input', () => {
+    hits.innerHTML = '';
+    for (const t of searchTopics(search.value).filter((x) => hasGenerator(x.id)).slice(0, 10)) {
+      hits.appendChild(h('button', {
+        class: 'chip', type: 'button',
+        onclick: () => { selected.add(t.id); repaintChosen(); },
+      }, t.name));
+    }
+  });
+  mk.append(nameInput, search, hits, chosen, h('button', {
+    class: 'btn', onclick: () => {
+      if (!selected.size) { alert('Add at least one topic.'); return; }
+      store.saveSet({
+        name: nameInput.value.trim() || `Set of ${selected.size}`,
+        topicIds: [...selected], items: [], source: 'topics',
+      });
+      router();
+    },
+  }, 'Save set'));
+  root.appendChild(mk);
+
+  /* Generate with the local model. */
+  root.appendChild(aiCard(p));
+
+  /* Existing sets. */
+  if (p.sets.length) {
+    const list = h('section', { class: 'card' }, [h('h2', { text: 'Your sets' })]);
+    for (const s of p.sets.slice().reverse()) {
+      const count = s.items && s.items.length ? s.items.length : (s.topicIds || []).length;
+      const row = h('div', { class: 'setrow' }, [
+        h('div', {}, [
+          h('strong', { text: s.name }),
+          h('span', { class: 'muted small', text: ` · ${count} ${s.items && s.items.length ? 'questions' : 'topics'}` }),
+          s.source === 'ollama' ? h('span', { class: 'pill ai', text: 'AI-written' }) : null,
+        ]),
+        h('div', { class: 'setactions' }, [
+          h('button', {
+            class: 'btn small', onclick: () => {
+              if (s.items && s.items.length) startSession({ pool: [], label: s.name, items: s.items, setId: s.id });
+              else startSession({ pool: s.topicIds, label: s.name });
+            },
+          }, 'Study'),
+          h('button', { class: 'linkish small danger', onclick: () => { if (confirm(`Delete "${s.name}"?`)) { store.deleteSet(s.id); router(); } } }, 'delete'),
+        ]),
+      ]);
+      if (s.source === 'ollama') {
+        row.appendChild(h('p', { class: 'muted small', text: `Written by ${s.model || 'a local model'} on ${new Date(s.created).toLocaleDateString()}. Not checked by the app: treat the answers as a second opinion, not as an answer key.` }));
+      }
+      list.appendChild(row);
+    }
+    root.appendChild(list);
+  }
+}
+
+function aiCard(p) {
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'Generate questions with your local model' }),
+    h('p', { class: 'muted', text: 'Runs on your own machine through Ollama. Nothing is sent anywhere, and it works offline. Use this for anything the built-in topics do not cover.' }),
+  ]);
+
+  if (!p.settings.ollamaModel) {
+    card.appendChild(h('p', {}, [
+      'No local model selected yet. ',
+      h('a', { href: '#/settings' }, 'Set one up in Settings'),
+      ', then come back.',
+    ]));
+    return card;
+  }
+
+  const concept = h('input', { type: 'text', class: 'textinput', placeholder: 'A concept, or a class: "Krebs cycle regulation", "Spanish preterite vs imperfect", "AP Psych unit 4"' });
+  const context = h('textarea', { class: 'textinput', rows: '2', placeholder: 'Optional: anything specific, e.g. "focus on the exceptions" or paste your notes' });
+  const countSel = h('select', {}, [3, 5, 8, 10, 15].map((n) => h('option', { value: String(n), selected: n === 5 }, `${n} questions`)));
+  const diffSel = h('select', {}, [
+    h('option', { value: '1' }, 'Introductory'),
+    h('option', { value: '2', selected: true }, 'Moderate'),
+    h('option', { value: '3' }, 'Challenging'),
+  ]);
+  const out = h('div', { class: 'genout' });
+  const btn = h('button', { class: 'btn' }, 'Generate');
+
+  btn.addEventListener('click', async () => {
+    const topic = concept.value.trim();
+    if (!topic) { concept.focus(); return; }
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    out.innerHTML = '';
+    out.appendChild(h('p', { class: 'muted', text: `Asking ${p.settings.ollamaModel} on this machine. A few seconds to a minute, depending on the model.` }));
+    try {
+      const res = await ollama.generateQuestions(p.settings.ollamaUrl, p.settings.ollamaModel, {
+        concept: topic,
+        context: context.value.trim(),
+        count: Number(countSel.value),
+        difficulty: Number(diffSel.value),
+      });
+      out.innerHTML = '';
+      out.appendChild(h('p', { class: 'aitag', text: `${res.items.length} question${res.items.length === 1 ? '' : 's'} written by ${res.model}. Read them before you trust them.` }));
+      if (res.warnings.length) {
+        out.appendChild(h('details', { class: 'warnings' }, [
+          h('summary', { text: `${res.warnings.length} item(s) were dropped as unusable` }),
+          h('ul', {}, res.warnings.map((w) => h('li', { text: w }))),
+        ]));
+      }
+      const preview = h('ol', { class: 'preview' });
+      for (const it of res.items) {
+        preview.appendChild(h('li', {}, [
+          h('div', { class: 'stem', html: it.stem }),
+          h('p', { class: 'muted small', html: `Answer: ${it.kind === 'choice' ? (it.choices.find((c) => c.correct) || {}).html : it.answerHtml}` }),
+        ]));
+      }
+      out.appendChild(preview);
+      out.appendChild(h('button', {
+        class: 'btn', onclick: () => {
+          store.saveSet({
+            name: topic.slice(0, 60), items: res.items, topicIds: [],
+            source: 'ollama', model: res.model,
+          });
+          router();
+        },
+      }, 'Save as a study set'));
+    } catch (err) {
+      out.innerHTML = '';
+      out.appendChild(h('p', { class: 'errline', text: err.message }));
+      if (err.hint) out.appendChild(h('p', { class: 'muted small', text: err.hint }));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generate';
+    }
+  });
+
+  card.append(concept, context, h('div', { class: 'optgrid' }, [
+    labelled('How many', countSel), labelled('Difficulty', diffSel),
+  ]), btn, out);
+  return card;
+}
+
+/* ================================================================== settings */
+
+function renderSettings(root) {
+  const s = store.getState();
+  const p = store.activeProfile();
+
+  root.appendChild(h('header', { class: 'pagehead' }, [h('h1', { text: 'Settings' })]));
+
+  /* Profiles. */
+  const prof = h('section', { class: 'card' }, [
+    h('h2', { text: 'Profiles' }),
+    h('p', { class: 'muted', text: 'Each profile has its own history, sets and settings. Switch between them on a shared laptop.' }),
+  ]);
+  for (const q of store.allProfiles()) {
+    prof.appendChild(h('div', { class: `profrow${q.id === s.activeId ? ' on' : ''}` }, [
+      h('span', { class: 'swatch', style: `background:${q.color}`, 'aria-hidden': 'true' }),
+      h('strong', { text: q.name }),
+      h('span', { class: 'muted small', text: `${q.attempts.length} attempts` }),
+      q.id === s.activeId ? h('span', { class: 'pill', text: 'active' })
+        : h('button', { class: 'btn small ghost', onclick: () => { store.switchProfile(q.id); router(); } }, 'switch to'),
+      h('button', {
+        class: 'linkish small', onclick: () => {
+          const n = prompt('Profile name', q.name);
+          if (n && n.trim()) { store.renameProfile(q.id, n.trim()); router(); }
+        },
+      }, 'rename'),
+      store.allProfiles().length > 1
+        ? h('button', {
+          class: 'linkish small danger', onclick: () => {
+            if (confirm(`Delete "${q.name}" and all of its history? This cannot be undone.`)) {
+              store.removeProfile(q.id); router();
+            }
+          },
+        }, 'delete') : null,
+    ]));
+  }
+  prof.appendChild(h('button', {
+    class: 'btn small', onclick: () => {
+      const n = prompt('Name for the new profile');
+      if (n && n.trim()) { store.addProfile(n.trim()); router(); }
+    },
+  }, 'Add a profile'));
+  root.appendChild(prof);
+
+  /* Practice preferences. */
+  const prefs = h('section', { class: 'card' }, [h('h2', { text: 'How much help' })]);
+  const guid = h('div', { class: 'radioset' });
+  for (const [val, label, desc] of [
+    ['hints', 'Guide me', 'Hints on request, escalating. The worked solution appears after you answer.'],
+    ['steps', 'Show the working', 'Same, but the worked solution is open by default after every question.'],
+    ['answer', 'No help', 'No hint button. Closest to exam conditions.'],
+  ]) {
+    const id = `g_${val}`;
+    const input = h('input', { type: 'radio', name: 'guidance', id, value: val, checked: p.settings.guidance === val });
+    input.addEventListener('change', () => store.setSetting('guidance', val));
+    guid.appendChild(h('label', { class: 'radio', for: id }, [
+      input, h('span', {}, [h('strong', { text: label }), h('span', { class: 'muted small', text: desc })]),
+    ]));
+  }
+  prefs.appendChild(guid);
+
+  const goal = h('input', { type: 'number', min: '5', max: '200', step: '5', value: String(p.settings.dailyGoal), class: 'textinput short' });
+  goal.addEventListener('change', () => store.setSetting('dailyGoal', Math.max(1, Number(goal.value) || 20)));
+  prefs.appendChild(labelled('Daily goal (questions)', goal));
+  root.appendChild(prefs);
+
+  /* Ollama. */
+  root.appendChild(ollamaCard(p));
+
+  /* Sync. */
+  root.appendChild(syncCard(s));
+
+  /* Data. */
+  const data = h('section', { class: 'card' }, [
+    h('h2', { text: 'Your data' }),
+    h('p', { class: 'muted', text: 'Everything lives in this browser, plus the sync service if you turned it on. Nothing else sees it.' }),
+  ]);
+  data.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn small ghost', onclick: () => {
+        const blob = new Blob([store.exportJson()], { type: 'application/json' });
+        const a = h('a', { href: URL.createObjectURL(blob), download: `study-backup-${new Date().toISOString().slice(0, 10)}.json` });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      },
+    }, 'Export a backup'),
+    h('label', { class: 'btn small ghost filebtn' }, [
+      'Import a backup',
+      h('input', {
+        type: 'file', accept: 'application/json', hidden: true,
+        onchange: async (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          const res = store.importJson(await f.text());
+          alert(res.message);
+          if (res.ok) router();
+        },
+      }),
+    ]),
+  ]));
+  root.appendChild(data);
+}
+
+function ollamaCard(p) {
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'Local model (Ollama)' }),
+    h('p', { class: 'muted', text: 'Optional. Lets you generate questions on any topic and ask for an explanation when you miss one. It runs entirely on this machine, costs nothing and works offline.' }),
+  ]);
+
+  const urlInput = h('input', { type: 'text', class: 'textinput', value: p.settings.ollamaUrl || 'http://localhost:11434' });
+  urlInput.addEventListener('change', () => store.setSetting('ollamaUrl', urlInput.value.trim()));
+  card.appendChild(labelled('Ollama address', urlInput));
+
+  const status = h('div', { class: 'ostatus' });
+  const modelWrap = h('div', {});
+  const testBtn = h('button', { class: 'btn small' }, 'Test the connection');
+
+  testBtn.addEventListener('click', async () => {
+    testBtn.disabled = true;
+    status.innerHTML = '';
+    status.appendChild(h('p', { class: 'muted', text: 'Looking for Ollama...' }));
+    const res = await ollama.ping(urlInput.value.trim());
+    status.innerHTML = '';
+    modelWrap.innerHTML = '';
+    if (!res.ok) {
+      status.appendChild(h('p', { class: 'errline', text: res.error.message }));
+      if (res.error.hint) status.appendChild(h('p', { class: 'muted small', text: res.error.hint }));
+      testBtn.disabled = false;
+      return;
+    }
+    if (!res.models.length) {
+      status.appendChild(h('p', { class: 'muted', text: 'Ollama is running but has no models. Pull one first, for example: ollama pull qwen2.5:7b' }));
+      testBtn.disabled = false;
+      return;
+    }
+    status.appendChild(h('p', { class: 'okline', text: `Connected. ${res.models.length} model${res.models.length === 1 ? '' : 's'} available.` }));
+    const sel = h('select', { class: 'textinput' }, [
+      h('option', { value: '' }, 'None (turn the model features off)'),
+      ...res.models.map((m) => h('option', { value: m.name, selected: m.name === p.settings.ollamaModel },
+        `${m.name}${m.params ? ` (${m.params})` : ''}`)),
+    ]);
+    const advice = h('p', { class: 'muted small' });
+    const updateAdvice = () => { advice.textContent = sel.value ? ollama.adviceFor(sel.value) : ''; };
+    sel.addEventListener('change', () => { store.setSetting('ollamaModel', sel.value); updateAdvice(); });
+    updateAdvice();
+    modelWrap.append(labelled('Model to use', sel), advice);
+    testBtn.disabled = false;
+  });
+
+  card.append(testBtn, status, modelWrap);
+
+  if (p.settings.ollamaModel) {
+    card.appendChild(h('p', { class: 'okline', text: `Currently using ${p.settings.ollamaModel}.` }));
+  }
+
+  card.appendChild(h('details', { class: 'help' }, [
+    h('summary', { text: 'Setting this up' }),
+    h('ol', {}, [
+      h('li', { html: 'Install Ollama from <code>ollama.com</code> and pull a model: <code>ollama pull qwen2.5:7b</code>' }),
+      h('li', {
+        html: 'Let this page talk to it. Ollama blocks requests from other origins by default, so set '
+          + `<code>OLLAMA_ORIGINS=${esc(location.origin)}</code> and restart it. `
+          + 'On Windows that is an environment variable in System Properties; on Mac or Linux, '
+          + `<code>launchctl setenv OLLAMA_ORIGINS "${esc(location.origin)}"</code> or an <code>Environment=</code> line in the systemd unit.`,
+      }),
+      h('li', { text: 'Click "Test the connection" above and pick a model.' }),
+    ]),
+    h('p', { class: 'muted small', text: 'With 16GB of VRAM, a 7B or 14B model at 4-bit is the sweet spot. Larger than about 32B will spill into system memory and crawl.' }),
+  ]));
+
+  return card;
+}
+
+function syncCard(s) {
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'Sync across devices' }),
+    h('p', { class: 'muted', text: 'Optional. Puts your profiles on a small service so your laptop and phone stay in step. Use the same sync key on both.' }),
+  ]);
+
+  const keyInput = h('input', {
+    type: 'text', class: 'textinput mono', value: s.sync.key || '',
+    placeholder: 'Paste the key from your other device, or generate one',
+    spellcheck: 'false', autocapitalize: 'characters',
+  });
+  keyInput.addEventListener('change', () => store.setSyncKey(keyInput.value));
+  card.appendChild(labelled('Sync key', keyInput));
+
+  const status = h('p', { class: 'muted small' });
+  function paintStatus() {
+    const sy = store.syncState();
+    if (sy.lastError) { status.className = 'errline small'; status.textContent = sy.lastError; return; }
+    status.className = 'muted small';
+    if (!sy.key) { status.textContent = 'Sync is off. Everything stays in this browser.'; return; }
+    const when = sy.lastPush ? new Date(sy.lastPush).toLocaleString() : 'never';
+    status.textContent = `Last synced: ${when}`;
+  }
+  paintStatus();
+
+  card.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn small ghost', onclick: () => {
+        if (s.sync.key && !confirm('Replace the existing key? The other device will stop syncing with this one until you give it the new key.')) return;
+        const k = store.generateSyncKey();
+        store.setSyncKey(k);
+        keyInput.value = k;
+        paintStatus();
+      },
+    }, 'Generate a key'),
+    h('button', {
+      class: 'btn small', onclick: async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = 'Syncing...';
+        const res = await store.syncNow();
+        btn.disabled = false;
+        btn.textContent = 'Sync now';
+        paintStatus();
+        if (res.ok) {
+          status.className = 'okline small';
+          status.textContent = res.added || res.updated
+            ? `Synced. Pulled ${res.added} new profile(s) and updated ${res.updated}.`
+            : 'Synced. Nothing new from the other device.';
+          router();
+        }
+      },
+    }, 'Sync now'),
+  ]));
+  card.appendChild(status);
+
+  if (s.sync.key) {
+    card.appendChild(h('details', { class: 'help' }, [
+      h('summary', { text: 'Set up the other device' }),
+      h('p', { text: 'Open this page there, go to Settings, and paste this key:' }),
+      h('p', { class: 'keyshow mono', text: s.sync.key }),
+      h('p', { class: 'muted small', text: 'Anyone with this key can read and write your study data, so treat it like a password. The service only ever stores a hash of it, never the key itself.' }),
+    ]));
+  }
+
+  const auto = h('input', { type: 'checkbox', id: 'autosync', checked: s.sync.autoSync });
+  auto.addEventListener('change', () => store.setAutoSync(auto.checked));
+  card.appendChild(h('label', { class: 'radio', for: 'autosync' }, [
+    auto, h('span', {}, [h('strong', { text: 'Sync automatically' }),
+      h('span', { class: 'muted small', text: 'On load, and a few seconds after you stop answering questions.' })]),
+  ]));
+
+  return card;
+}
+
+/* ===================================================================== boot */
+
+function mountProfileSwitcher() {
+  const host = $('#profswitch');
+  if (!host) return;
+  const paint = () => {
+    const s = store.getState();
+    const p = store.activeProfile();
+    host.innerHTML = '';
+    const sel = h('select', { 'aria-label': 'Active profile' }, [
+      ...store.allProfiles().map((q) => h('option', { value: q.id, selected: q.id === s.activeId }, q.name)),
+    ]);
+    sel.addEventListener('change', () => { store.switchProfile(sel.value); router(); });
+    host.append(h('span', { class: 'swatch', style: `background:${p.color}`, 'aria-hidden': 'true' }), sel);
+  };
+  paint();
+  store.subscribe(() => {
+    /* Only the switcher needs repainting on every change; views repaint on
+       navigation. */
+    const sel = $('#profswitch select');
+    const s = store.getState();
+    if (sel && sel.value !== s.activeId) paint();
+  });
+}
+
+let autoSyncTimer = null;
+
+/* Push a few seconds after the last change, so a practice session results in
+   one sync rather than one per question.
+
+   The isSyncing() guard is load-bearing: syncNow writes state several times
+   of its own (merged data, lastPull, lastPush) and each write notifies this
+   subscriber. Without the guard, every sync would arm the next one and the
+   app would sync forever on a timer. */
+function scheduleAutoSync() {
+  const s = store.getState();
+  if (!s.sync.autoSync || !s.sync.key) return;
+  if (store.isSyncing()) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(() => {
+    if (store.isSyncing()) return;
+    store.syncNow().catch(() => { /* the status line in Settings reports it */ });
+  }, 8000);
+}
+
+export function boot() {
+  store.load();
+  mountProfileSwitcher();
+  window.addEventListener('hashchange', router);
+  router();
+
+  store.subscribe(scheduleAutoSync);
+  const s = store.getState();
+  if (s.sync.autoSync && s.sync.key) {
+    store.syncNow().then((res) => { if (res.ok && (res.added || res.updated)) router(); }).catch(() => {});
+  }
+
+  /* Enter advances in practice even when focus has drifted off the form. */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.matches('input, textarea, select, button, a')) return;
+    const btn = $('#stage .answerform button[type=submit]');
+    if (btn) { e.preventDefault(); btn.click(); }
+  });
+}

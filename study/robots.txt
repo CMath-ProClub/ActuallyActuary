@@ -1,0 +1,3 @@
+# A private study tool. Nothing here is meant to be indexed.
+User-agent: *
+Disallow: /

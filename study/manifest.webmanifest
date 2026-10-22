@@ -1,0 +1,14 @@
+{
+  "name": "Actually Actuary Study",
+  "short_name": "Study",
+  "description": "Practice problems, mock tests and a dashboard that tells you what you are actually getting wrong.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#fffdf8",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
