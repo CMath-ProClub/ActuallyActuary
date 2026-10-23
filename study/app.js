@@ -6,7 +6,10 @@
 
 import MathKit from './math.js';
 import { COURSES, TOPIC_BY_ID, COURSE_BY_ID, topicsIn, unitsIn, searchTopics } from './topics.js';
-import { generate, grade, inputHint, hasGenerator, generatableTopics } from './generators.js';
+import { generate, grade, inputHint, hasGenerator, generatableTopics, freshSeed } from './generators.js';
+import { buildProblem } from './gen-sandbox.js';
+import * as flow from './flow.js';
+import * as ask from './ask.js';
 import * as store from './store.js';
 import * as sched from './scheduler.js';
 import * as charts from './charts.js';
@@ -45,7 +48,8 @@ const ALL_TOPIC_IDS = generatableTopics();
 /* ==================================================================== router */
 
 const ROUTES = {
-  '': renderDashboard,
+  '': renderStart,
+  start: renderStart,
   dashboard: renderDashboard,
   practice: renderPractice,
   test: renderTest,
@@ -272,10 +276,13 @@ function greeting() {
 
 /* ================================================================== practice */
 
-function startSession({ pool, label, items = null, setId = null }) {
+function startSession({ pool, label, items = null, setId = null, sandbox = null }) {
   session = {
     pool: pool && pool.length ? pool : ALL_TOPIC_IDS,
     label: label || 'Practice',
+    /* A sandbox session builds its problems from gen-sandbox.js, which asks
+       for the derivative itself rather than its value at a point. */
+    sandbox,
     items,                 /* fixed list (a custom set), or null for adaptive */
     setId,
     index: 0,
@@ -352,6 +359,23 @@ function nextProblem(stage) {
 
   let problem = null;
   let remediation = null;
+
+  if (session.sandbox) {
+    /* Endless by design: this is the "keep them coming" mode. A builder can
+       decline a draw (a derivative that came out identically zero cannot be
+       graded), so try a few times before giving up. */
+    for (let tries = 0; tries < 12 && !problem; tries++) {
+      problem = buildProblem(session.sandbox, freshSeed());
+    }
+    if (!problem) {
+      stage.appendChild(h('p', { class: 'muted', text: 'Could not build a problem for that selection.' }));
+      return;
+    }
+    session.current = problem;
+    session.lastTopicId = problem.topicId;
+    renderProblem(stage, problem, { remediation: null, mode: 'practice' });
+    return;
+  }
 
   if (session.items) {
     /* A fixed set: walk it in order, then stop. */
@@ -1514,4 +1538,274 @@ export function boot() {
     const btn = $('#stage .answerform button[type=submit]');
     if (btn) { e.preventDefault(); btn.click(); }
   });
+}
+
+/* ===================================================================== start */
+
+/* The landing flow. One question per screen, answers kept here so Back works
+   without a route for every step, and the whole thing driven by flow.js so
+   the paths can be tested without a browser. */
+
+let flowAnswers = {};
+
+function flowPeople() {
+  return store.allProfiles().map((p) => ({ id: p.id, name: p.name, color: p.color }));
+}
+
+function renderStart(root) {
+  const profiles = flowPeople();
+  const names = profiles.map((p) => p.name);
+  const step = flow.currentStep(flowAnswers, names);
+
+  if (!step) {
+    launch(flow.plan(flowAnswers, names), root);
+    return;
+  }
+
+  const path = flow.pathFor(flowAnswers, names);
+  const position = path.indexOf(step.id) + 1;
+
+  const panel = h('section', { class: 'flowstep' });
+
+  /* Where you are, and a way back to any earlier answer. */
+  const trail = h('nav', { class: 'flowtrail', 'aria-label': 'Your answers so far' });
+  for (const id of path) {
+    if (id === step.id) break;
+    const answered = flowAnswers[id];
+    trail.appendChild(h('button', {
+      class: 'linkish small',
+      type: 'button',
+      onclick: () => {
+        flowAnswers = flow.rewind(flowAnswers, id, names);
+        router();
+      },
+    }, answerLabel(id, answered)));
+    trail.appendChild(h('span', { class: 'sep', text: '/' }));
+  }
+  if (path.length > 1) panel.appendChild(trail);
+
+  /* Just the number. How many are left depends on answers not given yet, so
+     a total would be a guess dressed up as a fact. */
+  panel.appendChild(h('p', { class: 'flowcount', text: `Question ${position}` }));
+  panel.appendChild(h('h1', { class: 'flowq', text: step.title }));
+
+  if (step.kind === 'choice') panel.appendChild(choiceList(step, names));
+  else if (step.kind === 'who') panel.appendChild(whoList(profiles));
+  else if (step.kind === 'ask') panel.appendChild(askPanel(names));
+  else if (step.kind === 'form') panel.appendChild(formPanel(step, names));
+
+  const back = flow.previousStep(flowAnswers, names);
+  if (back) {
+    panel.appendChild(h('div', { class: 'flowback' }, [
+      h('button', {
+        class: 'linkish small', type: 'button',
+        onclick: () => { flowAnswers = flow.rewind(flowAnswers, back, names); router(); },
+      }, 'Back'),
+    ]));
+  }
+
+  root.appendChild(panel);
+}
+
+/* What an answered step reads as in the trail. */
+function answerLabel(id, value) {
+  const step = flow.STEPS[id];
+  if (!step) return id;
+  if (step.options) {
+    const hit = step.options.find((o) => o.value === value);
+    if (hit) return hit.label;
+  }
+  if (id === 'who') return String(value || '');
+  if (id === 'topic') return (value && value.text) ? value.text.slice(0, 28) : 'Topic';
+  if (id === 'quizOptions') return `${value && value.count ? value.count : 10} questions`;
+  return String(value || id);
+}
+
+/* Lettered options, the way a question on paper offers them. */
+function choiceList(step, names) {
+  const list = h('div', { class: 'picklist' });
+  step.options.forEach((opt, i) => {
+    list.appendChild(h('button', {
+      class: 'pick', type: 'button',
+      onclick: () => { flowAnswers = { ...flowAnswers, [step.id]: opt.value }; router(); },
+    }, [
+      h('span', { class: 'pickmark', text: String.fromCharCode(65 + i) }),
+      h('span', { class: 'pickbody' }, [
+        h('strong', { text: opt.label }),
+        h('span', { class: 'pickblurb', text: opt.blurb }),
+      ]),
+    ]));
+  });
+  return list;
+}
+
+function whoList(profiles) {
+  const list = h('div', { class: 'picklist' });
+  profiles.forEach((p, i) => {
+    list.appendChild(h('button', {
+      class: 'pick', type: 'button',
+      onclick: () => {
+        /* Choosing here also switches the active profile, because every
+           attempt from now on belongs to that person. */
+        store.switchProfile(p.id);
+        flowAnswers = { ...flowAnswers, who: p.name };
+        router();
+      },
+    }, [
+      h('span', { class: 'pickmark', text: String.fromCharCode(65 + i) }),
+      h('span', { class: 'pickbody' }, [
+        h('strong', { text: p.name }),
+        h('span', { class: 'pickblurb', text: 'Your own history and schedule.' }),
+      ]),
+    ]));
+  });
+  return list;
+}
+
+/* The ask box. Type a sentence, or take a skill from the list underneath. */
+function askPanel(names) {
+  const wrap = h('div', { class: 'askwrap' });
+  const box = h('textarea', {
+    class: 'textinput asktext', rows: 3, autofocus: true,
+    placeholder: 'trig derivatives, plain ones, and hint me if I am close',
+    'aria-label': 'What do you want to work on',
+  });
+  const reading = h('p', { class: 'askreading muted small' });
+  const go = h('button', { class: 'btn', type: 'button' }, 'Start');
+
+  const accept = (text) => {
+    const plan = ask.interpret(text);
+    if (!plan.recognised) {
+      reading.textContent = 'I did not recognise a topic in that. Pick one below, '
+        + 'or name a rule like chain rule, implicit or trig.';
+      return;
+    }
+    flowAnswers = { ...flowAnswers, topic: { text, plan } };
+    router();
+  };
+
+  box.addEventListener('input', () => {
+    const plan = ask.interpret(box.value);
+    reading.textContent = plan.recognised
+      ? `Reading that as: ${ask.describe(plan)}${plan.hints === true ? ', with hints' : ''}`
+      : '';
+  });
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); accept(box.value); }
+  });
+  go.addEventListener('click', () => accept(box.value));
+
+  wrap.appendChild(box);
+  wrap.appendChild(reading);
+  wrap.appendChild(h('div', { class: 'cta' }, [go]));
+
+  wrap.appendChild(h('h3', { class: 'unit', text: 'Or pick one' }));
+  const chips = h('div', { class: 'chips' });
+  for (const s of ask.skillMenu()) {
+    chips.appendChild(h('button', {
+      class: 'chip', type: 'button', title: s.ask,
+      onclick: () => {
+        flowAnswers = {
+          ...flowAnswers,
+          topic: { text: s.name, plan: ask.interpret(s.name) },
+        };
+        router();
+      },
+    }, s.name));
+  }
+  wrap.appendChild(chips);
+  return wrap;
+}
+
+/* The quiz settings: how many, how long, and whether part marks count. */
+function formPanel(step, names) {
+  const wrap = h('div', { class: 'formpanel' });
+  const values = {};
+  for (const f of step.fields) {
+    values[f.name] = f.value;
+    if (f.type === 'toggle') {
+      const id = `f_${f.name}`;
+      const input = h('input', { type: 'checkbox', id, checked: f.value });
+      input.addEventListener('change', () => {
+        values[f.name] = input.checked;
+        note.textContent = input.checked ? f.on : f.off;
+      });
+      const note = h('span', { class: 'pickblurb', text: f.value ? f.on : f.off });
+      wrap.appendChild(h('label', { class: 'radio', for: id }, [
+        input,
+        h('span', {}, [h('strong', { text: f.label }), note]),
+      ]));
+    } else {
+      const input = h('input', {
+        class: 'textinput short', type: 'number', min: f.min, max: f.max,
+        step: f.step, value: f.value,
+      });
+      input.addEventListener('input', () => { values[f.name] = Number(input.value); });
+      wrap.appendChild(h('div', { class: 'field' }, [
+        h('label', { text: f.label }),
+        input,
+        f.hint ? h('span', { class: 'pickblurb', text: f.hint }) : null,
+      ]));
+    }
+  }
+  wrap.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn', type: 'button',
+      onclick: () => {
+        flowAnswers = { ...flowAnswers, [step.id]: values };
+        router();
+      },
+    }, 'Start the quiz'),
+  ]));
+  return wrap;
+}
+
+/* The flow is finished: act on it. Anything not built yet says so plainly
+   rather than quietly starting something else. */
+function launch(plan, root) {
+  if (!plan) { root.appendChild(h('p', { text: 'Nothing to start.' })); return; }
+
+  if (plan.mode === 'practice') {
+    startSession({
+      label: plan.label || 'Practice',
+      sandbox: plan.skills.length
+        ? { skills: plan.skills, level: plan.level, hints: plan.hints }
+        : null,
+      pool: plan.topicIds && plan.topicIds.length ? plan.topicIds : null,
+    });
+    return;
+  }
+
+  const pending = {
+    quiz: ['Quizzes are next.', 'The flow records your settings - '
+      + `${plan.count} questions, ${plan.partial ? 'partial credit on' : 'no partial credit'}`
+      + `${plan.minutes ? `, ${plan.minutes} minutes` : ', untimed'} - but the graded run is `
+      + 'not wired up yet. Practice works now.'],
+    'homework-walkthrough': ['Homework help is next.',
+      'The photo path reads a worksheet with the local model and the engine solves it, '
+      + 'which is proven end to end, but this screen is not built yet.'],
+    'homework-extra': ['Homework help is next.',
+      'Generating more problems like the ones on your page needs the photo screen first.'],
+  }[plan.mode];
+
+  root.appendChild(h('section', { class: 'card' }, [
+    h('p', { class: 'eyebrow', text: 'Not built yet' }),
+    h('h1', { text: pending ? pending[0] : 'Not built yet' }),
+    h('p', { text: pending ? pending[1] : '' }),
+    h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => { flowAnswers = {}; router(); },
+      }, 'Start over'),
+      h('a', { class: 'btn', href: '#/dashboard' }, 'Dashboard'),
+    ]),
+  ]));
+
+  if (plan.shared || plan.sideBySide) {
+    root.appendChild(h('div', { class: 'caveat' }, [
+      h('strong', { text: 'Working together needs the sync service. ' }),
+      'The shared board runs on a Cloudflare Durable Object, which is free at our size '
+      + 'but has to be deployed once from study_api/ before two devices can see each other.',
+    ]));
+  }
 }

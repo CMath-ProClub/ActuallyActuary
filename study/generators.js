@@ -11,6 +11,7 @@ import * as ALG from './gen-algebra.js';
 import * as CALC from './gen-calculus.js';
 import * as ACT from './gen-actuarial.js';
 import * as CS from './gen-cs.js';
+import { gradeExpression } from './gen-sandbox.js';
 
 const { rng, hashSeed, parseNumber, numericEqual, textEqual, setEqual, esc } = MathKit;
 
@@ -106,6 +107,22 @@ export function grade(problem, response) {
   if (!raw) return { correct: false, detail: 'No answer given.' };
 
   switch (problem.kind) {
+    /* A typed-in function rather than a value. The sandbox builds these, and
+       expr.js decides whether what was typed is the same function as the
+       answer, in whatever form it was written. Unlike every other kind here
+       it can also come back UNDECIDED, when there were not enough points
+       where both sides are defined to compare them; that is reported rather
+       than counted as wrong. */
+    case 'expression': {
+      const v = gradeExpression(problem, raw);
+      return {
+        correct: v.correct,
+        detail: v.hint || '',
+        decided: v.decided !== false,
+        diagnosis: v.kind || '',
+      };
+    }
+
     case 'choice': {
       const idx = Number(raw);
       const opt = problem.choices && problem.choices[idx];
@@ -164,6 +181,10 @@ export function grade(problem, response) {
 export function inputHint(problem) {
   if (!problem) return '';
   switch (problem.kind) {
+    case 'expression':
+      return problem.implicit
+        ? 'an expression in x and y, e.g. -x/y'
+        : 'the derivative, e.g. 6*x*cos(3*x^2) - no need to simplify';
     case 'numeric': return 'a number, e.g. 12, -3.5, 3/4, 2*pi/3';
     case 'set': return problem.ordered ? 'two values, e.g. 3, -1' : 'all values, separated by commas';
     case 'text': return 'your answer';
