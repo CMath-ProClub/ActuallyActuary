@@ -2523,6 +2523,13 @@ function mountGraph(body) {
 
 function mountPhotos(body) {
   body.innerHTML = '';
+  /* Look for a vision model in the background. The panel works without one;
+     finding one just adds the Read it button on the next repaint. */
+  if (!visionState.checked) {
+    refreshVision().then((state) => {
+      if (state.model && workspace && workspace.panel === 'photos') router();
+    });
+  }
   const mount = h('div', {});
   body.appendChild(mount);
 
@@ -2534,6 +2541,9 @@ function mountPhotos(body) {
        about 300KB and the whole origin gets around 5MB - so the shelf is
        kept in IndexedDB and handed back when the panel reopens. */
     restore: () => persist.loadPhotos(photoKey),
+    /* Only offered when a model that can actually see is installed. A button
+       that always fails is worse than no button. */
+    onRead: ollamaVisionReady() ? (item) => readPhoto(item) : null,
     onAdd: (item) => persist.savePhoto(photoKey, item),
     onRemove: (item) => persist.deletePhoto(item.id),
     onUse: (item, text) => {
@@ -2571,15 +2581,54 @@ function mountPhotos(body) {
   ]));
 }
 
+/* ---------------------------------------------------------- reading a page */
+
+/* Whether this browser has a local model that can look at a picture. Checked
+   once per load and remembered, because asking Ollama on every render would
+   be a request per keystroke-ish repaint. */
+let visionState = { checked: false, model: '' };
+
+function ollamaVisionReady() {
+  return !!visionState.model;
+}
+
+async function refreshVision() {
+  if (visionState.checked) return visionState;
+  visionState.checked = true;
+  const p = store.activeProfile();
+  try {
+    const models = await ollama.visionModels(p.settings.ollamaUrl);
+    visionState.model = models.length ? models[0].name : '';
+  } catch (err) {
+    visionState.model = '';
+  }
+  return visionState;
+}
+
+async function readPhoto(item) {
+  const p = store.activeProfile();
+  const model = visionState.model;
+  if (!model) throw new Error('No model that can read an image is installed.');
+  const text = await ollama.readImage(p.settings.ollamaUrl, model, item.dataUrl);
+  return ollama.splitProblems(text);
+}
+
 /* Turn a typed function into a problem the engine can mark. The answer comes
    from differentiating it, so there is no answer key to be wrong. */
 function problemFromText(raw) {
   const text = String(raw || '').trim();
   if (!text) return null;
-  /* "f(x) = sin(3x)" and "y = sin(3x)" both mean the right hand side. */
-  const sides = text.split('=');
-  const body = sides.length === 2 && /^[a-z]\s*(\([a-z]\))?\s*$/i.test(sides[0])
-    ? sides[1] : text;
+  /* "f(x) = sin(3x)" and "y = sin(3x)" both mean the right hand side.
+
+     The dollar signs matter here: a transcription comes back as
+     "$ f(x) = \sin(3x^2) $", and testing the left side for a function name
+     without stripping them first fails, which sent the whole line to the
+     parser and failed on the equals sign. */
+  const cleaned = text.replace(/\$/g, ' ').trim();
+  const sides = cleaned.split('=');
+  const named = sides.length === 2
+    && /^(?:[a-z]\s*(?:\(\s*[a-z]\s*\))?|y|dy\s*\/\s*dx)$/i.test(sides[0].trim());
+  const body = named ? sides[1] : cleaned;
   const f = Expr.tryParse(body, { vars: ['x'] });
   if (!f) return null;
   let reference;

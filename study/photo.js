@@ -69,7 +69,7 @@ export function approximateBytes(dataUrl) {
 
 /* A shelf of photos with a note and a typed transcription against each. The
    caller supplies the DOM helper so this file stays free of app plumbing. */
-export function createShelf({ h, mount, onUse, onChange, restore, onAdd, onRemove }) {
+export function createShelf({ h, mount, onUse, onChange, restore, onAdd, onRemove, onRead }) {
   const items = [];
   const list = h('div', { class: 'shelf' });
   /* Telling a phone to drag and drop is telling it to do something it
@@ -113,6 +113,51 @@ export function createShelf({ h, mount, onUse, onChange, restore, onAdd, onRemov
       if (typeof onUse === 'function') onUse(item, transcript.value);
     });
 
+    /* Reading the page is the model's job and the only one it has here.
+       What it proposes lands in the box above, where it is yours to correct
+       before anything is solved: a small OCR model misreads handwriting, and
+       a wrong transcription silently becomes a different problem. */
+    const readState = h('span', { class: 'small muted' });
+    const read = h('button', { class: 'btn small ghost', type: 'button' }, 'Read it for me');
+    read.addEventListener('click', async () => {
+      if (typeof onRead !== 'function') return;
+      read.disabled = true;
+      readState.textContent = 'Reading...';
+      try {
+        const lines = await onRead(item);
+        if (!lines || !lines.length) {
+          readState.textContent = 'Nothing legible came back.';
+        } else {
+          transcript.value = lines[0];
+          item.transcript = lines[0];
+          item.readByModel = true;
+          if (typeof onAdd === 'function') onAdd(item);
+          readState.innerHTML = '';
+          readState.appendChild(h('span', { class: 'pill ai', text: 'model read' }));
+          readState.appendChild(h('span', {
+            text: lines.length > 1
+              ? ` ${lines.length} lines found. Check this one before using it.`
+              : ' Check it before using it.',
+          }));
+          if (lines.length > 1) {
+            const more = h('div', { class: 'readlines' });
+            for (const line of lines.slice(1)) {
+              more.appendChild(h('button', {
+                class: 'chip', type: 'button',
+                onclick: () => { transcript.value = line; item.transcript = line; },
+              }, line.length > 40 ? `${line.slice(0, 40)}...` : line));
+            }
+            readState.appendChild(more);
+          }
+        }
+      } catch (err) {
+        readState.textContent = (err && err.message) || 'That did not work.';
+        if (err && err.hint) readState.textContent += ` ${err.hint}`;
+      } finally {
+        read.disabled = false;
+      }
+    });
+
     const remove = h('button', { class: 'linkish small danger', type: 'button' }, 'Remove');
     remove.addEventListener('click', () => {
       const at = items.indexOf(item);
@@ -126,9 +171,11 @@ export function createShelf({ h, mount, onUse, onChange, restore, onAdd, onRemov
       h('figcaption', {}, [
         h('div', { class: 'shelfrow' }, [transcript, use]),
         h('div', { class: 'shelfmeta' }, [
+          typeof onRead === 'function' ? read : null,
           h('span', { class: 'small muted', text: `${item.width}×${item.height}` }),
           remove,
         ]),
+        readState,
       ]),
     ]);
   }

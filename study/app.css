@@ -1022,3 +1022,9 @@ footer {
   font-family: var(--face-ui); font-size: .64rem; text-transform: uppercase;
   letter-spacing: .12em; color: var(--faint); margin-right: .5em;
 }
+
+/* Extra lines the model found on the page, offered as chips so one tap
+   swaps which problem you are working on. */
+.readlines { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.readlines .chip { font-family: var(--face-ui); max-width: 100%; }
+.shelfmeta { flex-wrap: wrap; }

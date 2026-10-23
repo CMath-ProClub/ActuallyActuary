@@ -313,6 +313,129 @@ function escapeHtml(s) {
    to EXPLAIN a known-good answer rather than to produce one. That is a much
    safer job for a small model, and the answer shown to the student still comes
    from the generator, not from the model. */
+/* ------------------------------------------------------------ reading a photo */
+
+/* Transcribe a photographed worksheet.
+
+   This is the one job in the tool where a model genuinely beats code: a
+   photograph of handwriting is not something a parser can do anything with.
+   Everything AFTER the transcription is still done by expr.js, which is
+   tested and mechanical, so the model never decides whether an answer is
+   right - it only proposes what the page says, and you confirm it.
+
+   The prompt matters more than it looks. Measured against glm-ocr on the
+   same rendered worksheet, "Transcribe every line exactly." returned a
+   perfect read, while "Text Recognition:" mangled x^2 e^(5x) into
+   x^{2} e^{^{2}}(5x). Short and literal wins; anything that invites the
+   model to interpret gets interpretation. */
+const OCR_PROMPT = 'Transcribe every line exactly. Return only what is written, '
+  + 'one problem per line, with no commentary.';
+
+/* Models that can see. Ollama reports vision support inconsistently across
+   versions, so a name match is the reliable test, with the families field as
+   a fallback. */
+const VISION_HINTS = ['ocr', 'vl', 'vision', 'llava', 'moondream', 'omni', 'clef', 'bonsai'];
+
+export function looksVisionCapable(model) {
+  const name = String(model && model.name ? model.name : model || '').toLowerCase();
+  if (VISION_HINTS.some((h) => name.includes(h))) return true;
+  const families = (model && model.details && model.details.families) || [];
+  return families.some((f) => /clip|vision|mllama|siglip/i.test(String(f)));
+}
+
+export async function visionModels(url) {
+  const all = await listModels(url);
+  return all.filter((m) => looksVisionCapable(m));
+}
+
+/* `dataUrl` is what the photo shelf holds. Ollama wants the base64 payload
+   on its own, without the data: prefix. */
+export async function readImage(url, model, dataUrl, { signal } = {}) {
+  const comma = String(dataUrl || '').indexOf(',');
+  if (comma < 0) throw new OllamaError('That image could not be read.', { kind: 'input' });
+  const base64 = String(dataUrl).slice(comma + 1);
+
+  const res = await call(url, '/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      prompt: OCR_PROMPT,
+      images: [base64],
+      stream: false,
+      /* Zero temperature: a transcription has one right answer and this is
+         not the place for the model to be creative. */
+      options: { temperature: 0 },
+    }),
+    signal,
+  }, 120000);
+
+  const data = await res.json();
+  const text = String(data && data.response ? data.response : '').trim();
+  if (!text) {
+    throw new OllamaError('The model returned nothing for that image.', {
+      kind: 'empty',
+      hint: 'A clearer photo, or more of the page in frame, usually fixes it.',
+    });
+  }
+  return text;
+}
+
+/* Split a transcription into candidate problems, and strip the scaffolding
+   the model wraps around maths: LaTeX dollars, list numbers, and the
+   instruction words that are not part of the expression.
+
+   Deliberately conservative. Anything it is unsure of is left in the line
+   for a human to trim, because quietly deleting half of someone's homework
+   is worse than showing them an untidy line. */
+export function splitProblems(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line
+      /* "1.", "(2)", "3)" - the numbering, not the problem. */
+      .replace(/^\s*\(?\s*\d+\s*[.)\]]\s*/, '')
+      .replace(/^\s*[-*•]\s*/, '')
+      /* The instruction, which the tool supplies itself. */
+      .replace(/^(?:differentiate|find|compute|evaluate|simplify|factor|expand|solve|determine)\b[:\s]*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim())
+    .filter((line) => /[0-9a-z]/i.test(line));
+
+  /* Put the most mathematical line first.
+
+     A photographed worksheet has a title, a name, a date and a page number
+     on it as well as the problems, and the model transcribes all of it
+     faithfully. Dropping those outright would be wrong - on an odd page one
+     of them IS the question - but offering "Calculus I - Worksheet 4" as the
+     thing to differentiate is worse than useless. So they are ranked and
+     everything stays available. */
+  return lines
+    .map((line, index) => ({ line, index, score: mathiness(line) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((row) => row.line);
+}
+
+function mathiness(line) {
+  let score = 0;
+  if (/=/.test(line)) score += 2;
+  if (/[+−*/^]/.test(line)) score += 1;
+  if (/\b(?:sin|cos|tan|sec|csc|cot|ln|log|exp|sqrt)\b/i.test(line)) score += 2;
+  if (/\bd[yx]\s*\/\s*d[yx]\b/i.test(line)) score += 2;
+  if (/[a-z]\s*\^\s*\d/i.test(line)) score += 1;
+  if (/\d/.test(line)) score += 0.5;
+  /* The furniture of a worksheet, which is never the question. */
+  if (/\b(?:worksheet|name|date|period|chapter|section|page|class|homework|due)\b/i.test(line)) {
+    score -= 4;
+  }
+  /* Mostly words is prose, not maths. */
+  const letters = (line.match(/[a-z]/gi) || []).length;
+  const symbols = (line.match(/[0-9+−*/^()=]/g) || []).length;
+  if (letters > 12 && symbols < 3) score -= 2;
+  return score;
+}
+
 export async function explain(url, model, { stem, answer, wrongAnswer, topic }) {
   if (!model) throw new OllamaError('No model selected.', { kind: 'config' });
   const res = await call(url, '/api/chat', {
