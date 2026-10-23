@@ -8,7 +8,7 @@ import MathKit from './math.js';
 import { COURSES, TOPIC_BY_ID, COURSE_BY_ID, topicsIn, unitsIn, searchTopics } from './topics.js';
 import { generate, grade, inputHint, hasGenerator, generatableTopics, freshSeed } from './generators.js';
 import { buildProblem, distractorsFor as sandboxDistractors,
-  SKILLS as SANDBOX_SKILLS } from './gen-sandbox.js';
+  SKILLS as SANDBOX_SKILLS, onTrack } from './gen-sandbox.js';
 import Expr from './expr.js';
 import * as board from './board.js';
 import * as graph from './graph.js';
@@ -595,6 +595,15 @@ function renderProblem(stage, problem, { remediation, mode }) {
     : null;
   if (hintBtn) actions.appendChild(hintBtn);
 
+  /* Checking where you are without committing to it. Nothing is recorded,
+     which is the point: being told you are close should not cost you the
+     question. */
+  const trackBtn = (['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)
+    && mode === 'practice')
+    ? h('button', { class: 'btn ghost', type: 'button' }, 'Am I on track?')
+    : null;
+  if (trackBtn) actions.appendChild(trackBtn);
+
   const skipBtn = h('button', { class: 'btn ghost', type: 'button' }, 'Skip');
   actions.appendChild(skipBtn);
   form.appendChild(actions);
@@ -616,6 +625,19 @@ function renderProblem(stage, problem, { remediation, mode }) {
         hintBtn.disabled = true;
         hintBtn.textContent = 'No more hints';
       }
+    });
+  }
+
+  if (trackBtn) {
+    trackBtn.addEventListener('click', () => {
+      if (settled) return;
+      const where = onTrack(problem, getResponse(), { hintsShown });
+      hintBox.hidden = false;
+      hintBox.innerHTML = '';
+      hintBox.appendChild(h('p', { class: `hint track ${where.state}` }, [
+        h('strong', { text: `${trackLabel(where.state)} ` }),
+        where.message,
+      ]));
     });
   }
 
@@ -2180,6 +2202,18 @@ function mathKeys(input) {
   return row;
 }
 
+/* What a progress check calls each state, in words rather than a colour. */
+function trackLabel(state) {
+  return {
+    right: 'That is it.',
+    partway: 'Part of it is right.',
+    close: 'Close.',
+    off: 'Not yet.',
+    unreadable: 'I cannot read that.',
+    empty: 'Where to start.',
+  }[state] || '';
+}
+
 /* ======================================================== the parse echo */
 
 /* Show what the grader READ, under the box, as it is typed.
@@ -2582,6 +2616,19 @@ function paintWorkspaceProblem(slot) {
     echo,
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: check }, 'Check'),
+      ['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => {
+            const where = onTrack(problem, input.value);
+            feedback.innerHTML = '';
+            feedback.appendChild(h('div', { class: `feedback track ${where.state}` }, [
+              h('strong', { text: trackLabel(where.state) }),
+              h('p', { text: where.message }),
+            ]));
+          },
+        }, 'Am I on track?')
+        : null,
       h('button', {
         class: 'btn ghost', type: 'button',
         onclick: () => {

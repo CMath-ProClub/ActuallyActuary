@@ -23,6 +23,25 @@ import { TOPICS, TOPIC_BY_ID } from './topics.js';
 /* Words that mean a sandbox skill. Longest match wins, so "chain rule" is
    found before "rule", and "logarithmic differentiation" before "log". */
 const SKILL_PHRASES = [
+  /* Longer than "trig derivative", which would otherwise claim this first
+     and leave the word inverse stranded. */
+  ['inverse trig derivative', 'invtrig'],
+  ['inverse trig', 'invtrig'],
+  ['arc trig', 'invtrig'],
+  ['arcsin', 'invtrig'],
+  ['arccos', 'invtrig'],
+  ['arctan', 'invtrig'],
+  ['inverse sine', 'invtrig'],
+  ['inverse cosine', 'invtrig'],
+  ['inverse tangent', 'invtrig'],
+  ['cosecant', 'trig'],
+  ['secant', 'trig'],
+  ['cotangent', 'trig'],
+  ['csc', 'trig'],
+  ['cot', 'trig'],
+  ['tangent', 'trig'],
+  ['sine', 'trig'],
+  ['cosine', 'trig'],
   ['u substitution', 'usub'],
   ['u-substitution', 'usub'],
   ['usub', 'usub'],

@@ -59,6 +59,111 @@ function polynomial(r, level) {
 const TRIG = ['sin', 'cos', 'tan'];
 const TRIG_WIDE = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
 
+/* ------------------------------------------------------ the rest of trig */
+
+/* Everything a calculus course actually asks about, rather than sine and
+   cosine with a linear inside.
+
+   Carter's words: "whether it be arc or whether it's cosecant or whether
+   it's tan, I need to have all that junk in there." So: the three
+   reciprocals, the three inverses, powers of trig functions, trig of a
+   polynomial, products of two trig functions, and one trig function inside
+   another. */
+const TRIG_ALL = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
+const TRIG_INVERSE = ['asin', 'acos', 'atan'];
+
+function trigShape(r, level) {
+  /* Level 1 is a single function with a bare x: the rule on its own. */
+  if (level === 1) {
+    const name = r.pick(['sin', 'cos', 'tan']);
+    const a = r.nz(2, 8);
+    return { f: mul(num(a), fn(name, X)), inner: X };
+  }
+
+  const inside = add(mul(num(r.nz(-6, 6)), X), num(r.int(-8, 8)));
+
+  if (level === 2) {
+    const shape = r.int(0, 3);
+    const name = r.pick(TRIG_ALL);
+    if (shape === 0) return { f: mul(num(r.nz(2, 7)), fn(name, inside)), inner: inside };
+    if (shape === 1) {
+      /* A power of a trig function: the chain rule with the trig on the
+         inside rather than the outside. */
+      return {
+        f: pow(fn(name, X), num(r.int(2, 4))),
+        inner: fn(name, X),
+        note: 'The outside is the power; the inside is the trig function.',
+      };
+    }
+    if (shape === 2) {
+      /* Trig of a polynomial. */
+      const poly = add(mul(num(r.nz(2, 5)), pow(X, num(2))), num(r.int(-6, 6)));
+      return { f: fn(name, poly), inner: poly };
+    }
+    /* A product of two different trig functions. */
+    const other = r.pick(TRIG_ALL.filter((t) => t !== name));
+    return {
+      f: mul(fn(name, X), fn(other, X)),
+      factors: [fn(name, X), fn(other, X)],
+      note: 'Two trig functions multiplied: the product rule, then each derivative.',
+    };
+  }
+
+  /* Level 3: inverses, nesting, and trig wrapped around something that
+     needs its own chain rule. */
+  const shape = r.int(0, 4);
+
+  if (shape === 0) {
+    const name = r.pick(TRIG_INVERSE);
+    const arg = r() < 0.5 ? mul(num(r.nz(2, 4)), X) : pow(X, num(2));
+    return {
+      f: mul(num(r.nz(1, 5)), fn(name, arg)),
+      inner: arg,
+      note: `The derivative of ${name === 'atan' ? 'arctan' : name === 'asin' ? 'arcsin' : 'arccos'}(u) `
+        + 'is an algebraic fraction, times u prime.',
+    };
+  }
+
+  if (shape === 1) {
+    /* One trig function inside another. */
+    const outer = r.pick(['sin', 'cos', 'tan']);
+    const inner = fn(r.pick(['sin', 'cos']), X);
+    return {
+      f: fn(outer, inner),
+      inner,
+      note: 'A trig function of a trig function. Outside first, then the inside.',
+    };
+  }
+
+  if (shape === 2) {
+    /* A power of a reciprocal trig function, which is where the sign and
+       the extra factor both go missing. */
+    const name = r.pick(['sec', 'csc', 'cot']);
+    return {
+      f: pow(fn(name, mul(num(r.nz(2, 4)), X)), num(r.int(2, 3))),
+      inner: fn(name, mul(num(r.nz(2, 4)), X)),
+      note: 'Three layers: the power, the trig function, and what is inside it.',
+    };
+  }
+
+  if (shape === 3) {
+    /* x times a trig function of a polynomial: product rule AND chain rule
+       in the same question. */
+    const poly = mul(num(r.nz(2, 4)), pow(X, num(2)));
+    return {
+      f: mul(X, fn(r.pick(['sin', 'cos']), poly)),
+      factors: [X, fn('sin', poly)],
+      note: 'Product rule on the outside, chain rule inside the second factor.',
+    };
+  }
+
+  /* A quotient of two trig functions, which is not always worth rewriting
+     as a single one. */
+  const top = fn(r.pick(['sin', 'cos', 'tan']), X);
+  const bottom = add(fn(r.pick(['sin', 'cos']), X), num(r.int(2, 5)));
+  return { f: div(top, bottom), factors: [top, bottom] };
+}
+
 /* --------------------------------------------------------------- the skills */
 
 /* Each builder returns { f, inner } where `inner` names the inside function
@@ -84,19 +189,8 @@ const SKILLS = {
   trig: {
     name: 'Trig derivatives',
     topicId: 'calc.trigderiv',
-    ask: 'plain sin, cos and tan to differentiate',
-    build(r, level) {
-      const name = r.pick(level === 1 ? TRIG : TRIG_WIDE);
-      if (level === 1) {
-        /* Plain functions, exactly what "give me some plain ones" means:
-           a coefficient outside, a bare x inside. */
-        const a = r.nz(2, 8);
-        return { f: mul(num(a), fn(name, X)), inner: X };
-      }
-      const inside = linear(r);
-      const a = r.nz(2, 7);
-      return { f: mul(num(a), fn(name, inside)), inner: inside };
-    },
+    ask: 'sin, cos, tan, sec, csc, cot, powers and nests',
+    build(r, level) { return trigShape(r, level); },
   },
 
   chain: {
@@ -213,28 +307,37 @@ const SKILLS = {
     topicId: 'calc.implicit',
     ask: 'dy/dx when y will not come out of the equation',
     implicit: true,
+    /* "give me some trig with implicit" should mean implicit equations WITH
+       trig in them, not trig questions alternating with conics. When both
+       are asked for, the equation is drawn from the families that have a
+       trig function in them. */
+    build(r, level, spec) {
+      const wantsTrig = !!(spec && spec.skills
+        && spec.skills.some((k) => k === 'trig' || k === 'invtrig'));
+      if (!wantsTrig) return implicitEquation(r, level);
+      for (let attempt = 0; attempt < 25; attempt++) {
+        const equation = implicitEquation(r, Math.max(2, level));
+        if (hasTrig(equation.left) || hasTrig(equation.right)) return equation;
+      }
+      return implicitEquation(r, level);
+    },
+  },
+
+  invtrig: {
+    name: 'Inverse trig derivatives',
+    topicId: 'calc.trigderiv',
+    ask: 'arcsin, arccos and arctan',
     build(r, level) {
-      const shape = level === 1 ? r.int(0, 1) : r.int(0, 3);
-      if (shape === 0) {
-        const rad = r.int(2, 7);
-        return { F: add(pow(X, num(2)), pow(Y, num(2))), c: rad * rad, shape: 'circle' };
-      }
-      if (shape === 1) {
-        return { F: mul(X, Y), c: r.nz(2, 9), shape: 'hyperbola' };
-      }
-      if (shape === 2) {
-        const a = r.int(2, 5);
-        const b = r.int(2, 5);
-        return {
-          F: add(mul(num(a), pow(X, num(2))), mul(num(b), pow(Y, num(2)))),
-          c: a * b * r.int(2, 5),
-          shape: 'ellipse',
-        };
-      }
+      const name = r.pick(['asin', 'acos', 'atan']);
+      const arg = level === 1 ? X
+        : level === 2 ? mul(num(r.nz(2, 5)), X)
+          : r() < 0.5 ? pow(X, num(2)) : fn('exp', mul(num(r.nz(1, 3)), X));
+      const a = r.nz(1, 6);
       return {
-        F: add(add(pow(X, num(2)), mul(X, Y)), pow(Y, num(2))),
-        c: r.int(3, 12),
-        shape: 'rotated conic',
+        f: a === 1 ? fn(name, arg) : mul(num(a), fn(name, arg)),
+        inner: arg,
+        note: 'An inverse trig derivative is an algebraic fraction, times the '
+          + 'derivative of what is inside.',
       };
     },
   },
@@ -243,6 +346,13 @@ const SKILLS = {
 /* Everything after this point asks a different question - integrate this,
    factor this - and is marked differently, so the builders live apart and
    join SKILLS at the bottom of the file. */
+
+/* Does this expression contain a trig function anywhere in it? */
+function hasTrig(node) {
+  if (!node) return false;
+  if (node.t === 'fn' && /^(sin|cos|tan|sec|csc|cot|asin|acos|atan)$/.test(node.n)) return true;
+  return hasTrig(node.a) || hasTrig(node.b);
+}
 
 /* ------------------------------------------------- integrals and algebra */
 
@@ -670,38 +780,283 @@ function distractorsFor(f, reference) {
   return out;
 }
 
-/* -------------------------------------------------------- implicit curves */
+/* ------------------------------------------------- implicit, properly */
 
-/* Points that actually lie on F(x,y) = c.
+/* An implicit problem is an EQUATION, not a conic with a number on the
+   right. Writing it as left = right rather than F(x,y) = c is what allows
 
-   dy/dx for a circle is -x/y, and a student may legitimately write a form
-   that only matches that ON the circle. Comparing across the whole plane
-   would fail a correct answer, so solve for y by Newton's method and compare
-   at those points instead. */
-function curveScopes(F, c, seed, count = 26) {
-  const r = MathKit.rng(seed);
+       e^y = 17 ln(x^sin(xy))
+
+   which is the shape that actually turns up once a course is past circles:
+   an exponential in y, a logarithm in x, and a trig function of both at
+   once. Internally it is still F = left - right and dy/dx = -F_x/F_y; the
+   equation form is for the student, and for the generator to be able to
+   build something worth differentiating.
+
+   `domain` says where the equation means anything. An equation with ln(x) in
+   it has nothing to say about negative x, and sampling there would waste
+   every attempt. */
+function implicitEquation(r, level) {
+  if (level === 1) {
+    const shape = r.int(0, 2);
+    if (shape === 0) {
+      const rad = r.int(2, 7);
+      return {
+        left: add(pow(X, num(2)), pow(Y, num(2))),
+        right: num(rad * rad),
+        note: 'A circle. Differentiate both sides, remembering y is a function of x.',
+      };
+    }
+    if (shape === 1) {
+      return { left: mul(X, Y), right: num(r.nz(2, 9)), note: 'The left side is a product.' };
+    }
+    const a = r.int(2, 5);
+    const b = r.int(2, 5);
+    return {
+      left: add(mul(num(a), pow(X, num(2))), mul(num(b), pow(Y, num(2)))),
+      right: num(a * b * r.int(2, 5)),
+      note: 'An ellipse.',
+    };
+  }
+
+  if (level === 2) {
+    const shape = r.int(0, 6);
+    if (shape === 0) {
+      return {
+        left: add(add(pow(X, num(2)), mul(X, Y)), pow(Y, num(2))),
+        right: num(r.int(3, 12)),
+        note: 'The middle term needs the product rule before you can collect dy/dx.',
+      };
+    }
+    if (shape === 1) {
+      return {
+        left: add(fn('exp', Y), pow(X, num(2))),
+        right: num(r.int(2, 9)),
+        note: 'd/dx of e^y is e^y times dy/dx.',
+      };
+    }
+    if (shape === 2) {
+      return {
+        left: add(fn('sin', Y), mul(num(r.nz(2, 4)), pow(X, num(2)))),
+        right: num(r.int(1, 4)),
+        note: 'd/dx of sin(y) is cos(y) times dy/dx.',
+      };
+    }
+    if (shape === 3) {
+      return {
+        left: sub(mul(X, pow(Y, num(2))), fn('cos', X)),
+        right: num(r.int(1, 6)),
+        note: 'The first term is a product of x and a function of y.',
+      };
+    }
+    if (shape === 5) {
+      /* The shape Carter had on a quiz and could not start:
+         x e^y = 2y + y^3. The left is a product with e^y in it, the right
+         is all y, and the whole thing has to be collected before dy/dx
+         comes out. */
+      const a = r.int(2, 5);
+      const b = r.int(2, 4);
+      return {
+        left: mul(X, fn('exp', Y)),
+        right: add(mul(num(a), Y), mul(num(b === 1 ? 1 : b), pow(Y, num(3)))),
+        note: 'The left is a product and the right is all y. Differentiate both, '
+          + 'then collect every dy/dx on one side.',
+      };
+    }
+    if (shape === 6) {
+      return {
+        left: mul(Y, fn('exp', X)),
+        right: add(pow(Y, num(2)), num(r.int(1, 5))),
+        note: 'Both sides carry a dy/dx once you differentiate.',
+      };
+    }
+    return {
+      left: add(fn('ln', Y), mul(num(r.nz(2, 5)), X)),
+      right: num(r.int(1, 6)),
+      domain: 'y-positive',
+      note: 'd/dx of ln(y) is dy/dx over y.',
+    };
+  }
+
+  /* Level 3: both variables inside the same function, and more than one
+     kind of function in the same equation. */
+  const shape = r.int(0, 9);
+
+  if (shape === 0) {
+    /* The one Carter asked for. ln(x^u) is u ln(x) for positive x, so this
+       is a product rule inside a logarithm inside an equation - about as
+       much as one line can carry. */
+    const a = r.int(2, 20);
+    return {
+      left: fn('exp', Y),
+      right: mul(num(a), fn('ln', pow(X, fn('sin', mul(X, Y))))),
+      domain: 'x-positive',
+      note: 'Take the exponent out of the logarithm first: ln(x^u) is u ln(x).',
+    };
+  }
+
+  if (shape === 1) {
+    return {
+      left: fn('sin', mul(X, Y)),
+      right: add(X, Y),
+      note: 'The left side needs the chain rule and then the product rule inside it.',
+    };
+  }
+
+  if (shape === 2) {
+    return {
+      left: fn('exp', mul(X, Y)),
+      right: add(pow(X, num(2)), Y),
+      note: 'd/dx of e^(xy) is e^(xy) times the derivative of xy.',
+    };
+  }
+
+  if (shape === 3) {
+    return {
+      left: fn('ln', add(pow(X, num(2)), pow(Y, num(2)))),
+      right: mul(num(r.nz(1, 3)), X),
+      note: 'A logarithm of something containing both variables.',
+    };
+  }
+
+  if (shape === 4) {
+    return {
+      left: add(mul(X, fn('sin', Y)), mul(Y, fn('cos', X))),
+      right: num(r.int(1, 5)),
+      note: 'Both terms are products, and each contains a function of the other variable.',
+    };
+  }
+
+  if (shape === 5) {
+    return {
+      left: fn('tan', add(X, Y)),
+      right: mul(X, Y),
+      note: 'The left side is a chain rule; the right is a product rule.',
+    };
+  }
+
+  if (shape === 6) {
+    /* An inverse trig function with both variables in it. */
+    return {
+      left: fn('atan', mul(X, Y)),
+      right: add(X, Y),
+      note: 'd/dx arctan(u) is u prime over 1 plus u squared.',
+    };
+  }
+
+  if (shape === 7) {
+    return {
+      left: add(fn('asin', Y), pow(X, num(2))),
+      right: num(r.int(1, 3)),
+      note: 'd/dx arcsin(y) is dy/dx over the square root of 1 minus y squared.',
+    };
+  }
+
+  if (shape === 8) {
+    const name = r.pick(['sec', 'csc', 'cot']);
+    return {
+      left: fn(name, Y),
+      right: add(mul(num(r.nz(2, 4)), X), Y),
+      note: `The reciprocal trig functions each carry their own pair: `
+        + `d/dx ${name}(y) brings a dy/dx with it.`,
+    };
+  }
+
+  /* x e^y against a polynomial in y, at the harder end: the same shape as
+     the quiz question, with more on the right to collect. */
+  return {
+    left: mul(pow(X, num(2)), fn('exp', Y)),
+    right: sub(pow(Y, num(3)), mul(num(r.int(2, 5)), Y)),
+    note: 'Product rule on the left, and every term on the right carries a dy/dx.',
+  };
+}
+
+/* Points that actually lie on left = right.
+
+   Harder than it was for a circle. A transcendental equation has branches,
+   gaps, and stretches of x where there is no real y at all, so this tries
+   Newton from several starting points and falls back to hunting for a sign
+   change and bisecting, which cannot miss a crossing that exists in the
+   range it scans. Anything near a vertical tangent is dropped: dy/dx does
+   not exist there and neither side of a comparison would mean anything. */
+function curveScopes(F, c, seed, opts = {}) {
+  const r = MathKit.rng(seed >>> 0);
   const Fy = derivative(F, 'y');
   const f = Expr.compile(F);
   const fy = Expr.compile(Fy);
+  const domain = opts.domain || 'any';
+  const residual = (x, y) => f({ x, y }) - c;
+
+  const pickX = () => {
+    if (domain === 'x-positive') return 0.25 + r() * 3.5;
+    return (r() < 0.5 ? -1 : 1) * (0.3 + r() * 2.6);
+  };
+  const yStart = () => {
+    if (domain === 'y-positive') return 0.2 + r() * 3;
+    return (r() < 0.5 ? -1 : 1) * (0.3 + r() * 2.6);
+  };
+
+  const newton = (x, start) => {
+    let y = start;
+    for (let k = 0; k < 60; k++) {
+      const value = residual(x, y);
+      const slope = fy({ x, y });
+      if (!isFinite(value) || !isFinite(slope) || Math.abs(slope) < 1e-9) return null;
+      const step = value / slope;
+      y -= step;
+      if (!isFinite(y)) return null;
+      if (Math.abs(step) < 1e-13) return y;
+    }
+    return null;
+  };
+
+  /* Scan for a sign change and bisect. Slower, but it finds roots Newton
+     walks straight past on a periodic equation. */
+  const bisect = (x) => {
+    const lo = domain === 'y-positive' ? 0.05 : -6;
+    const hi = 6;
+    const steps = 240;
+    let previousY = lo;
+    let previous = residual(x, lo);
+    for (let i = 1; i <= steps; i++) {
+      const y = lo + ((hi - lo) * i) / steps;
+      const value = residual(x, y);
+      if (isFinite(previous) && isFinite(value) && previous * value < 0) {
+        let a = previousY;
+        let b = y;
+        for (let k = 0; k < 80; k++) {
+          const mid = (a + b) / 2;
+          const midValue = residual(x, mid);
+          if (!isFinite(midValue)) break;
+          if (residual(x, a) * midValue <= 0) b = mid;
+          else a = mid;
+        }
+        return (a + b) / 2;
+      }
+      previousY = y;
+      previous = value;
+    }
+    return null;
+  };
+
   const out = [];
   let guard = 0;
-  while (out.length < count && guard++ < count * 40) {
-    const x = (r() < 0.5 ? -1 : 1) * (0.3 + r() * 2.4);
-    let y = (r() < 0.5 ? -1 : 1) * (0.4 + r() * 2.6);
-    let ok = false;
-    for (let k = 0; k < 40; k++) {
-      const residual = f({ x, y }) - c;
-      const slope = fy({ x, y });
-      if (!isFinite(residual) || !isFinite(slope) || Math.abs(slope) < 1e-8) break;
-      const step = residual / slope;
-      y -= step;
-      if (Math.abs(step) < 1e-13) { ok = true; break; }
+  while (out.length < (opts.count || 26) && guard++ < (opts.count || 26) * 60) {
+    const x = pickX();
+    let y = null;
+    for (let attempt = 0; attempt < 3 && y === null; attempt++) {
+      y = newton(x, yStart());
     }
-    if (!ok || !isFinite(y)) continue;
-    /* A point where F_y vanishes is a vertical tangent: dy/dx does not exist
-       there and neither side of the comparison means anything. */
-    if (Math.abs(fy({ x, y })) < 1e-4) continue;
-    if (Math.abs(f({ x, y }) - c) > 1e-9 * Math.max(1, Math.abs(c))) continue;
+    if (y === null) y = bisect(x);
+    if (y === null || !isFinite(y)) continue;
+    if (domain === 'y-positive' && y <= 0) continue;
+    if (Math.abs(residual(x, y)) > 1e-8 * Math.max(1, Math.abs(c))) continue;
+    const slope = fy({ x, y });
+    /* A vertical tangent, or a point where the implicit function theorem
+       has nothing to say. */
+    if (!isFinite(slope) || Math.abs(slope) < 1e-3) continue;
+    const dydx = -Expr.compile(derivative(F, 'x'))({ x, y }) / slope;
+    if (!isFinite(dydx) || Math.abs(dydx) > 1e4) continue;
     out.push({ x, y });
   }
   return out;
@@ -723,7 +1078,7 @@ export function buildProblem(spec, seed) {
   const id = r.pick(ids);
   const skill = SKILLS[id];
 
-  const built = skill.build(r, level);
+  const built = skill.build(r, level, spec);
   if (!built) return null;
 
   if (skill.implicit) return implicitProblem(id, skill, built, level, seed);
@@ -789,20 +1144,30 @@ export function buildProblem(spec, seed) {
 }
 
 function implicitProblem(id, skill, built, level, seed) {
-  const { F, c } = built;
-  const Fx = derivative(F, 'x');
-  const Fy = derivative(F, 'y');
-  if (Expr.vars(Fy).size === 0) return null;
+  const { left, right, domain } = built;
+  if (!left || !right) return null;
+
+  /* left = right becomes F = 0, which is the only form the rule needs.
+     Keeping the equation around separately is for the student: nobody
+     writes "e^y - 17 ln(x^sin(xy)) = 0" on a worksheet. */
+  const F = sub(left, right);
+  const Fx = simplify(derivative(F, 'x'));
+  const Fy = simplify(derivative(F, 'y'));
+  /* No y in the derivative means it was never an implicit problem. */
+  if (Expr.vars(Fy).size === 0 && Expr.isIdenticallyZero(Fy)) return null;
+
   const reference = simplify(simplify(neg(div(Fx, Fy))));
-  const scopes = curveScopes(F, c, seed);
+  if (Expr.isIdenticallyZero(reference)) return null;
+
+  const scopes = curveScopes(F, 0, seed, { domain });
   /* No usable points means no checkable problem. Better to skip it than to
      ask something that cannot be graded. The floor is comfortably above the
      minimum equivalent() wants, so a borderline curve does not produce a
      problem whose grading then reports "I cannot tell". */
   if (scopes.length < 14) return null;
 
-  const wrongWay = simplify(simplify(neg(div(Fy, Fx))));
   const distractors = [];
+  const wrongWay = simplify(simplify(neg(div(Fy, Fx))));
   if (!equivalent(wrongWay, reference, { scopes }).equal) {
     distractors.push({
       kind: 'reciprocal',
@@ -811,7 +1176,7 @@ function implicitProblem(id, skill, built, level, seed) {
     });
   }
   /* Treating y as a constant is THE implicit differentiation mistake: the
-     y-terms then contribute nothing and dy/dx comes out of the x-terms
+     y terms then contribute nothing and dy/dx comes out of the x terms
      alone. */
   const asConstant = simplify(simplify(neg(Fx)));
   if (!equivalent(asConstant, reference, { scopes }).equal) {
@@ -823,6 +1188,7 @@ function implicitProblem(id, skill, built, level, seed) {
     });
   }
 
+  const equation = `${html(left)} = ${html(right)}`;
   return {
     source: 'sandbox',
     kind: 'expression',
@@ -835,9 +1201,13 @@ function implicitProblem(id, skill, built, level, seed) {
     key: `sandbox:${id}:${level}:${seed >>> 0}`,
     variable: 'x',
     implicit: true,
-    stem: `For ${eqHtml(html(F), String(c))}, find ${MathKit.frac('dy', 'dx')}.`,
+    domain: domain || 'any',
+    stem: `For <span class="eq">${equation}</span>, find ${MathKit.frac('dy', 'dx')}.`,
     instruction: 'Your answer may use both x and y. Any correct form counts.',
-    functionText: `${Expr.text(F)} = ${c}`,
+    /* Both sides, so a reload and the test harness can both rebuild the
+       curve rather than guessing at which part was the equation. */
+    functionText: `${text(left)} = ${text(right)}`,
+    curve: { left: text(left), right: text(right) },
     answerNode: reference,
     answerText: text(reference),
     answerHtml: html(reference),
@@ -845,18 +1215,21 @@ function implicitProblem(id, skill, built, level, seed) {
     distractors,
     scopes,
     original: null,
+    note: built.note || null,
     hints: [
-      'Differentiate both sides with respect to x, remembering that y is a function of x.',
-      `The y terms give ${html(Fy)} times dy/dx, and the x terms give ${html(Fx)}.`,
-      'Collect the dy/dx terms on one side and divide.',
+      built.note || 'Differentiate both sides with respect to x, remembering that y is a function of x.',
+      `Differentiating the left gives ${html(simplify(derivative(left, 'x')))} from the x terms `
+        + `and ${html(simplify(derivative(left, 'y')))} times dy/dx from the y terms.`,
+      'Collect every dy/dx on one side, factor it out, and divide.',
     ],
     steps: [
-      { title: 'Differentiate both sides', html: `${html(Fx)} + ${html(Fy)}·${MathKit.frac('dy', 'dx')} = 0` },
+      {
+        title: 'Differentiate both sides',
+        html: `${html(Fx)} + ${html(Fy)}·${MathKit.frac('dy', 'dx')} = 0`,
+      },
       { title: 'Solve for dy/dx', html: `${MathKit.frac('dy', 'dx')} = ${html(reference)}` },
     ],
-    graph: {
-      implicit: `${latex(F)}=${c}`,
-    },
+    graph: { implicit: `${latex(left)}=${latex(right)}` },
   };
 }
 
@@ -947,5 +1320,113 @@ export function gradeExpression(problem, raw) {
 }
 
 Object.assign(SKILLS, SKILL_EXTRAS);
+
+/* ------------------------------------------------------ am I on track */
+
+/* Checking without being marked.
+
+   Carter's ask: "guiding hints to tell me whether or not I'm on the right
+   track." The grader could already say what went wrong, but only once you
+   had committed, which is no use halfway through an implicit problem where
+   you have the numerator and are stuck on the denominator.
+
+   So this looks at whatever is in the box right now and says where it sits
+   relative to the answer, WITHOUT recording an attempt. The useful cases
+   are the partial ones:
+
+     - the top of the fraction is right, the bottom is not
+     - the shape is right and a coefficient is out
+     - every sign is flipped
+     - two of the three terms are there
+
+   Those are all things the engine can establish by comparison, and all
+   things a person stuck on a problem wants to hear. Where there is nothing
+   specific to say it falls back to the next hint rather than inventing
+   encouragement, because "keep going" from a computer is worth nothing. */
+
+/* The top and bottom of an answer shaped like a fraction, if it is one.
+   Implicit answers almost always are: -F_x/F_y. */
+function fractionParts(node) {
+  if (!node) return null;
+  const core = node.t === 'neg' ? node.a : node;
+  if (core.t !== 'div') return null;
+  return { top: core.a, bottom: core.b, negated: node.t === 'neg' };
+}
+
+export function onTrack(problem, raw, { hintsShown = 0 } = {}) {
+  const text = String(raw == null ? '' : raw).trim();
+  const nextHint = () => {
+    const hints = problem && problem.hints ? problem.hints : [];
+    const hint = hints[Math.min(hintsShown, hints.length - 1)];
+    return hint || '';
+  };
+
+  if (!text) {
+    return {
+      state: 'empty',
+      message: problem && problem.note
+        ? problem.note
+        : nextHint() || 'Start by writing down which rule this needs.',
+    };
+  }
+
+  /* An integral answer may end in + C, which is not part of the
+     expression and must not be read as a stray variable. */
+  const cleaned = problem && problem.kind === 'antiderivative'
+    ? Expr.stripPlusC(text) : text;
+
+  const allowed = problem && problem.implicit ? { vars: ['x', 'y'] } : { vars: ['x'] };
+  const node = Expr.tryParse(cleaned, allowed);
+  if (!node) {
+    return {
+      state: 'unreadable',
+      message: Expr.parseMessage(cleaned, allowed) || 'I cannot read that yet.',
+    };
+  }
+
+  /* The real verdict first: if it is right, say so and stop. */
+  const verdict = gradeExpression(problem, text);
+  if (verdict.correct) {
+    return { state: 'right', message: 'That is it. Check it in if you are happy.' };
+  }
+
+  const scopes = problem && problem.scopes ? { scopes: problem.scopes } : {};
+
+  /* Half of a fraction is the most useful thing to be told, and the most
+     common place to be stuck on an implicit problem. */
+  const parts = fractionParts(problem && problem.answerNode);
+  if (parts) {
+    if (Expr.equivalent(node, parts.top, scopes).equal
+      || Expr.equivalent(node, Expr.neg(parts.top), scopes).equal) {
+      return {
+        state: 'partway',
+        message: 'That is the top of the fraction, and it is right. '
+          + 'Now the bottom: it comes from the terms that carried a dy/dx.',
+      };
+    }
+    if (Expr.equivalent(node, parts.bottom, scopes).equal
+      || Expr.equivalent(node, Expr.neg(parts.bottom), scopes).equal) {
+      return {
+        state: 'partway',
+        message: 'That is the bottom of the fraction, and it is right. '
+          + 'The top comes from everything that did NOT carry a dy/dx.',
+      };
+    }
+  }
+
+  /* Otherwise the ordinary diagnosis, which already names the mistake. */
+  if (verdict.hint) {
+    const close = ['factor', 'sign', 'partial', 'offset', 'chain-missing', 'chain-twice'];
+    return {
+      state: close.includes(verdict.diagnosis || verdict.kind) ? 'close' : 'off',
+      message: verdict.hint,
+    };
+  }
+
+  return {
+    state: 'off',
+    message: nextHint() || 'Not there yet. Try the hint.',
+  };
+}
 
 export { SKILLS, BREAKS, SKILL_EXTRAS, brokenDiff, distractorsFor, curveScopes };

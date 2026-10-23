@@ -495,6 +495,16 @@ function diff(node, v = 'x') {
 const isNum = (n) => n.t === 'num';
 const isZero = (n) => n.t === 'num' && n.v === 0;
 const isOne = (n) => n.t === 'num' && n.v === 1;
+/* Structural identity, by comparing printed form. Cheap, and exact enough
+   for the cancellations in simplify: two trees that print the same ARE the
+   same tree. */
+const sameTree = (a, b) => {
+  try {
+    return text(a) === text(b);
+  } catch (err) {
+    return false;
+  }
+};
 
 /* Enough simplification to make a stated answer readable, and no more. This
    is not a CAS: it folds constants and drops identities, it does not collect
@@ -545,6 +555,21 @@ function simplify(node) {
       }
       if (a.t === 'neg') return simplify(neg(mul(a.a, b)));
       if (b.t === 'neg') return simplify(neg(mul(a, b.a)));
+      /* (p/q)*q is p.
+
+         Not a flourish. Differentiating ln(u) gives u'/u, so a chain
+         rule through a logarithm leaves (1/u)*u sitting in the answer.
+         On e^y = 17 ln(x^sin(xy)) that one rule is the difference
+         between an answer somebody can read and a line of noise with
+         the cancellation still in it. */
+      if (a.t === 'div' && sameTree(a.b, b)) return simplify(a.a);
+      if (b.t === 'div' && sameTree(b.b, a)) return simplify(b.a);
+      /* n*(p/q) is (n*p)/q, which keeps the coefficient where it reads. */
+      if (isNum(a) && b.t === 'div') return simplify(div(mul(a, b.a), b.b));
+      /* A number buried in a product comes to the front: x*2*y is 2xy. */
+      if (!isNum(a) && b.t === 'mul' && isNum(b.a)) {
+        return simplify(mul(b.a, mul(a, b.b)));
+      }
       return mul(a, b);
     }
     case 'div': {
@@ -555,6 +580,11 @@ function simplify(node) {
       if (isNum(a) && isNum(b) && b.v !== 0 && Number.isInteger(a.v / b.v)) {
         return num(a.v / b.v);
       }
+      /* p/(1/q) is p*q. d/dx ln(y) is 1/y, so dividing by it turns up
+         every time a logarithm of y is differentiated implicitly. */
+      if (b.t === 'div' && isOne(b.a)) return simplify(mul(a, b.b));
+      /* p/p is 1, whatever p is. */
+      if (sameTree(a, b)) return num(1);
       return div(a, b);
     }
     case 'pow': {
@@ -672,15 +702,33 @@ function html(node, parent = 0) {
     }
     case 'div': return wrap(MathKit.frac(html(node.a, 0), html(node.b, 0)));
     case 'pow': {
-      const base = html(node.a, 5);
       const e = node.b;
       const plain = (isNum(e) && Number.isInteger(e.v))
         || e.t === 'var' || (e.t === 'neg' && isNum(e.a));
+      /* sin(x)^2 is written sin^2(x). The exponent goes on the FUNCTION,
+         which is the one piece of notation where maths puts it somewhere
+         other than after the thing being raised. */
+      if (plain && node.a.t === 'fn' && isNum(e) && e.v > 0
+        && !['sqrt', 'exp', 'abs'].includes(node.a.n)) {
+        const name = { asin: 'arcsin', acos: 'arccos', atan: 'arctan' }[node.a.n] || node.a.n;
+        return `${name}${MathKit.sup(text(e))}(${html(node.a.a, 0)})`;
+      }
+      /* A base that already carries a superscript or a radical has to be
+         bracketed, or (e^x)^2 and e^(x^2) look identical on the page, and
+         so do the square of a root and the root of a square. */
+      const ambiguous = (node.a.t === 'fn' && ['exp', 'sqrt', 'cbrt'].includes(node.a.n))
+        || node.a.t === 'pow';
+      const base = ambiguous ? `(${html(node.a, 0)})` : html(node.a, 5);
       if (plain) return wrap(`${base}${MathKit.sup(text(e))}`);
       return wrap(`${base}^(${html(e, 0)})`);
     }
     case 'fn': {
       if (node.n === 'sqrt') return MathKit.sqrt(html(node.a, 0));
+      /* Nobody writes asin. The parser accepts both spellings; the page
+         shows the one a textbook uses. */
+      if (node.n === 'asin') return `arcsin(${html(node.a, 0)})`;
+      if (node.n === 'acos') return `arccos(${html(node.a, 0)})`;
+      if (node.n === 'atan') return `arctan(${html(node.a, 0)})`;
       /* e to a power. The exponent is rendered rather than printed as
          source, because sup() can only use Unicode superscripts for digits
          and falls back to literal text for anything else - which is how

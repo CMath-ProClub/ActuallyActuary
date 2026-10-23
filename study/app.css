@@ -645,6 +645,13 @@ button.barrow:hover { background: var(--sunk); }
 .frac .num { border-bottom: 1px solid currentColor; padding: 0 .3em .05em; }
 .frac .den { padding: .05em .3em 0; }
 
+/* In a question, a fraction sits in a line of larger type, and a baseline
+   shift tuned for body text drops it below the line: "find dy/dx ." ended
+   up with the fraction hanging under the sentence and the full stop
+   floating. Centring it against the text middle holds whatever its height
+   turns out to be. */
+.stem .frac, .eq .frac, .answerline .frac { vertical-align: middle; }
+
 .sup { font-size: .72em; vertical-align: super; line-height: 0; }
 
 .radical { margin-right: -.08em; }
@@ -1065,3 +1072,12 @@ footer {
 }
 .peekproblem { margin-bottom: 12px; }
 .peekboard { height: 300px; cursor: default; }
+
+/* A progress check. Coloured by how close it is, and always paired with
+   words, because a colour alone says nothing to someone who cannot see it. */
+.hint.track, .feedback.track { border-left: 3px solid var(--edge); padding-left: 12px; }
+.hint.track.right, .feedback.track.right { border-left-color: var(--good); }
+.hint.track.partway, .feedback.track.partway { border-left-color: var(--accent); }
+.hint.track.close, .feedback.track.close { border-left-color: var(--warnc); }
+.hint.track.off, .feedback.track.off { border-left-color: var(--muted); }
+.hint.track.unreadable, .feedback.track.unreadable { border-left-color: var(--warnc); }
