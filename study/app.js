@@ -1987,11 +1987,14 @@ function formPanel(step, names) {
 function launch(plan, root) {
   if (!plan) { root.appendChild(h('p', { text: 'Nothing to start.' })); return; }
 
-  /* Two people on the same problem belong in the workspace whatever they
-     picked afterwards: that is where the board and the shared question are.
-     Sending them to the solo practice view instead was a dead end - they
-     had chosen to work together and got two separate screens. */
-  if (plan.shared) { startWorkspace(plan); return; }
+  /* Anything with two people in it belongs in the workspace, whatever they
+     picked afterwards. On the same problem, that is where the shared board
+     and the shared question live. Side by side, it is where your own board
+     gets published so the other person can look in when you ask for help -
+     which was the entire point of choosing to sit together. Sending either
+     to the solo practice view was a dead end: two people who chose to work
+     together got two unconnected screens. */
+  if (plan.shared || plan.sideBySide) { startWorkspace(plan); return; }
 
   if (plan.mode === 'practice') {
     startSession({
@@ -2323,17 +2326,25 @@ function leaveRoom() {
 }
 
 function ensureRoom() {
-  if (!workspace || !workspace.plan.shared || liveRoom) return;
+  if (!workspace || liveRoom) return;
+  /* Shared means one board between two people. Side by side means each has
+     their own, published so the other can look in when asked for help -
+     which is the whole point of sitting next to somebody. */
+  const name = workspace.plan.shared ? workspace.plan.room : workspace.plan.ownRoom;
+  if (!name) return;
   const endpoint = store.syncEndpoint();
   if (!endpoint) return;
-  liveRoom = room.joinRoom(endpoint, workspace.plan.room, workspace.plan.who, {
+  liveRoom = room.joinRoom(endpoint, name, workspace.plan.who, {
     onStatus: (state, detail) => {
       roomStatus = { state, detail: detail || '' };
       const line = $('#roomline');
       if (line) paintRoomLine(line);
     },
     onHello: (msg) => {
-      /* Everything that happened before arriving, including the board. */
+      /* Only a SHARED room hands you its board and question. Your own room
+         in side-by-side mode is something you publish, not something that
+         reaches back and rearranges your screen. */
+      if (!workspace.plan.shared) return;
       if (workspace.board && msg.strokes && msg.strokes.length) {
         for (const s of msg.strokes) workspace.board.apply(s);
       }
@@ -2342,10 +2353,11 @@ function ensureRoom() {
         if (rebuilt) { workspace.problem = rebuilt; router(); }
       }
     },
-    onStroke: (s) => { if (workspace.board) workspace.board.apply(s); },
-    onErase: (id) => { if (workspace.board) workspace.board.apply({ id, dead: true, points: [] }); },
-    onClear: () => { if (workspace.board) workspace.board.clear(); },
+    onStroke: (s) => { if (workspace.plan.shared && workspace.board) workspace.board.apply(s); },
+    onErase: (id) => { if (workspace.plan.shared && workspace.board) workspace.board.apply({ id, dead: true, points: [] }); },
+    onClear: () => { if (workspace.plan.shared && workspace.board) workspace.board.clear(); },
     onProblem: (description) => {
+      if (!workspace.plan.shared) return;
       const rebuilt = rebuildProblem(description);
       if (!rebuilt) return;
       workspace.problem = rebuilt;
@@ -2359,11 +2371,24 @@ function ensureRoom() {
 function paintRoomLine(line) {
   line.innerHTML = '';
   const { state, detail } = roomStatus;
+  const sideBySide = workspace && workspace.plan.sideBySide;
   line.appendChild(h('span', {
     class: `pill ${state === 'connected' ? 'ai' : 'warn'}`,
-    text: state === 'connected' ? 'together' : state === 'connecting' ? 'connecting' : 'offline',
+    text: state === 'connected' ? (sideBySide ? 'shared' : 'together')
+      : state === 'connecting' ? 'connecting' : 'offline',
   }));
-  line.appendChild(h('span', { class: 'small muted', text: ` ${detail || ''}` }));
+  /* Side by side is your OWN board, published. "Nobody else here yet" would
+     be describing a room that is not supposed to have anybody else in it. */
+  const names = workspace && workspace.plan.others
+    ? workspace.plan.others.map((o) => o.name).join(' and ') : '';
+  line.appendChild(h('span', {
+    class: 'small muted',
+    text: sideBySide
+      ? (state === 'connected'
+        ? ` Your board is visible to ${names || 'the other device'} if they look in.`
+        : ' Working on this device only.')
+      : ` ${detail || ''}`,
+  }));
   if (liveRoom && liveRoom.pending) {
     line.appendChild(h('span', { class: 'small muted', text: ` ${liveRoom.pending} waiting to send.` }));
   }
@@ -2408,6 +2433,7 @@ function renderWorkspace(root) {
         class: 'btn small ghost', type: 'button',
         onclick: () => {
           persist.clearSession(store.activeProfile().id, 'workspace');
+          closePeek();
           leaveRoom();
           workspace = null;
           flowAnswers = {};
@@ -2431,6 +2457,21 @@ function renderWorkspace(root) {
         + 'service is deployed from study_api/ and its address is set in Settings.',
       ]));
     }
+  }
+
+  /* Looking in on the other person, when you are working side by side. */
+  if (plan.sideBySide && plan.others && plan.others.length && store.syncEndpoint()) {
+    const row = h('div', { class: 'cta peekrow' });
+    for (const person of plan.others) {
+      row.appendChild(h('button', {
+        class: 'btn small ghost', type: 'button',
+        onclick: () => {
+          const panel = openPeek(person);
+          if (panel) root.appendChild(panel);
+        },
+      }, `Look in on ${person.name}`));
+    }
+    root.appendChild(row);
   }
 
   /* The problem, when there is one. */
@@ -2558,6 +2599,21 @@ function paintWorkspaceProblem(slot) {
           },
         }, 'Walk me through it')
         : null,
+      /* Two people working something out on a board need to be able to
+         agree to just look, without one of them having to guess wrong
+         first to see it. */
+      h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => {
+          feedback.innerHTML = '';
+          feedback.appendChild(h('div', { class: 'feedback' }, [
+            h('strong', { text: 'The answer' }),
+            h('p', { html: problem.answerHtml || '' }),
+            h('p', { class: 'small muted', text: 'Nothing is recorded when you '
+              + 'reveal it, so this does not count against anybody.' }),
+          ]));
+        },
+      }, 'Reveal the answer'),
       workspace.plan.mode !== 'homework-walkthrough'
         ? h('button', {
           class: 'btn ghost', type: 'button',
@@ -2910,6 +2966,100 @@ function problemFromText(raw) {
     hints: [`The answer is ${Expr.html(reference)}, in one of its forms.`],
     steps: [{ title: 'Differentiate', html: Expr.html(reference) }],
   };
+}
+
+/* ================================================================== peeking */
+
+/* Looking in on what the other person is doing.
+
+   The point of sitting next to somebody while you both work is that you can
+   glance over when they get stuck. Two people on two laptops lose that, so
+   this puts it back: their board, their question, read only, in a panel you
+   can close again.
+
+   Read only is the whole design. Drawing on someone else's board uninvited
+   is not helping, it is taking over, and the shared mode is right there for
+   when that is what you both want. */
+
+let peek = null;
+
+function closePeek() {
+  if (peek && peek.link) peek.link.leave();
+  if (peek && peek.node) peek.node.remove();
+  peek = null;
+}
+
+function openPeek(person) {
+  closePeek();
+  const endpoint = store.syncEndpoint();
+  if (!endpoint || !person || !person.room) return;
+
+  const canvas = h('canvas', { class: 'boardcanvas peekboard', 'aria-label': `${person.name}'s board` });
+  const status = h('p', { class: 'small muted', text: `Looking for ${person.name}...` });
+  const problemSlot = h('div', { class: 'peekproblem' });
+
+  const node = h('section', { class: 'card peek' }, [
+    h('div', { class: 'peekhead' }, [
+      h('div', {}, [
+        h('p', { class: 'eyebrow', text: 'Looking in' }),
+        h('h2', { text: `${person.name}'s work` }),
+      ]),
+      h('button', { class: 'btn small ghost', type: 'button', onclick: () => { closePeek(); router(); } }, 'Close'),
+    ]),
+    status,
+    problemSlot,
+    canvas,
+    h('p', { class: 'small muted', text: 'Read only. They cannot see you looking, '
+      + 'and nothing you do here reaches their board.' }),
+  ]);
+
+  const view = board.createBoard(canvas, { dark: darkNow(), readOnly: true });
+
+  const link = room.joinRoom(endpoint, person.room, `${workspace.plan.who} (looking)`, {
+    onStatus: (state) => {
+      if (state === 'connected') return;
+      status.textContent = state === 'connecting'
+        ? `Looking for ${person.name}...`
+        : `Cannot reach ${person.name} right now.`;
+    },
+    onHello: (msg) => {
+      view.load(msg.strokes || []);
+      /* Phrased without a pronoun: the app does not know anybody's, and
+         guessing from a name would be a strange thing to get wrong. */
+      status.textContent = (msg.strokes && msg.strokes.length)
+        ? `${msg.strokes.length} stroke${msg.strokes.length === 1 ? '' : 's'} on `
+          + `${person.name}'s board.`
+        : `Nothing on ${person.name}'s board yet.`;
+      paintPeekProblem(problemSlot, msg.problem, person);
+    },
+    onStroke: (stroke) => {
+      view.apply(stroke);
+      status.textContent = `${person.name} is working.`;
+    },
+    onErase: (id) => view.apply({ id, dead: true, points: [] }),
+    onClear: () => view.load([]),
+    onProblem: (description) => paintPeekProblem(problemSlot, description, person),
+  });
+
+  peek = { link, node, view, person };
+  return node;
+}
+
+function paintPeekProblem(slot, description, person) {
+  slot.innerHTML = '';
+  if (!description) {
+    slot.appendChild(h('p', { class: 'small muted', text: `${person.name} has no problem open.` }));
+    return;
+  }
+  const rebuilt = rebuildProblem(description);
+  if (!rebuilt) return;
+  slot.appendChild(h('div', { class: 'stem', html: rebuilt.stem }));
+  /* Their question, not their answer. Whether they have got it yet is
+     theirs to say. */
+  slot.appendChild(h('details', { class: 'steps' }, [
+    h('summary', { text: 'The answer to this one' }),
+    h('p', { html: rebuilt.answerHtml || '' }),
+  ]));
 }
 
 /* ===================================================================== quiz */

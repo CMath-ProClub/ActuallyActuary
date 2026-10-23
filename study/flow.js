@@ -301,6 +301,14 @@ export function plan(answers, people = ['carter']) {
        the two profile names rather than random, so the second person does not
        have to be sent a code. */
     room: shared ? roomName(people) : null,
+    /* Side by side is two people doing their own work in the same place, so
+       each has a room of their own that the other can look into. The pair
+       name is the same on both devices; the suffix says whose board it is. */
+    ownRoom: sideBySide ? `${roomName(people)}-${slug(who)}` : null,
+    others: (people || []).filter((p) => p !== who).map((p) => ({
+      name: p,
+      room: sideBySide ? `${roomName(people)}-${slug(p)}` : null,
+    })),
   };
 
   if (answers.intent === 'homework') {
@@ -333,6 +341,10 @@ export function plan(answers, people = ['carter']) {
     label: describe(ask),
     asked: ask.text || '',
   };
+}
+
+function slug(name) {
+  return String(name || 'someone').toLowerCase().replace(/[^a-z0-9]/g, '') || 'someone';
 }
 
 function roomName(people) {
