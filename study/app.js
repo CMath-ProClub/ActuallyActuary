@@ -13,6 +13,8 @@ import * as board from './board.js';
 import * as graph from './graph.js';
 import * as photo from './photo.js';
 import * as flow from './flow.js';
+import * as mistakes from './mistakes.js';
+import * as persist from './persist.js';
 import * as ask from './ask.js';
 import * as store from './store.js';
 import * as sched from './scheduler.js';
@@ -126,6 +128,8 @@ function renderDashboard(root) {
     h('h1', { text: `${greeting()}, ${p.name}` }),
     h('p', { class: 'lead', text: 'What to work on, and how it is going.' }),
   ]));
+
+  root.appendChild(mistakesCard(p));
 
   /* Stat tiles. One number each, so not a chart. */
   const tiles = h('div', { class: 'tiles' }, [
@@ -311,7 +315,45 @@ function startSession({ pool, label, items = null, setId = null, sandbox = null 
   if (location.hash === before) router();
 }
 
+function savePractice() {
+  if (!session) return;
+  /* A fixed set walks a stored list of items rather than seeds, so it is not
+     rebuildable this way and is left alone. */
+  if (session.items) return;
+  persist.saveSession(store.activeProfile().id, 'practice', {
+    label: session.label,
+    sandbox: session.sandbox || null,
+    pool: session.pool,
+    answered: session.answered,
+    correct: session.correct,
+    startedAt: session.startedAt,
+    problem: persist.describeProblem(session.current),
+  });
+}
+
 function renderPractice(root) {
+  if (!session) {
+    /* Same reasoning as the workspace: a refresh in the middle of a question
+       should not cost you the session. */
+    const saved = persist.loadSession(store.activeProfile().id, 'practice');
+    if (saved && (saved.sandbox || (saved.pool && saved.pool.length))) {
+      session = {
+        pool: saved.pool && saved.pool.length ? saved.pool : ALL_TOPIC_IDS,
+        label: saved.label || 'Practice',
+        items: null,
+        setId: null,
+        sandbox: saved.sandbox || null,
+        index: 0,
+        answered: saved.answered || 0,
+        correct: saved.correct || 0,
+        current: null,
+        startedAt: saved.startedAt || Date.now(),
+        lastTopicId: null,
+        history: [],
+        resumeProblem: saved.problem || null,
+      };
+    }
+  }
   if (!session) {
     root.appendChild(h('div', { class: 'card' }, [
       h('h2', { text: 'Nothing in progress' }),
@@ -342,6 +384,7 @@ function renderPractice(root) {
 function endSession() {
   const s = session;
   session = null;
+  persist.clearSession(store.activeProfile().id, 'practice');
   if (!s || !s.answered) { go('dashboard'); return; }
   const main = $('#view');
   main.innerHTML = '';
@@ -355,6 +398,13 @@ function endSession() {
     s.answered < 10
       ? h('p', { class: 'muted', text: 'That is a short session, so the percentage does not mean much on its own.' })
       : null,
+    /* The useful part is not the score, it is what went wrong more than
+       once. Null most of the time, which is correct: one miss is a miss, not
+       a pattern. */
+    (() => {
+      const note = mistakes.sessionNote(store.activeProfile().attempts, s.startedAt);
+      return note ? h('p', { class: 'sessionnote', text: note }) : null;
+    })(),
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', onclick: () => startSession({ pool: s.pool, label: s.label }) }, 'Go again'),
       h('a', { class: 'btn ghost', href: '#/dashboard' }, 'Dashboard'),
@@ -369,6 +419,19 @@ function nextProblem(stage) {
   let problem = null;
   let remediation = null;
 
+  /* Coming back from a reload lands on the question that was on screen, not
+     a new one, because the seed rebuilds it exactly. */
+  if (session.resumeProblem) {
+    const resumed = rebuildProblem(session.resumeProblem);
+    session.resumeProblem = null;
+    if (resumed) {
+      session.current = resumed;
+      session.lastTopicId = resumed.topicId;
+      renderProblem(stage, resumed, { remediation: null, mode: 'practice' });
+      return;
+    }
+  }
+
   if (session.sandbox) {
     /* Endless by design: this is the "keep them coming" mode. A builder can
        decline a draw (a derivative that came out identically zero cannot be
@@ -382,6 +445,7 @@ function nextProblem(stage) {
     }
     session.current = problem;
     session.lastTopicId = problem.topicId;
+    savePractice();
     renderProblem(stage, problem, { remediation: null, mode: 'practice' });
     return;
   }
@@ -409,6 +473,7 @@ function nextProblem(stage) {
 
   session.current = problem;
   session.lastTopicId = problem.topicId;
+  savePractice();
   renderProblem(stage, problem, { remediation, mode: 'practice' });
 }
 
@@ -477,6 +542,11 @@ function renderProblem(stage, problem, { remediation, mode }) {
       spellcheck: 'false', placeholder: inputHint(problem), 'aria-label': 'Your answer',
     });
     form.appendChild(input);
+    /* Only where an expression is expected. Echoing a plain number back at
+       someone would be noise. */
+    if (['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)) {
+      form.appendChild(attachEcho(input, problem));
+    }
     getResponse = () => input.value;
     setTimeout(() => input.focus(), 30);
   }
@@ -605,9 +675,12 @@ function renderProblem(stage, problem, { remediation, mode }) {
       hintsUsed: hintsShown,
       seed: problem.seed,
       mode: skipped ? 'skip' : mode,
+      /* What the grader worked out, kept rather than shown once and lost. */
+      diagnosis: skipped ? 'skipped' : (res.diagnosis || ''),
     });
     session.answered++;
     if (res.correct) session.correct++;
+    savePractice();
     session.history.push({ topicId: problem.topicId, correct: res.correct });
 
     const bar = $('.sessionbar strong');
@@ -968,6 +1041,7 @@ function finishTest(problems, timedOut = false) {
       hintsUsed: 0,
       seed: prob.seed,
       mode: 'test',
+      diagnosis: res.diagnosis || '',
     });
     return { prob, response: t.responses[i], result: res };
   });
@@ -1302,6 +1376,8 @@ function renderSettings(root) {
   root.appendChild(prefs);
 
   /* Ollama. */
+  root.appendChild(storageCard());
+
   root.appendChild(graphCard(p));
 
   root.appendChild(ollamaCard(p));
@@ -1343,6 +1419,40 @@ function renderSettings(root) {
 
 /* Where the Desmos key lives. Without one the graph panel uses the built-in
    plotter, which is why this is a convenience rather than a requirement. */
+/* What the workspace is keeping, and a way to be rid of it. Storage that
+   cannot be inspected or emptied is storage people are right not to trust. */
+function storageCard() {
+  const line = h('p', { class: 'small muted', text: 'Checking what is stored...' });
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'Saved work' }),
+    h('p', { class: 'muted', text: 'Whiteboard strokes and photos stay on this device so '
+      + 'that closing the tab does not lose them. They are never uploaded.' }),
+    line,
+  ]);
+  const paint = () => {
+    const strokeKb = Math.round(persist.strokeBytes() / 1024);
+    persist.photoUsage().then((usage) => {
+      line.textContent = `${usage.count} photo${usage.count === 1 ? '' : 's'} `
+        + `(${Math.round(usage.bytes / 1024)}KB) and about ${strokeKb}KB of whiteboard work.`;
+    });
+  };
+  paint();
+  card.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn small ghost', type: 'button',
+      onclick: () => {
+        if (!confirm('Delete saved whiteboards and photos on this device?')) return;
+        persist.clearEverything().then(() => {
+          persist.clearSession(store.activeProfile().id, 'workspace');
+          persist.clearSession(store.activeProfile().id, 'practice');
+          paint();
+        });
+      },
+    }, 'Delete saved work'),
+  ]));
+  return card;
+}
+
 function graphCard(p) {
   const key = h('input', {
     class: 'textinput', type: 'text', value: p.settings.desmosKey || '',
@@ -1829,6 +1939,64 @@ function launch(plan, root) {
   startWorkspace(plan);
 }
 
+/* ============================================================== mistakes */
+
+/* What keeps going wrong. The grader already works this out for every wrong
+   answer; this is the first place it is remembered rather than shown once
+   and forgotten. */
+function mistakesCard(p) {
+  const rows = mistakes.summarize(p.attempts).filter((r) => r.count >= mistakes.PATTERN_FLOOR);
+  const teachable = rows.filter((r) => r.teachable);
+  if (!teachable.length) {
+    /* Nothing to say yet, and saying it anyway would be noise. A notation
+       problem is worth raising on its own though, because the fix is
+       different: it is how you are typing, not what you know. */
+    const notation = rows.find((r) => r.kind === 'unreadable');
+    if (!notation) return h('div', { hidden: true });
+    return h('section', { class: 'card' }, [
+      h('p', { class: 'eyebrow', text: 'Worth knowing' }),
+      h('h2', { text: 'Some answers could not be read' }),
+      h('p', { text: `${notation.count} of your recent answers could not be parsed, which is a `
+        + 'notation problem rather than a maths one. Check brackets, and write a product as 2*x or 2x.' }),
+    ]);
+  }
+
+  /* The heading used to repeat the first row word for word. The list says
+     it better, with the count attached. */
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'What keeps going wrong' }),
+    h('p', { class: 'muted', text: teachable.length > 1
+      ? 'The same slips, most often first. Each one has a drill aimed at it.'
+      : 'One thing is going wrong more than once. There is a drill for it.' }),
+  ]);
+
+  const list = h('ul', { class: 'mistakelist' });
+  for (const row of teachable.slice(0, 4)) {
+    const drill = mistakes.drillFor(row);
+    list.appendChild(h('li', {}, [
+      h('span', { class: 'mistakecount', text: String(row.count) }),
+      h('span', { class: 'mistakebody' }, [
+        h('strong', { text: row.label }),
+        h('span', { class: 'pickblurb', text: row.detail }),
+      ]),
+      drill
+        ? h('button', {
+          class: 'btn small ghost', type: 'button',
+          onclick: () => startSession({
+            label: drill.label,
+            sandbox: { skills: drill.skills, level: drill.level, hints: drill.hints },
+          }),
+        }, 'Drill it')
+        : null,
+    ]));
+  }
+  card.appendChild(list);
+  card.appendChild(h('p', { class: 'small muted', text:
+    `Counted over your last ${Math.min(p.attempts.length, 120)} answers. `
+    + `Anything under ${mistakes.PATTERN_FLOOR} is left out, because it is not a pattern yet.` }));
+  return card;
+}
+
 /* ================================================================= profiles */
 
 /* A fresh install has one profile called "Me", which is a fine default for
@@ -1879,6 +2047,73 @@ function profileSetupCard(onDone) {
   ]);
 }
 
+/* ======================================================== the parse echo */
+
+/* Show what the grader READ, under the box, as it is typed.
+
+   The worst thing a grader can do is not mark you wrong; it is mark you
+   wrong because it misread you. The engine already refuses to guess at
+   ambiguous input, but until now you only found that out by submitting. The
+   echo makes the reading visible while there is still time to fix it: type
+   1/2x and see one half times x, which is the reading, and add brackets if
+   you meant something else.
+
+   It also quietly teaches the notation. After a few problems you know that
+   3x and 3*x are the same and that sin 2x needs brackets, without anyone
+   having written a help page about it. */
+function attachEcho(input, problem) {
+  const echo = h('p', { class: 'echo', 'aria-live': 'polite' });
+  const variable = problem && problem.variable ? problem.variable : 'x';
+  const allowed = problem && problem.kind === 'expression' && problem.implicit
+    ? [variable, 'y'] : null;
+
+  const paint = () => {
+    const raw = input.value;
+    /* An integral answer may legitimately end in + C, which is not part of
+       the expression and must not be read as a stray variable. */
+    const text = problem && problem.kind === 'antiderivative'
+      ? Expr.stripPlusC(raw) : raw;
+    if (!String(text).trim()) {
+      echo.className = 'echo';
+      echo.innerHTML = '';
+      return;
+    }
+    const node = Expr.tryParse(text, allowed ? { vars: allowed } : null);
+    if (!node) {
+      echo.className = 'echo bad';
+      /* The parser's own words, which name the actual problem - an unclosed
+         bracket, a function without brackets - rather than a generic moan. */
+      echo.textContent = Expr.parseMessage(text, allowed ? { vars: allowed } : null)
+        || 'I cannot read that yet.';
+      return;
+    }
+    echo.className = 'echo ok';
+    echo.innerHTML = `<span class="echolabel">reads as</span> ${Expr.html(node)}`
+      + (problem && problem.kind === 'antiderivative' && /\+\s*c\s*$/i.test(raw)
+        ? ' <span class="echolabel">+ C</span>' : '');
+  };
+
+  input.addEventListener('input', paint);
+  paint();
+  return echo;
+}
+
+/* Rebuild a problem from the few fields that describe it. Seeds make this
+   exact rather than approximate: you come back to the same question, not a
+   similar one. */
+function rebuildProblem(d) {
+  if (!d) return null;
+  try {
+    if (d.source === 'typed') return problemFromText(d.text);
+    if (d.source === 'sandbox') {
+      return buildProblem({ skills: [d.skill], level: d.level }, d.seed);
+    }
+    return generate(d.topicId, d.level, d.seed);
+  } catch (err) {
+    return null;
+  }
+}
+
 /* ================================================================ workspace */
 
 /* The room where the work happens: the problem, a board to work it out on, a
@@ -1891,6 +2126,16 @@ function profileSetupCard(onDone) {
 
 let workspace = null;
 
+function saveWorkspace() {
+  if (!workspace) return;
+  persist.saveSession(store.activeProfile().id, 'workspace', {
+    plan: workspace.plan,
+    panel: workspace.panel,
+    problem: persist.describeProblem(workspace.problem),
+    lastAnswer: workspace.lastAnswer || '',
+  });
+}
+
 function startWorkspace(plan) {
   workspace = {
     plan,
@@ -1901,6 +2146,7 @@ function startWorkspace(plan) {
     shelf: null,
     lastAnswer: '',
   };
+  saveWorkspace();
   const before = location.hash;
   go('workspace');
   if (location.hash === before) router();
@@ -1911,6 +2157,24 @@ function darkNow() {
 }
 
 function renderWorkspace(root) {
+  if (!workspace) {
+    /* A reload empties the page but not the record of what you were doing.
+       Rebuilding from the description is what makes closing the tab by
+       accident survivable. */
+    const saved = persist.loadSession(store.activeProfile().id, 'workspace');
+    if (saved && saved.plan) {
+      workspace = {
+        plan: saved.plan,
+        problem: rebuildProblem(saved.problem),
+        panel: saved.panel || 'board',
+        board: null,
+        graph: null,
+        shelf: null,
+        lastAnswer: saved.lastAnswer || '',
+        restored: true,
+      };
+    }
+  }
   if (!workspace) {
     root.appendChild(h('section', { class: 'card' }, [
       h('h1', { text: 'Nothing open' }),
@@ -1929,7 +2193,12 @@ function renderWorkspace(root) {
     h('div', { class: 'tbarright' }, [
       h('button', {
         class: 'btn small ghost', type: 'button',
-        onclick: () => { workspace = null; flowAnswers = {}; go('start'); },
+        onclick: () => {
+          persist.clearSession(store.activeProfile().id, 'workspace');
+          workspace = null;
+          flowAnswers = {};
+          go('start');
+        },
       }, 'Finish'),
     ]),
   ]));
@@ -1960,7 +2229,7 @@ function renderWorkspace(root) {
       class: `tab${workspace.panel === panel.id ? ' on' : ''}`,
       type: 'button', role: 'tab',
       'aria-selected': workspace.panel === panel.id ? 'true' : 'false',
-      onclick: () => { workspace.panel = panel.id; router(); },
+      onclick: () => { workspace.panel = panel.id; saveWorkspace(); router(); },
     }, panel.label));
   }
   root.appendChild(h('section', { class: 'card wspanels' }, [tabs, body]));
@@ -1998,7 +2267,7 @@ function paintWorkspaceProblem(slot) {
           class: 'btn small ghost', type: 'button',
           onclick: () => {
             const made = buildProblem({ skills: ['chain', 'trig', 'product'], level: 2 }, freshSeed());
-            if (made) { workspace.problem = made; router(); }
+            if (made) { workspace.problem = made; saveWorkspace(); router(); }
           },
         }, 'Give me one'),
       ]),
@@ -2018,10 +2287,13 @@ function paintWorkspaceProblem(slot) {
     placeholder: inputHint(problem), value: workspace.lastAnswer || '',
     'aria-label': 'Your answer',
   });
+  const echo = ['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)
+    ? attachEcho(input, problem) : null;
   const feedback = h('div', { class: 'wsfeedback' });
 
   const check = () => {
     workspace.lastAnswer = input.value;
+    saveWorkspace();
     const res = grade(problem, input.value);
     feedback.innerHTML = '';
     feedback.appendChild(h('div', {
@@ -2041,6 +2313,7 @@ function paintWorkspaceProblem(slot) {
 
   card.appendChild(h('div', { class: 'answerform' }, [
     input,
+    echo,
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: check }, 'Check'),
       h('button', {
@@ -2065,7 +2338,12 @@ function paintWorkspaceProblem(slot) {
           class: 'btn ghost', type: 'button',
           onclick: () => {
             const next = similarProblem(problem);
-            if (next) { workspace.problem = next; workspace.lastAnswer = ''; router(); }
+            if (next) {
+              workspace.problem = next;
+              workspace.lastAnswer = '';
+              saveWorkspace();
+              router();
+            }
           },
         }, 'Another like it')
         : null,
@@ -2108,12 +2386,31 @@ function mountBoard(body) {
   const tools = h('div', { class: 'boardtools' });
   body.appendChild(tools);
   body.appendChild(canvas);
+  const penGroup = h('div', { class: 'toolgroup' });
+  const inkGroup = h('div', { class: 'toolgroup' });
+  const actGroup = h('div', { class: 'toolgroup' });
 
+  /* Scoped to the person and the problem, so the working out you did for
+     THIS question comes back with it rather than one board smeared across
+     everything. */
+  const key = persist.workspaceKey(
+    store.activeProfile().id,
+    workspace.problem ? workspace.problem.key : 'scratch',
+  );
   const api = board.createBoard(canvas, {
     author: workspace.plan.who || 'me',
     dark: darkNow(),
+    /* Saving on every stroke is affordable because strokes are small and
+       localStorage is synchronous. No debounce, no lost work. */
+    onChange: () => persist.saveStrokes(key, api.strokes),
   });
   workspace.board = api;
+  const saved = persist.loadStrokes(key);
+  if (saved.length) {
+    api.load(saved);
+    body.appendChild(h('p', { class: 'small muted restored' },
+      `${saved.length} stroke${saved.length === 1 ? '' : 's'} restored from last time.`));
+  }
 
   const toolButton = (id, label) => {
     const btn = h('button', {
@@ -2128,9 +2425,10 @@ function mountBoard(body) {
     }, label);
     return btn;
   };
-  tools.appendChild(toolButton('pen', 'Pen'));
-  tools.appendChild(toolButton('marker', 'Highlighter'));
-  tools.appendChild(toolButton('eraser', 'Eraser'));
+  penGroup.appendChild(toolButton('pen', 'Pen'));
+  penGroup.appendChild(toolButton('marker', 'Highlighter'));
+  penGroup.appendChild(toolButton('eraser', 'Eraser'));
+  tools.appendChild(penGroup);
 
   for (const colour of board.BOARD_COLORS) {
     const swatch = h('button', {
@@ -2145,15 +2443,34 @@ function mountBoard(body) {
       },
     });
     swatch.style.background = darkNow() ? colour.dark : colour.light;
-    tools.appendChild(swatch);
+    inkGroup.appendChild(swatch);
   }
+  tools.appendChild(inkGroup);
 
-  tools.appendChild(h('button', {
+  actGroup.appendChild(h('button', {
     class: 'linkish small', type: 'button', onclick: () => api.undo(),
   }, 'Undo'));
-  tools.appendChild(h('button', {
-    class: 'linkish small danger', type: 'button', onclick: () => api.clear(),
+  actGroup.appendChild(h('button', {
+    class: 'linkish small danger', type: 'button',
+    onclick: () => { api.clear(); persist.clearStrokes(key); },
   }, 'Clear'));
+  /* On a phone the board is otherwise a letterbox. Full screen makes it the
+     whole screen, which is the only size worth writing on. The Fullscreen
+     API is not used because on iOS Safari it does not apply to arbitrary
+     elements. */
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button',
+    onclick: (e) => {
+      const panels = e.target.closest('.wspanels');
+      if (!panels) return;
+      const full = panels.classList.toggle('full');
+      e.target.textContent = full ? 'Exit full screen' : 'Full screen';
+      /* The canvas just changed size, so its backing store has to follow or
+         the next stroke lands in the wrong place. */
+      requestAnimationFrame(() => api.resize());
+    },
+  }, 'Full screen'));
+  tools.appendChild(actGroup);
 }
 
 /* --------------------------------------------------------------- the graph */
@@ -2209,9 +2526,16 @@ function mountPhotos(body) {
   const mount = h('div', {});
   body.appendChild(mount);
 
+  const photoKey = persist.workspaceKey(store.activeProfile().id, 'shelf');
   workspace.shelf = photo.createShelf({
     h,
     mount,
+    /* A photo is too big for localStorage - one downscaled phone picture is
+       about 300KB and the whole origin gets around 5MB - so the shelf is
+       kept in IndexedDB and handed back when the panel reopens. */
+    restore: () => persist.loadPhotos(photoKey),
+    onAdd: (item) => persist.savePhoto(photoKey, item),
+    onRemove: (item) => persist.deletePhoto(item.id),
     onUse: (item, text) => {
       const made = problemFromText(text);
       if (!made) {
@@ -2221,6 +2545,7 @@ function mountPhotos(body) {
       made.fromPhoto = true;
       workspace.problem = made;
       workspace.lastAnswer = '';
+      saveWorkspace();
       router();
     },
   });
@@ -2238,6 +2563,7 @@ function mountPhotos(body) {
         if (!made) { alert('I could not read that as a function.'); return; }
         workspace.problem = made;
         workspace.lastAnswer = '';
+        saveWorkspace();
         router();
       });
       return h('div', { class: 'shelfrow' }, [box, go2]);
@@ -2375,6 +2701,8 @@ function renderQuiz(root) {
 
   card.appendChild(h('div', { class: 'answerform' }, [
     input,
+    ['expression', 'antiderivative', 'factored', 'expanded'].includes(q.kind)
+      ? attachEcho(input, q) : null,
     h('div', { class: 'cta' }, [
       quizRun.index > 0
         ? h('button', { class: 'btn ghost', type: 'button', onclick: () => advance(-1) }, 'Back')
@@ -2449,6 +2777,7 @@ function finishQuiz(timedOut = false) {
       hintsUsed: 0,
       seed: row.problem.seed,
       mode: 'quiz',
+      diagnosis: row.res.diagnosis || '',
     });
   }
   router();

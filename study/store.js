@@ -49,7 +49,7 @@ export function blankProfile(name, colorIndex = 0) {
       ollamaModel: '',
       reduceMotion: false,
     },
-    attempts: [],               /* {id, topicId, ts, correct, ms, difficulty, hints, seed, mode} */
+    attempts: [],               /* {id, topicId, ts, correct, ms, difficulty, hints, seed, mode, diagnosis} */
     mastery: {},                /* topicId -> {seen, correct, streak, ease, due, last} */
     sets: [],                   /* {id, name, topicIds[], items[], created, updated, source} */
     tests: [],                  /* {id, name, ts, items[], score, total, breakdown, updated} */
@@ -217,7 +217,11 @@ export function setSetting(key, value) {
 
 /* Record one answered problem. Returns the updated mastery row so the caller
    can show "you are now 4 for 5 on this". */
-export function recordAttempt({ topicId, correct, ms, difficulty, hintsUsed, seed, mode }) {
+/* `diagnosis` is WHY it was wrong, as expr.js worked it out. Without it an
+   attempt could only say that chain rule was shaky, never that the same slip
+   happens every time. Adding a field is safe for sync: the merge unions
+   attempts by id, so an older device simply contributes rows without one. */
+export function recordAttempt({ topicId, correct, ms, difficulty, hintsUsed, seed, mode, diagnosis }) {
   let row;
   update((st) => {
     const p = st.profiles[st.activeId];
@@ -232,6 +236,7 @@ export function recordAttempt({ topicId, correct, ms, difficulty, hintsUsed, see
       hints: hintsUsed || 0,
       seed: seed || 0,
       mode: mode || 'practice',
+      diagnosis: correct ? '' : (diagnosis || ''),
     });
     /* Keep the log bounded. 5000 attempts is years of study and well inside
        the localStorage budget. */

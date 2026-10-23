@@ -217,7 +217,10 @@ code, kbd {
 }
 .brand span { color: var(--accent); }
 
-#nav { display: flex; gap: 2px; flex: 1 1 auto; flex-wrap: wrap; }
+/* min-width:0 is the whole fix for the nav running off the side of a
+   phone: a flex item will not shrink below its own content width without
+   it, so the links could never wrap no matter how narrow the screen. */
+#nav { display: flex; gap: 2px; flex: 1 1 auto; flex-wrap: wrap; min-width: 0; }
 #nav a {
   border: 0; padding: 5px 1px; margin-right: 16px;
   font-family: var(--face-ui);
@@ -829,8 +832,24 @@ footer {
   display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
   margin-bottom: 12px;
 }
+.toolgroup { display: flex; gap: 6px; align-items: center; }
+.toolgroup + .toolgroup {
+  padding-left: 10px; margin-left: 4px; border-left: 1px solid var(--hair);
+}
+.boardtools .spacer { flex: 1 1 auto; }
+
+/* A board you can only see a sliver of is a board you cannot work on, so it
+   can take over the screen. Fixed rather than the Fullscreen API, which on
+   iOS Safari does not apply to arbitrary elements. */
+.wspanels.full {
+  position: fixed; inset: 0; z-index: 40; margin: 0;
+  display: flex; flex-direction: column;
+  border: 0; background: var(--paper);
+}
+.wspanels.full .tabbody { flex: 1 1 auto; display: flex; flex-direction: column; }
+.wspanels.full .boardcanvas, .wspanels.full .graphhost { flex: 1 1 auto; height: auto; }
 .inkdot {
-  width: 20px; height: 20px; padding: 0; cursor: pointer;
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
   border: 1px solid var(--edge); background: none;
 }
 .inkdot.on { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -900,3 +919,106 @@ footer {
   font-size: 1.9em; line-height: .85; font-weight: 400;
 }
 .integral .dx { margin-left: .15em; }
+
+/* ------------------------------------------------------------- the phone */
+
+/* Everything below was written against a desktop window and then looked at
+   on a 390px screen, which is where Lilly will actually use it. */
+
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+
+  /* The bar is two rows on a phone: identity, then where to go. The nav
+     scrolls sideways rather than wrapping to three lines and pushing the
+     problem off the screen. */
+  .topinner { padding: 8px 12px; gap: 8px; }
+  #nav {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    order: 3; width: 100%; gap: 0;
+  }
+  #nav::-webkit-scrollbar { display: none; }
+  #nav a { margin-right: 14px; padding: 7px 1px; white-space: nowrap; }
+  .brand { font-size: .9rem; }
+
+  main { padding: 16px 12px 60px; }
+  .card { padding: 15px 14px; }
+
+  h1 { font-size: 1.5rem; }
+  .stem { font-size: 1.15rem; }
+
+  /* Thumb-sized, and wide enough to read. iOS zooms the page when a focused
+     input is under 16px, which is why the answer box is explicitly 16. */
+  .btn { padding: 12px 16px; min-height: 44px; }
+  .btn.small { padding: 9px 13px; min-height: 38px; }
+  .answerinput, .textinput, textarea, select {
+    font-size: 16px; min-height: 44px;
+  }
+  .chip { min-height: 36px; padding: 7px 12px; }
+  .tab { min-height: 46px; padding: 12px 13px; }
+  .inkdot { width: 32px; height: 32px; }
+  .pick { padding: 16px 2px; }
+  .pickmark { width: 30px; height: 30px; line-height: 28px; }
+
+  /* Tall enough to write on. */
+  .boardcanvas { height: 62vh; min-height: 360px; }
+  .graphhost { height: 56vh; min-height: 320px; }
+
+  .sessionbar { padding: 10px 12px; }
+  .flowstep { padding: 18px 14px 16px; }
+  .flowq { font-size: 1.42rem; }
+  .setupgrid { grid-template-columns: 1fr; }
+  .tabbody { padding: 12px 12px 14px; }
+
+  /* A table of results has nowhere to go on a phone; let it scroll. */
+  .scroller { overflow-x: auto; }
+}
+
+/* Coarse pointers get bigger hit areas whatever the screen size, which
+   covers a tablet with a pen as well as a phone. */
+@media (pointer: coarse) {
+  .linkish { padding: 4px 0; display: inline-block; }
+  .inkdot { width: 30px; height: 30px; }
+}
+
+/* ------------------------------------------------------------- mistakes */
+
+.mistakelist { list-style: none; margin: 14px 0 10px; padding: 0; }
+.mistakelist li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 0; border-top: 1px solid var(--hair);
+}
+.mistakecount {
+  font-family: var(--face-ui); font-size: 1.1rem; font-weight: 600;
+  color: var(--ink); min-width: 1.6em; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mistakebody { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.sessionnote {
+  border-left: 3px solid var(--accent); padding-left: 12px;
+  margin-top: 12px; color: var(--body);
+}
+
+/* ------------------------------------------------------------- the echo */
+
+/* What the grader read, shown under the box while there is still time to
+   change it. Quiet when it agrees with you, and plain about it when it
+   cannot read something at all. */
+.echo {
+  /* A flex row, for the same reason the integral is one: the reading may
+     contain a stacked fraction, and a label cannot sit on the baseline of
+     something whose height is not known in advance. */
+  display: flex; align-items: center; flex-wrap: wrap; gap: .15em;
+  margin: 10px 0 0;
+  min-height: 1.6em;
+  font-family: var(--face-math);
+  font-size: 1.02rem;
+  color: var(--muted);
+}
+.echo.bad { display: block; }
+.echo:empty { margin: 0; min-height: 0; }
+.echo.ok { color: var(--body); }
+.echo.bad { font-family: var(--face-text); font-size: .9rem; color: var(--warnc); }
+.echolabel {
+  font-family: var(--face-ui); font-size: .64rem; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--faint); margin-right: .5em;
+}

@@ -131,18 +131,27 @@ export function grade(problem, response) {
     case 'choice': {
       const idx = Number(raw);
       const opt = problem.choices && problem.choices[idx];
-      return { correct: !!(opt && opt.correct), detail: '' };
+      const ok = !!(opt && opt.correct);
+      return { correct: ok, detail: '', diagnosis: ok ? '' : 'wrong' };
     }
 
     case 'numeric': {
       const got = parseNumber(raw);
       if (got === null) {
-        return { correct: false, detail: `I could not read "${esc(raw)}" as a number. Try a plain number, a fraction like 3/4, or an expression like 2*pi/3.` };
+        /* Not a maths mistake: the answer could not be read at all. Worth
+           counting separately, because a pile of these means the notation
+           is the problem rather than the method. */
+        return {
+          correct: false,
+          diagnosis: 'unreadable',
+          detail: `I could not read "${esc(raw)}" as a number. Try a plain number, a fraction like 3/4, or an expression like 2*pi/3.`,
+        };
       }
       const ok = numericEqual(got, problem.answer, problem.tol || 1e-6);
       return {
         correct: ok,
         detail: ok ? '' : `Read as ${MathKit.num(got, 6)}.`,
+        diagnosis: ok ? '' : 'wrong',
       };
     }
 
@@ -154,12 +163,13 @@ export function grade(problem, response) {
           return { correct: false, detail: `Expected ${problem.answers.length} values separated by commas.` };
         }
         const ok = parts.every((p, i) => numericEqual(p, problem.answers[i], problem.tol || 1e-6));
-        return { correct: ok, detail: '' };
+        return { correct: ok, detail: '', diagnosis: ok ? '' : 'wrong' };
       }
       const ok = setEqual(raw, problem.answers, problem.tol || 1e-6);
       return {
         correct: ok,
         detail: ok ? '' : `Expected ${problem.answers.length} value${problem.answers.length === 1 ? '' : 's'}, in any order.`,
+        diagnosis: ok ? '' : 'wrong',
       };
     }
 
@@ -167,16 +177,16 @@ export function grade(problem, response) {
     default: {
       const accept = [problem.answer, ...(problem.accept || [])];
       const ok = textEqual(raw, accept);
-      if (ok) return { correct: true, detail: '' };
+      if (ok) return { correct: true, detail: '', diagnosis: '' };
       /* A text answer that parses to the right number is usually a formatting
          difference, not a wrong answer. Say so rather than marking it wrong
          with no explanation. */
       const asNum = parseNumber(raw);
       const wantNum = parseNumber(problem.answer);
       if (asNum !== null && wantNum !== null && numericEqual(asNum, wantNum)) {
-        return { correct: true, detail: '' };
+        return { correct: true, detail: '', diagnosis: '' };
       }
-      return { correct: false, detail: '' };
+      return { correct: false, detail: '', diagnosis: 'wrong' };
     }
   }
 }

@@ -69,11 +69,17 @@ export function approximateBytes(dataUrl) {
 
 /* A shelf of photos with a note and a typed transcription against each. The
    caller supplies the DOM helper so this file stays free of app plumbing. */
-export function createShelf({ h, mount, onUse, onChange }) {
+export function createShelf({ h, mount, onUse, onChange, restore, onAdd, onRemove }) {
   const items = [];
   const list = h('div', { class: 'shelf' });
+  /* Telling a phone to drag and drop is telling it to do something it
+     cannot. The copy follows the device. */
+  const coarse = typeof window !== 'undefined' && window.matchMedia
+    && window.matchMedia('(pointer: coarse)').matches;
   const empty = h('p', { class: 'muted small shelfempty' },
-    'Nothing here yet. Drop an image, paste a screenshot, or use the buttons.');
+    coarse
+      ? 'Nothing here yet. Take a photo of the page you are working from.'
+      : 'Nothing here yet. Drop an image, paste a screenshot, or use the buttons.');
 
   const status = h('p', { class: 'muted small', role: 'status' });
 
@@ -96,7 +102,11 @@ export function createShelf({ h, mount, onUse, onChange }) {
       placeholder: 'type the function, e.g. sin(3x^2)',
       'aria-label': 'What the problem says',
     });
-    transcript.addEventListener('input', () => { item.transcript = transcript.value; });
+    transcript.addEventListener('input', () => {
+      item.transcript = transcript.value;
+      /* What you typed under a photo is the work; keep it with the photo. */
+      if (typeof onAdd === 'function') onAdd(item);
+    });
 
     const use = h('button', { class: 'btn small', type: 'button' }, 'Use this');
     use.addEventListener('click', () => {
@@ -107,6 +117,7 @@ export function createShelf({ h, mount, onUse, onChange }) {
     remove.addEventListener('click', () => {
       const at = items.indexOf(item);
       if (at >= 0) items.splice(at, 1);
+      if (typeof onRemove === 'function') onRemove(item);
       repaint();
     });
 
@@ -137,6 +148,7 @@ export function createShelf({ h, mount, onUse, onChange }) {
         ...shrunk,
       };
       items.push(item);
+      if (typeof onAdd === 'function') onAdd(item);
       const saved = Math.max(0, item.original.bytes - approximateBytes(item.dataUrl));
       status.textContent = saved > 50000
         ? `Added, scaled down to ${item.width}×${item.height} (${Math.round(saved / 1024)}KB smaller).`
@@ -162,13 +174,16 @@ export function createShelf({ h, mount, onUse, onChange }) {
     cameraPick.value = '';
   });
 
+  /* On a phone the camera IS the feature, so it leads and is the solid
+     button; on a laptop the file picker leads and pasting a screenshot is
+     the fastest route of all, so that hint only shows where it applies. */
+  const touch = coarse;
+  const chooseBtn = h('button', { class: 'btn small ghost', type: 'button', onclick: () => filePick.click() }, 'Choose a file');
+  const cameraBtn = h('button', { class: `btn small${touch ? '' : ' ghost'}`, type: 'button', onclick: () => cameraPick.click() }, 'Take a photo');
   const drop = h('div', { class: 'dropzone', tabindex: '0' }, [
-    h('p', { class: 'dropline', text: 'Drop a photo or screenshot here' }),
-    h('div', { class: 'cta' }, [
-      h('button', { class: 'btn small ghost', type: 'button', onclick: () => filePick.click() }, 'Choose a file'),
-      h('button', { class: 'btn small ghost', type: 'button', onclick: () => cameraPick.click() }, 'Take a photo'),
-    ]),
-    h('p', { class: 'small muted', text: 'Or press Ctrl+V with a screenshot copied.' }),
+    h('p', { class: 'dropline', text: touch ? 'Add your page' : 'Drop a photo or screenshot here' }),
+    h('div', { class: 'cta' }, touch ? [cameraBtn, chooseBtn] : [chooseBtn, cameraBtn]),
+    touch ? null : h('p', { class: 'small muted', text: 'Or press Ctrl+V with a screenshot copied.' }),
     filePick,
     cameraPick,
   ]);
@@ -196,6 +211,19 @@ export function createShelf({ h, mount, onUse, onChange }) {
   mount.appendChild(status);
   mount.appendChild(list);
   repaint();
+
+  /* Anything stored from last time. Asynchronous, so the shelf paints empty
+     first and fills in; that is better than blocking the panel on a disk
+     read that may never finish in private browsing. */
+  if (typeof restore === 'function') {
+    Promise.resolve(restore()).then((saved) => {
+      if (!Array.isArray(saved) || !saved.length) return;
+      const known = new Set(items.map((i) => i.id));
+      for (const row of saved) if (!known.has(row.id)) items.push(row);
+      items.sort((a, b) => (a.at || 0) - (b.at || 0));
+      repaint();
+    }).catch(() => { /* nothing stored */ });
+  }
 
   return {
     add,
