@@ -113,6 +113,11 @@ export function grade(problem, response) {
        it can also come back UNDECIDED, when there were not enough points
        where both sides are defined to compare them; that is reported rather
        than counted as wrong. */
+    /* All four are marked by the expression engine; gradeExpression picks
+       the right question to ask of the answer. */
+    case 'antiderivative':
+    case 'factored':
+    case 'expanded':
     case 'expression': {
       const v = gradeExpression(problem, raw);
       return {
@@ -181,6 +186,12 @@ export function grade(problem, response) {
 export function inputHint(problem) {
   if (!problem) return '';
   switch (problem.kind) {
+    case 'antiderivative':
+      return 'an antiderivative, e.g. sin(3*x)/3 - the + C is optional';
+    case 'factored':
+      return 'the factored form, e.g. (x+2)(x+3)';
+    case 'expanded':
+      return 'multiplied out, e.g. x^2+5*x+6';
     case 'expression':
       return problem.implicit
         ? 'an expression in x and y, e.g. -x/y'

@@ -888,3 +888,15 @@ footer {
   .boardcanvas, .graphhost { height: 320px; }
   .tab { padding: 10px 11px; font-size: .66rem; letter-spacing: .06em; }
 }
+
+/* An integral is three things that have to line up vertically: a tall sign, an
+   integrand that may itself be a stacked fraction, and the dx. Laying them out
+   as a centred inline flex row is the only way they stay aligned whatever the
+   integrand turns out to be; vertical-align cannot centre against a fraction
+   whose height is not known in advance. */
+.integral { display: inline-flex; align-items: center; gap: .2em; }
+.intsign {
+  font-family: var(--face-math);
+  font-size: 1.9em; line-height: .85; font-weight: 400;
+}
+.integral .dx { margin-left: .15em; }

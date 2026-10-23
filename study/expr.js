@@ -539,6 +539,10 @@ function simplify(node) {
       if (isNum(a) && b.t === 'mul' && isNum(b.a)) {
         return simplify(mul(num(a.v * b.a.v), b.b));
       }
+      /* And into a fraction: 6·(1/(2√x)) -> 6/(2√x), which then reduces. */
+      if (isNum(a) && b.t === 'div' && isNum(b.a)) {
+        return simplify(div(num(a.v * b.a.v), b.b));
+      }
       if (a.t === 'neg') return simplify(neg(mul(a.a, b)));
       if (b.t === 'neg') return simplify(neg(mul(a, b.a)));
       return mul(a, b);
@@ -624,7 +628,11 @@ function text(node, parent = 0) {
       return wrap(`${text(node.a, 1)} + ${text(node.b, 1)}`);
     }
     case 'sub': return wrap(`${text(node.a, 1)} - ${text(node.b, 2)}`);
-    case 'mul': return wrap(`${text(node.a, 2)}*${text(node.b, 2)}`);
+    case 'mul': {
+      if (isOne(node.a)) return text(node.b, parent);
+      if (isOne(node.b)) return text(node.a, parent);
+      return wrap(`${text(node.a, 2)}*${text(node.b, 2)}`);
+    }
     case 'div': return wrap(`${text(node.a, 2)}/${text(node.b, 3)}`);
     case 'pow': return wrap(`${text(node.a, 5)}^${text(node.b, 4)}`);
     case 'fn': return `${node.n}(${text(node.a, 0)})`;
@@ -649,13 +657,18 @@ function html(node, parent = 0) {
     }
     case 'sub': return wrap(`${html(node.a, 1)} − ${html(node.b, 2)}`);
     case 'mul': {
+      /* A coefficient of one is not written. x^2 reads as x^2, never 1x^2. */
+      if (isOne(node.a)) return html(node.b, parent);
+      if (isOne(node.b)) return html(node.a, parent);
       const left = html(node.a, 2);
       const right = html(node.b, 2);
-      /* 3x and x·sin(x): a number against a symbol needs no dot, two
-         expressions do, or 2·3 would read as 23. */
+      /* 3x and x·sin(x) need no dot. Two numbers do, or 2·3 reads as 23.
+         Neither does a bracket: (x-4)(x-2) is how it is written by hand. */
+      const bracketed = node.b.t === 'add' || node.b.t === 'sub' || node.b.t === 'neg';
+      const bare = node.b.t === 'var' || node.b.t === 'pow' || bracketed
+        || (node.b.t === 'fn' && isNum(node.a));
       const needsDot = isNum(node.a) && isNum(node.b);
-      const bare = node.b.t === 'var' || node.b.t === 'fn' || node.b.t === 'pow';
-      return wrap(`${left}${needsDot ? '·' : bare ? '' : '·'}${right}`);
+      return wrap(`${left}${needsDot || !bare ? '·' : ''}${right}`);
     }
     case 'div': return wrap(MathKit.frac(html(node.a, 0), html(node.b, 0)));
     case 'pow': {
@@ -668,7 +681,15 @@ function html(node, parent = 0) {
     }
     case 'fn': {
       if (node.n === 'sqrt') return MathKit.sqrt(html(node.a, 0));
-      if (node.n === 'exp') return `e${MathKit.sup(text(node.a))}`;
+      /* e to a power. The exponent is rendered rather than printed as
+         source, because sup() can only use Unicode superscripts for digits
+         and falls back to literal text for anything else - which is how
+         e^(2x) came out as "e2*x". */
+      if (node.n === 'exp') {
+        const e = node.a;
+        const plain = (isNum(e) && Number.isInteger(e.v)) || e.t === 'var';
+        return plain ? `e${MathKit.sup(text(e))}` : `e<span class="sup">${html(e, 0)}</span>`;
+      }
       return `${node.n}(${html(node.a, 0)})`;
     }
     default: return '?';
@@ -967,18 +988,31 @@ function matchTerms(student, reference) {
 
    Returns { correct, decided, kind, hint }. `kind` is a stable slug so the
    UI and the tests can both key off it. */
-function judge(raw, reference, context = {}) {
-  /* Restrict the letters to the ones the reference answer itself uses, so a
-     typo like "6x cos" (which tokenizes to a product with c, o and s in it)
-     is reported as unreadable instead of silently graded. */
+/* Parse what was typed, with the letters restricted to the ones the problem
+   actually uses. Returns {node} or {error}. Shared by every judge below. */
+function readAnswer(raw, reference, context = {}) {
+  /* A typo like "6x cos" tokenizes to a product with c, o and s in it, and
+     grading that silently is worse than refusing it. */
   const allowed = context.vars
     || (reference ? [...new Set([...vars(reference), 'x'])] : null);
   const limit = allowed ? { vars: allowed } : null;
-  const parseError = parseMessage(raw, limit);
-  if (parseError) {
-    return { correct: false, decided: true, kind: 'unreadable', hint: parseError };
+  const error = parseMessage(raw, limit);
+  if (error) return { error };
+  return { node: parse(raw, limit) };
+}
+
+function judge(raw, reference, context = {}) {
+  const read = readAnswer(raw, reference, context);
+  if (read.error) {
+    return { correct: false, decided: true, kind: 'unreadable', hint: read.error };
   }
-  const student = parse(raw, limit);
+  return diagnose(read.node, reference, context);
+}
+
+/* Compare a parsed answer against a parsed reference and say what went
+   wrong. Split out from judge() so an antiderivative can run the SAME
+   diagnostics on the derivative of what was typed. */
+function diagnose(student, reference, context = {}) {
   /* Every comparison below has to use the SAME points as the first one, or a
      curve-restricted problem would be judged on the curve and then diagnosed
      off it. */
@@ -1116,12 +1150,181 @@ function judge(raw, reference, context = {}) {
   };
 }
 
+/* ------------------------------------------------- integrals and form */
+
+/* An antiderivative is checked by DIFFERENTIATING it.
+
+   There is no symbolic integration anywhere in this file, and none is
+   needed: to mark the answer to the integral of 3x^2, differentiate what
+   was typed and see whether it comes back as 3x^2. Every antiderivative
+   that works is accepted, in any form, and the constant of integration
+   looks after itself because differentiating kills it. x^3, x^3 + 7 and
+   x^3 - 1/2 all pass without the grader knowing anything about C.
+
+   That also means the problems cannot be unsolvable. The generator picks an
+   F, differentiates it to get the integrand, and asks for the integral of
+   that - so an elementary antiderivative is guaranteed to exist, which is
+   not true of an integrand picked at random. */
+function stripPlusC(raw) {
+  /* "+ C", "+c", "+ constant". Students write it because they were told to,
+     and the parser would otherwise call C an unknown variable. */
+  return String(raw == null ? '' : raw)
+    .replace(/\s*\+\s*(?:c|k|const(?:ant)?)\s*$/i, '')
+    .trim();
+}
+
+function judgeAntiderivative(raw, integrand, context = {}) {
+  const cleaned = stripPlusC(raw);
+  if (!cleaned) {
+    return { correct: false, decided: true, kind: 'unreadable', hint: 'No answer given.' };
+  }
+  const variable = context.variable || 'x';
+  const read = readAnswer(cleaned, integrand, context);
+  if (read.error) {
+    return { correct: false, decided: true, kind: 'unreadable', hint: read.error };
+  }
+
+  let slope;
+  try {
+    slope = derivative(read.node, variable);
+  } catch (err) {
+    return { correct: false, decided: true, kind: 'unreadable', hint: 'I could not differentiate that to check it.' };
+  }
+
+  const verdict = diagnose(slope, integrand, { ...context, distractors: null });
+  if (verdict.correct) return verdict;
+
+  /* Answering with the integrand itself is common enough to name - but only
+     AFTER the real check, because some functions are their own
+     antiderivative. The integral of e^x is e^x, and calling that "you copied
+     the question" would fail a correct answer. */
+  if (equivalent(read.node, integrand, { count: 30 }).equal) {
+    return {
+      correct: false,
+      decided: true,
+      kind: 'not-integrated',
+      hint: 'That is the function you were asked to integrate, not its antiderivative.',
+    };
+  }
+
+  /* The diagnostics talk about the derivative, because that is what was
+     compared. Translate the common ones back into integration. */
+  if (verdict.kind === 'factor') {
+    const match = /factor of (-?[\d.]+)/.exec(verdict.hint || '');
+    const factor = match ? Number(match[1]) : null;
+    if (factor) {
+      return {
+        ...verdict,
+        hint: factor > 1 || factor < -1
+          ? `Differentiating your answer gives something ${factor} times too big. `
+            + `Dividing your answer by ${factor} fixes it, which is the step the inside function asks for.`
+          : `Differentiating your answer comes up short by a factor of ${factor}. `
+            + 'Check what the inside function contributes.',
+      };
+    }
+  }
+  if (verdict.kind === 'zero') {
+    return { ...verdict, hint: 'Your answer is a constant, so its derivative is zero. '
+      + 'A constant cannot be the antiderivative of anything but zero.' };
+  }
+  return verdict;
+}
+
+/* --------------------------------------------------------- written form */
+
+/* Equivalence alone cannot mark "factor this". x^2 + 5x + 6 is equivalent to
+   itself, so typing the question back would pass. These two ask the other
+   half of the question: is it WRITTEN the way the instruction asked? */
+
+const stripSign = (node) => (node.t === 'neg' ? stripSign(node.a) : node);
+
+/* Peel a leading numeric coefficient: 3(x+1)(x+2) is factored, and so is
+   (x+1)(x+2). */
+function stripNumericFactor(node) {
+  let core = stripSign(node);
+  for (let guard = 0; guard < 8; guard++) {
+    if (core.t === 'mul' && isNum(core.a)) { core = stripSign(core.b); continue; }
+    if (core.t === 'mul' && isNum(core.b)) { core = stripSign(core.a); continue; }
+    if (core.t === 'div' && isNum(core.b)) { core = stripSign(core.a); continue; }
+    break;
+  }
+  return core;
+}
+
+const isSum = (node) => node.t === 'add' || node.t === 'sub';
+
+/* Written as a product rather than a sum. */
+export function isFactored(node) {
+  if (!node) return false;
+  const core = stripNumericFactor(node);
+  if (core.t === 'mul') return true;
+  /* (x + 2)^2 is factored; x^2 is not, since nothing was factored out. */
+  if (core.t === 'pow' && isNum(core.b) && core.b.v >= 2 && isSum(core.a)) return true;
+  return false;
+}
+
+/* A single term with no sum hiding inside it: 3, x, -2x^3, x^2/4. */
+function isMonomial(node) {
+  const core = stripSign(node);
+  if (core.t === 'num' || core.t === 'var' || core.t === 'const') return true;
+  if (core.t === 'pow') {
+    return (core.a.t === 'var' || core.a.t === 'num') && isNum(core.b);
+  }
+  if (core.t === 'mul') return isMonomial(core.a) && isMonomial(core.b);
+  if (core.t === 'div') return isMonomial(core.a) && isMonomial(core.b);
+  return false;
+}
+
+/* Written out as a sum of plain terms, with nothing left in brackets. */
+export function isExpanded(node) {
+  if (!node) return false;
+  return terms(node).every((t) => isMonomial(t.node));
+}
+
+/* Grade an answer that has to be equivalent AND written a particular way.
+   `form` is 'factored' or 'expanded'. */
+function judgeForm(raw, reference, form, context = {}) {
+  const read = readAnswer(raw, reference, context);
+  if (read.error) {
+    return { correct: false, decided: true, kind: 'unreadable', hint: read.error };
+  }
+  const same = equivalent(read.node, reference, context.scopes ? { scopes: context.scopes } : {});
+  if (!same.decided) {
+    return {
+      correct: false,
+      decided: false,
+      kind: 'undecidable',
+      hint: 'I could not check that automatically. Compare it against the worked answer.',
+    };
+  }
+  if (!same.equal) {
+    /* Wrong value: fall through to the ordinary diagnostics, which can say
+       which term is off. */
+    return diagnose(read.node, reference, context);
+  }
+  /* Right value, wrong form. Worth saying clearly, because the student has
+     done the arithmetic correctly and simply not answered the question. */
+  const ok = form === 'factored' ? isFactored(read.node) : isExpanded(read.node);
+  if (ok) return { correct: true, decided: true, kind: 'correct', hint: '' };
+  return {
+    correct: false,
+    decided: true,
+    kind: form === 'factored' ? 'not-factored' : 'not-expanded',
+    hint: form === 'factored'
+      ? 'That is equal to the original, which means your algebra is right, but it is '
+        + 'not factored. The answer should be a product of brackets.'
+      : 'That is equal to the original, but it is not multiplied out. The answer '
+        + 'should be a sum of plain terms, with nothing left in brackets.',
+  };
+}
+
 export const Expr = {
   parse, tryParse, parseMessage, ParseError, latexToText,
   evaluate, compile, vars,
   diff, derivative, simplify,
   text, html, latex,
-  equivalent, judge, matchTerms, terms, signed, isIdenticallyZero,
+  equivalent, judge, diagnose, judgeAntiderivative, judgeForm, stripPlusC,
+  isFactored, isExpanded, matchTerms, terms, signed, isIdenticallyZero,
   constantRatio, constantDifference, samplePoints, validPoints,
   num, vr, cn, neg, add, sub, mul, div, pow, fn,
   FNS, CONSTS,

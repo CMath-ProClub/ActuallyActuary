@@ -23,6 +23,23 @@ import { TOPICS, TOPIC_BY_ID } from './topics.js';
 /* Words that mean a sandbox skill. Longest match wins, so "chain rule" is
    found before "rule", and "logarithmic differentiation" before "log". */
 const SKILL_PHRASES = [
+  ['u substitution', 'usub'],
+  ['u-substitution', 'usub'],
+  ['usub', 'usub'],
+  ['substitution', 'usub'],
+  ['antiderivative', 'antiderivative'],
+  ['indefinite integral', 'antiderivative'],
+  ['integral', 'antiderivative'],
+  ['integrate', 'antiderivative'],
+  ['integration', 'antiderivative'],
+  ['factoring', 'factor'],
+  ['factorise', 'factor'],
+  ['factorize', 'factor'],
+  ['factor', 'factor'],
+  ['expanding', 'expand'],
+  ['expand', 'expand'],
+  ['multiply out', 'expand'],
+  ['foil', 'expand'],
   ['logarithmic differentiation', 'logdiff'],
   ['logarithmic derivation', 'logdiff'],
   ['log differentiation', 'logdiff'],

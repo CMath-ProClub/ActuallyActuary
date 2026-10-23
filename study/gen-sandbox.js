@@ -240,6 +240,295 @@ const SKILLS = {
   },
 };
 
+/* Everything after this point asks a different question - integrate this,
+   factor this - and is marked differently, so the builders live apart and
+   join SKILLS at the bottom of the file. */
+
+/* ------------------------------------------------- integrals and algebra */
+
+/* Antiderivative problems are built from the ANSWER outwards, like everything
+   else here, and that is what makes them solvable. Pick an integrand from a
+   family whose antiderivative is known, state both, and then check the pair
+   mechanically before the problem is allowed out: differentiating the stated
+   F has to give back the integrand. An integrand picked at random usually has
+   no elementary antiderivative at all. */
+function antiderivativePair(r, level) {
+  const kind = level === 1
+    ? r.pick(['power', 'trig', 'exp'])
+    : r.pick(['power', 'trig', 'exp', 'linear', 'log', 'root']);
+  const c = r.nz(2, 7);
+  const k = r.nz(2, 5);
+
+  if (kind === 'power') {
+    const n = level === 1 ? r.int(1, 3) : r.int(2, 5);
+    return {
+      integrand: mul(num(c), pow(X, num(n))),
+      F: div(mul(num(c), pow(X, num(n + 1))), num(n + 1)),
+      note: 'Raise the power by one, then divide by the new power.',
+    };
+  }
+  if (kind === 'trig') {
+    const useSin = r() < 0.5;
+    const inner = level === 1 ? X : mul(num(k), X);
+    const scale = level === 1 ? 1 : k;
+    return useSin
+      ? {
+        integrand: mul(num(c), fn('sin', inner)),
+        F: neg(div(mul(num(c), fn('cos', inner)), num(scale))),
+        note: 'The integral of sine is minus cosine.',
+      }
+      : {
+        integrand: mul(num(c), fn('cos', inner)),
+        F: div(mul(num(c), fn('sin', inner)), num(scale)),
+        note: 'The integral of cosine is sine.',
+      };
+  }
+  if (kind === 'exp') {
+    const inner = level === 1 ? X : mul(num(k), X);
+    const scale = level === 1 ? 1 : k;
+    return {
+      integrand: mul(num(c), fn('exp', inner)),
+      F: div(mul(num(c), fn('exp', inner)), num(scale)),
+      note: 'e to a power integrates to itself, divided by the coefficient inside.',
+    };
+  }
+  if (kind === 'linear') {
+    const a = r.nz(2, 4);
+    const b = r.int(1, 7);
+    const n = r.int(2, 4);
+    const inside = add(mul(num(a), X), num(b));
+    return {
+      integrand: pow(inside, num(n)),
+      F: div(pow(inside, num(n + 1)), num(a * (n + 1))),
+      note: 'Raise the power by one, divide by the new power AND by the inside coefficient.',
+    };
+  }
+  if (kind === 'log') {
+    const a = r.nz(2, 5);
+    const b = r.int(1, 8);
+    return {
+      integrand: div(num(a), add(mul(num(a), X), num(b))),
+      F: fn('ln', add(mul(num(a), X), num(b))),
+      note: 'A derivative over its own function integrates to a logarithm.',
+    };
+  }
+  /* root */
+  return {
+    integrand: div(num(c), fn('sqrt', X)),
+    F: mul(num(2 * c), fn('sqrt', X)),
+    note: 'Write the root as a power of one half and use the power rule.',
+  };
+}
+
+/* u-substitution: the chain rule undone. Built by picking the OUTSIDE and the
+   INSIDE, so the integrand always carries the inside derivative that makes
+   the substitution work. */
+function uSubPair(r, level) {
+  const a = r.nz(2, 4);
+  const inside = r() < 0.5
+    ? mul(num(a), pow(X, num(2)))
+    : add(pow(X, num(2)), num(r.int(1, 6)));
+  const outer = r.pick(['sin', 'cos', 'exp']);
+  const dInside = derivative(inside);
+  const F = outer === 'sin' ? neg(fn('cos', inside))
+    : outer === 'cos' ? fn('sin', inside)
+      : fn('exp', inside);
+  /* d/dx of F is exactly (outer' of inside) * inside', which is the
+     integrand. Stating it this way means the substitution is always clean. */
+  const integrand = simplify(simplify(derivative(F)));
+  return {
+    integrand,
+    F,
+    inside,
+    note: `Let u = ${text(inside)}, so du = ${text(dInside)} dx.`,
+  };
+}
+
+/* Factoring and expanding are built from the ROOTS, as CLAUDE.md says to:
+   pick what the answer factors into, then multiply it out to make the
+   question. Picking coefficients first gives a quadratic that does not
+   factor over the integers, which is not the drill. */
+function quadraticFromRoots(r, level) {
+  const lead = level === 3 ? r.pick([1, 2, 3]) : 1;
+  let r1 = r.nz(-6, 6);
+  let r2 = r.nz(-6, 6);
+  if (level === 1) { r1 = Math.abs(r1) * (r() < 0.5 ? -1 : 1); r2 = r1 === r2 ? r2 + 1 : r2; }
+  /* lead * (x - r1)(x - r2) */
+  const factored = lead === 1
+    ? mul(linearFactor(r1), linearFactor(r2))
+    : mul(num(lead), mul(linearFactor(r1), linearFactor(r2)));
+  const b = -(r1 + r2) * lead;
+  const c = r1 * r2 * lead;
+  const expanded = add(add(mul(num(lead), pow(X, num(2))), mul(num(b), X)), num(c));
+  return { factored, expanded, roots: [r1, r2], lead };
+}
+
+function linearFactor(root) {
+  return root === 0 ? X : add(X, num(-root));
+}
+
+const SKILL_EXTRAS = {
+  antiderivative: {
+    name: 'Antiderivatives',
+    topicId: 'calc.antideriv',
+    ask: 'indefinite integrals',
+    integral: true,
+    build(r, level) {
+      const pair = antiderivativePair(r, level);
+      if (level === 3 && r() < 0.4) {
+        /* Two terms added, which is where sign slips happen. */
+        const other = antiderivativePair(r, 2);
+        return {
+          integrand: add(pair.integrand, other.integrand),
+          F: add(pair.F, other.F),
+          note: 'Integrate term by term.',
+        };
+      }
+      return pair;
+    },
+  },
+
+  usub: {
+    name: 'u-substitution',
+    topicId: 'calc.usub',
+    ask: 'integrals that need a substitution',
+    integral: true,
+    build(r, level) { return uSubPair(r, level); },
+  },
+
+  factor: {
+    name: 'Factoring',
+    topicId: 'alg2.factor',
+    ask: 'factoring quadratics',
+    form: 'factored',
+    build(r, level) {
+      const q = quadraticFromRoots(r, level);
+      return { question: q.expanded, display: q.factored, roots: q.roots };
+    },
+  },
+
+  expand: {
+    name: 'Expanding',
+    topicId: 'alg2.expand',
+    ask: 'multiplying brackets out',
+    form: 'expanded',
+    build(r, level) {
+      const q = quadraticFromRoots(r, level);
+      if (level === 3 && r() < 0.4) {
+        /* A squared bracket, where the middle term is the thing people drop. */
+        const root = r.nz(-5, 5);
+        const inner = linearFactor(root);
+        return {
+          question: pow(inner, num(2)),
+          display: add(add(pow(X, num(2)), mul(num(-2 * root), X)), num(root * root)),
+        };
+      }
+      return { question: q.factored, display: q.expanded };
+    },
+  },
+};
+
+/* Build one of the problems above. Separate from buildProblem because these
+   ask a different question and are marked a different way. */
+function buildIntegral(id, skill, built, level, seed) {
+  const { integrand, F } = built;
+  if (!integrand || !F) return null;
+  /* The generator checks its own answer key: differentiating the stated
+     antiderivative has to give back the integrand. A pair that fails this is
+     a bug, and a bug here would teach the wrong thing. */
+  const back = derivative(F);
+  if (!equivalent(back, integrand).equal) return null;
+  if (Expr.isIdenticallyZero(integrand)) return null;
+
+  const tidy = simplify(simplify(F));
+  return {
+    source: 'sandbox',
+    kind: 'antiderivative',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Find <span class="integral"><span class="intsign">∫</span>`
+      + `<span class="integrand">${html(integrand)}</span>`
+      + `<i class="dx">dx</i></span>`,
+    instruction: 'Any correct antiderivative counts. You do not need to write + C.',
+    functionText: text(integrand),
+    integrand,
+    answerNode: tidy,
+    answerText: text(tidy),
+    answerHtml: `${html(tidy)} + C`,
+    answerLatex: latex(tidy),
+    distractors: [],
+    original: integrand,
+    note: built.note || null,
+    hints: [
+      built.note || 'Work backwards from the derivative rules.',
+      `Differentiating ${html(tidy)} gives you back ${html(integrand)}.`,
+    ],
+    steps: [
+      built.inside
+        ? { title: 'Substitute', html: `u = ${html(built.inside)}` }
+        : { title: 'Which rule, backwards', html: built.note || '' },
+      { title: 'The antiderivative', html: `${html(tidy)} + C` },
+      /* The builder has already verified that differentiating F gives the
+         integrand back, so show the integrand rather than the raw derivative,
+         which arrives in whatever shape the rules produced it. */
+      { title: 'Check it', html: `Differentiating that gives back ${html(integrand)}` },
+    ],
+    graph: { f: latex(integrand), derivative: latex(tidy) },
+  };
+}
+
+function buildForm(id, skill, built, level, seed) {
+  const { question, display } = built;
+  if (!question || !display) return null;
+  /* The two have to be the same thing written differently, or the problem
+     asks for something impossible. */
+  if (!equivalent(question, display).equal) return null;
+  const factored = skill.form === 'factored';
+  /* And the stated answer has to be in the form being asked for. */
+  if (factored && !Expr.isFactored(display)) return null;
+  if (!factored && !Expr.isExpanded(display)) return null;
+
+  return {
+    source: 'sandbox',
+    kind: factored ? 'factored' : 'expanded',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: factored
+      ? `Factor <span class="eq">${html(question)}</span>`
+      : `Multiply out <span class="eq">${html(question)}</span>`,
+    instruction: factored
+      ? 'Write it as a product of brackets.'
+      : 'Write it as a sum of plain terms.',
+    functionText: text(question),
+    answerNode: question,
+    answerText: text(display),
+    answerHtml: html(display),
+    answerLatex: latex(display),
+    distractors: [],
+    original: null,
+    hints: factored
+      ? ['Find two numbers that multiply to the constant and add to the middle coefficient.',
+        `It factors as ${html(display)}.`]
+      : ['Every term in the first bracket multiplies every term in the second.',
+        `It comes out as ${html(display)}.`],
+    steps: [
+      { title: factored ? 'The factors' : 'Multiplied out', html: html(display) },
+    ],
+  };
+}
+
 /* ------------------------------------------------------- wrong on purpose */
 
 /* Differentiate with one rule broken. Each mode is a mistake students
@@ -433,6 +722,8 @@ export function buildProblem(spec, seed) {
   if (!built) return null;
 
   if (skill.implicit) return implicitProblem(id, skill, built, level, seed);
+  if (skill.integral) return buildIntegral(id, skill, built, level, seed);
+  if (skill.form) return buildForm(id, skill, built, level, seed);
 
   let f = built.f;
   /* At the top level, two skills at once is what "longer problems" means. */
@@ -629,12 +920,24 @@ function stepsFor(id, built, f, reference) {
    points for an implicit problem. */
 export function gradeExpression(problem, raw) {
   if (!problem) return { correct: false, decided: true, kind: 'wrong', hint: '' };
-  return Expr.judge(raw, problem.answerNode, {
+  const context = {
     distractors: problem.distractors,
     original: problem.original,
     inner: problem.inner,
     scopes: problem.scopes,
-  });
+    variable: problem.variable || 'x',
+  };
+  /* An antiderivative is marked by differentiating it, and a factoring
+     question is marked on its FORM as well as its value. */
+  if (problem.kind === 'antiderivative') {
+    return Expr.judgeAntiderivative(raw, problem.integrand, context);
+  }
+  if (problem.kind === 'factored' || problem.kind === 'expanded') {
+    return Expr.judgeForm(raw, problem.answerNode, problem.kind, context);
+  }
+  return Expr.judge(raw, problem.answerNode, context);
 }
 
-export { SKILLS, BREAKS, brokenDiff, distractorsFor, curveScopes };
+Object.assign(SKILLS, SKILL_EXTRAS);
+
+export { SKILLS, BREAKS, SKILL_EXTRAS, brokenDiff, distractorsFor, curveScopes };

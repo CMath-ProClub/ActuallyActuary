@@ -66,7 +66,10 @@ const ROUTES = {
 function currentRoute() {
   const raw = location.hash.replace(/^#\/?/, '');
   const [name, ...rest] = raw.split('/');
-  return { name: name || 'dashboard', args: rest };
+  /* No hash at all means the front page, which is the landing flow. It used
+     to mean the dashboard, so opening the bare URL skipped the flow
+     entirely - the one entry point most likely to be used. */
+  return { name: name || 'start', args: rest };
 }
 
 function go(path) {
@@ -106,9 +109,9 @@ function router() {
 
 function paintNav(active) {
   for (const a of $$('#nav a')) {
-    const target = a.getAttribute('href').replace(/^#\/?/, '') || 'dashboard';
-    a.classList.toggle('on', target === (active || 'dashboard'));
-    if (target === (active || 'dashboard')) a.setAttribute('aria-current', 'page');
+    const target = a.getAttribute('href').replace(/^#\/?/, '') || 'start';
+    a.classList.toggle('on', target === (active || 'start'));
+    if (target === (active || 'start')) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   }
 }
