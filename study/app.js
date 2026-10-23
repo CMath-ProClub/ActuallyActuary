@@ -7,7 +7,8 @@
 import MathKit from './math.js';
 import { COURSES, TOPIC_BY_ID, COURSE_BY_ID, topicsIn, unitsIn, searchTopics } from './topics.js';
 import { generate, grade, inputHint, hasGenerator, generatableTopics, freshSeed } from './generators.js';
-import { buildProblem, distractorsFor as sandboxDistractors } from './gen-sandbox.js';
+import { buildProblem, distractorsFor as sandboxDistractors,
+  SKILLS as SANDBOX_SKILLS } from './gen-sandbox.js';
 import Expr from './expr.js';
 import * as board from './board.js';
 import * as graph from './graph.js';
@@ -15,6 +16,7 @@ import * as photo from './photo.js';
 import * as flow from './flow.js';
 import * as mistakes from './mistakes.js';
 import * as persist from './persist.js';
+import * as room from './room.js';
 import * as ask from './ask.js';
 import * as store from './store.js';
 import * as sched from './scheduler.js';
@@ -162,7 +164,7 @@ function renderDashboard(root) {
       const rem = sched.remediationFor(w.topicId, p);
       const li = h('li', {}, [
         h('button', {
-          class: 'linkish', onclick: () => startSession({ pool: [w.topicId], label: w.name }),
+          class: 'linkish', onclick: () => startTopic(w.topicId, w.name),
         }, w.name),
         h('span', { class: 'pill warn', text: `${Math.round(w.accuracy * 100)}%` }),
         h('span', { class: 'muted small', text: `${w.correct}/${w.seen}` }),
@@ -171,7 +173,7 @@ function renderDashboard(root) {
         li.appendChild(h('p', { class: 'remnote', text: sched.remediationMessage(rem) }));
         li.appendChild(h('button', {
           class: 'linkish small',
-          onclick: () => startSession({ pool: [rem.topicId], label: TOPIC_BY_ID[rem.topicId].name }),
+          onclick: () => startTopic(rem.topicId, TOPIC_BY_ID[rem.topicId].name),
         }, `Practice ${TOPIC_BY_ID[rem.topicId].name} instead`));
       }
       list.appendChild(li);
@@ -192,7 +194,7 @@ function renderDashboard(root) {
     const chips = h('div', { class: 'chips' });
     for (const d of due) {
       chips.appendChild(h('button', {
-        class: 'chip', onclick: () => startSession({ pool: [d.topicId], label: d.name }),
+        class: 'chip', onclick: () => startTopic(d.topicId, d.name),
       }, d.name));
     }
     dueCard.appendChild(chips);
@@ -223,7 +225,7 @@ function renderDashboard(root) {
   ]);
   mast.appendChild(charts.masteryChart(sched.topicStats(ALL_TOPIC_IDS, p), {
     limit: 12,
-    onPick: (id) => startSession({ pool: [id], label: TOPIC_BY_ID[id].name }),
+    onPick: (id) => startTopic(id, TOPIC_BY_ID[id].name),
   }));
   root.appendChild(mast);
 
@@ -257,7 +259,7 @@ function renderDashboard(root) {
         const acc = m && m.seen >= sched.MIN_ATTEMPTS ? store.recentAccuracy(t.id, 20, p) : null;
         const chip = h('button', {
           class: 'chip', title: t.blurb || t.name,
-          onclick: () => startSession({ pool: [t.id], label: t.name }),
+          onclick: () => startTopic(t.id, t.name),
         }, [
           t.name,
           acc != null ? h('span', {
@@ -288,6 +290,36 @@ function greeting() {
 }
 
 /* ================================================================== practice */
+
+/* Which sandbox skill, if any, teaches a curriculum topic.
+
+   Built by inverting the skill table rather than written out, so a skill
+   that changes which topic it belongs to cannot leave a stale mapping
+   behind. Several skills can point at one topic - trig, exp and log all sit
+   under the same one - and the first is good enough to practise with. */
+const SKILL_FOR_TOPIC = (() => {
+  const map = new Map();
+  for (const [id, skill] of Object.entries(SANDBOX_SKILLS)) {
+    if (skill.topicId && !map.has(skill.topicId)) map.set(skill.topicId, id);
+  }
+  return map;
+})();
+
+/* Practising one topic should use the best question the tool can ask about
+   it. For anything the sandbox covers that means the derivative itself
+   rather than its value at a point, which is what the old generator was
+   limited to. A topic with no sandbox skill carries on as before. */
+function startTopic(topicId, label) {
+  const skill = SKILL_FOR_TOPIC.get(topicId);
+  if (skill) {
+    startSession({
+      label: label || (TOPIC_BY_ID[topicId] && TOPIC_BY_ID[topicId].name) || 'Practice',
+      sandbox: { skills: [skill], level: 2, hints: true },
+    });
+    return;
+  }
+  startSession({ pool: [topicId], label });
+}
 
 function startSession({ pool, label, items = null, setId = null, sandbox = null }) {
   session = {
@@ -545,6 +577,8 @@ function renderProblem(stage, problem, { remediation, mode }) {
     /* Only where an expression is expected. Echoing a plain number back at
        someone would be noise. */
     if (['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)) {
+      const keys = mathKeys(input);
+      if (keys) form.appendChild(keys);
       form.appendChild(attachEcho(input, problem));
     }
     getResponse = () => input.value;
@@ -611,20 +645,45 @@ function renderProblem(stage, problem, { remediation, mode }) {
     }
     if (problem.note) feedback.appendChild(h('p', { class: 'pnote', text: problem.note }));
 
-    /* Worked solution: always available, shown automatically on a miss. */
+    /* Worked solution: always available, shown automatically on a miss.
+
+       One step at a time rather than the whole thing at once. Handing
+       somebody the finished working teaches them that the working exists;
+       revealing it a line at a time means they can stop at the point where
+       they see it, which is the point they were actually stuck. */
     if (problem.steps && problem.steps.length) {
       solution.hidden = false;
       solution.innerHTML = '';
       const det = h('details', { class: 'steps', open: !res.correct });
       det.appendChild(h('summary', { text: res.correct ? 'See the worked solution' : 'How to get there' }));
+
       const ol = h('ol');
-      for (const st of problem.steps) {
+      let shown = 0;
+      const more = h('button', { class: 'btn small ghost', type: 'button' });
+      const revealOne = () => {
+        if (shown >= problem.steps.length) return;
+        const st = problem.steps[shown];
         ol.appendChild(h('li', {}, [
           h('span', { class: 'sttitle', text: st.title }),
           h('span', { class: 'sthtml', html: st.html }),
         ]));
-      }
+        shown += 1;
+        const left = problem.steps.length - shown;
+        more.textContent = left ? `Next step (${left} more)` : 'That is all of it';
+        more.disabled = left === 0;
+      };
+      more.addEventListener('click', revealOne);
+      revealOne();
       det.appendChild(ol);
+      if (problem.steps.length > 1) {
+        det.appendChild(h('div', { class: 'cta' }, [
+          more,
+          h('button', {
+            class: 'linkish small', type: 'button',
+            onclick: () => { while (shown < problem.steps.length) revealOne(); },
+          }, 'Show the rest'),
+        ]));
+      }
       solution.appendChild(det);
     }
 
@@ -806,6 +865,10 @@ function renderTest(root) {
     for (const t of p.tests.slice().reverse().slice(0, 12)) {
       list.appendChild(h('li', {}, [
         h('span', { class: 'tname', text: t.name }),
+        /* A quiz and a mock test are different things and are scored
+           differently, so the list says which it was rather than leaving
+           two unlike numbers side by side. */
+        t.kind === 'quiz' ? h('span', { class: 'pill', text: 'quiz' }) : null,
         h('span', { class: 'tscore', text: `${t.score}/${t.total}` }),
         h('span', { class: 'muted small', text: new Date(t.ts).toLocaleDateString() }),
         h('button', { class: 'linkish small', onclick: () => { testRun = reopenTest(t); router(); } }, 'review'),
@@ -883,7 +946,10 @@ function reopenTest(saved) {
     id: saved.id,
     name: saved.name,
     items: saved.items,
-    responses: saved.responses || new Array(saved.items.length).fill(''),
+    /* A mock test keeps its answers in one list; a quiz keeps each answer
+       on the item it belongs to. Either way the review needs them. */
+    responses: saved.responses
+      || saved.items.map((it) => (it && it.response) || ''),
     index: 0,
     startedAt: saved.ts,
     deadline: 0,
@@ -897,7 +963,7 @@ let tickTimer = null;
 
 function paintTestRunning(root) {
   const t = testRun;
-  const problems = t.items.map((it) => generate(it.topicId, it.difficulty, it.seed));
+  const problems = t.items.map((it) => rebuildSavedItem(it));
 
   const head = h('div', { class: 'sessionbar' }, [
     h('div', {}, [
@@ -1921,6 +1987,12 @@ function formPanel(step, names) {
 function launch(plan, root) {
   if (!plan) { root.appendChild(h('p', { text: 'Nothing to start.' })); return; }
 
+  /* Two people on the same problem belong in the workspace whatever they
+     picked afterwards: that is where the board and the shared question are.
+     Sending them to the solo practice view instead was a dead end - they
+     had chosen to work together and got two separate screens. */
+  if (plan.shared) { startWorkspace(plan); return; }
+
   if (plan.mode === 'practice') {
     startSession({
       label: plan.label || 'Practice',
@@ -2047,6 +2119,64 @@ function profileSetupCard(onDone) {
   ]);
 }
 
+/* ========================================================= the math keys */
+
+/* A row of the characters a phone keyboard buries.
+
+   Typing 6*x*cos(3*x^2) on a touch keyboard means switching layers for the
+   star, the caret and the brackets, four times each. On a laptop this would
+   be clutter, so it only appears for a coarse pointer, which is also what
+   catches a tablet with a pen.
+
+   Keys insert at the cursor rather than appending, because people do go back
+   and fix a bracket. */
+const MATH_KEYS = [
+  { label: 'x', insert: 'x' },
+  { label: '( )', insert: '()', back: 1 },
+  { label: 'x²', insert: '^2' },
+  { label: '^', insert: '^' },
+  { label: '×', insert: '*' },
+  { label: '÷', insert: '/' },
+  { label: '√', insert: 'sqrt()', back: 1 },
+  { label: 'π', insert: 'pi' },
+  { label: 'sin', insert: 'sin()', back: 1 },
+  { label: 'cos', insert: 'cos()', back: 1 },
+  { label: 'tan', insert: 'tan()', back: 1 },
+  { label: 'ln', insert: 'ln()', back: 1 },
+  { label: 'eˣ', insert: 'e^' },
+];
+
+function touchDevice() {
+  return typeof window !== 'undefined' && window.matchMedia
+    && window.matchMedia('(pointer: coarse)').matches;
+}
+
+function mathKeys(input) {
+  if (!touchDevice()) return null;
+  const row = h('div', { class: 'mathkeys', role: 'group', 'aria-label': 'Maths keys' });
+  for (const key of MATH_KEYS) {
+    row.appendChild(h('button', {
+      class: 'mathkey', type: 'button', tabindex: '-1',
+      /* Keeping focus in the field means the caret does not jump to the end
+         and the on-screen keyboard does not flap shut between taps. */
+      onmousedown: (e) => e.preventDefault(),
+      onclick: () => {
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        const before = input.value.slice(0, start);
+        const after = input.value.slice(end);
+        input.value = before + key.insert + after;
+        const caret = start + key.insert.length - (key.back || 0);
+        input.setSelectionRange(caret, caret);
+        input.focus();
+        /* So the parse echo updates as though it had been typed. */
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      },
+    }, key.label));
+  }
+  return row;
+}
+
 /* ======================================================== the parse echo */
 
 /* Show what the grader READ, under the box, as it is typed.
@@ -2098,6 +2228,18 @@ function attachEcho(input, problem) {
   return echo;
 }
 
+/* A saved test item, which may be either shape.
+
+   Mock tests have always stored {topicId, difficulty, seed}. A finished quiz
+   stores the newer description, which can also name a sandbox skill. Reading
+   both here means an old saved test keeps working and a quiz can be reopened
+   at all, rather than rebuilding as a row of nulls. */
+function rebuildSavedItem(it) {
+  if (!it) return null;
+  if (it.source) return rebuildProblem(it);
+  return generate(it.topicId, it.difficulty, it.seed);
+}
+
 /* Rebuild a problem from the few fields that describe it. Seeds make this
    exact rather than approximate: you come back to the same question, not a
    similar one. */
@@ -2128,6 +2270,11 @@ let workspace = null;
 
 function saveWorkspace() {
   if (!workspace) return;
+  /* Both people should be looking at the same question. Sent as a seed, so
+     the other device rebuilds it rather than being handed a rendered one. */
+  if (liveRoom && workspace.problem) {
+    liveRoom.problem(persist.describeProblem(workspace.problem));
+  }
   persist.saveSession(store.activeProfile().id, 'workspace', {
     plan: workspace.plan,
     panel: workspace.panel,
@@ -2137,9 +2284,17 @@ function saveWorkspace() {
 }
 
 function startWorkspace(plan) {
+  /* A session that named a topic should open with a question on it rather
+     than an empty board and a shrug. */
+  let opening = null;
+  if (plan.skills && plan.skills.length) {
+    for (let i = 0; i < 12 && !opening; i++) {
+      opening = buildProblem({ skills: plan.skills, level: plan.level || 2 }, freshSeed());
+    }
+  }
   workspace = {
     plan,
-    problem: null,
+    problem: opening,
     panel: plan.mode === 'practice' || plan.mode === 'quiz' ? 'board' : 'photos',
     board: null,
     graph: null,
@@ -2154,6 +2309,64 @@ function startWorkspace(plan) {
 
 function darkNow() {
   return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+/* The shared session, when there is one. Held outside the workspace object
+   so a re-render does not drop the connection and start another. */
+let liveRoom = null;
+let roomStatus = { state: 'offline', detail: '' };
+
+function leaveRoom() {
+  if (liveRoom) liveRoom.leave();
+  liveRoom = null;
+  roomStatus = { state: 'offline', detail: '' };
+}
+
+function ensureRoom() {
+  if (!workspace || !workspace.plan.shared || liveRoom) return;
+  const endpoint = store.syncEndpoint();
+  if (!endpoint) return;
+  liveRoom = room.joinRoom(endpoint, workspace.plan.room, workspace.plan.who, {
+    onStatus: (state, detail) => {
+      roomStatus = { state, detail: detail || '' };
+      const line = $('#roomline');
+      if (line) paintRoomLine(line);
+    },
+    onHello: (msg) => {
+      /* Everything that happened before arriving, including the board. */
+      if (workspace.board && msg.strokes && msg.strokes.length) {
+        for (const s of msg.strokes) workspace.board.apply(s);
+      }
+      if (msg.problem && !workspace.problem) {
+        const rebuilt = rebuildProblem(msg.problem);
+        if (rebuilt) { workspace.problem = rebuilt; router(); }
+      }
+    },
+    onStroke: (s) => { if (workspace.board) workspace.board.apply(s); },
+    onErase: (id) => { if (workspace.board) workspace.board.apply({ id, dead: true, points: [] }); },
+    onClear: () => { if (workspace.board) workspace.board.clear(); },
+    onProblem: (description) => {
+      const rebuilt = rebuildProblem(description);
+      if (!rebuilt) return;
+      workspace.problem = rebuilt;
+      workspace.lastAnswer = '';
+      saveWorkspace();
+      router();
+    },
+  });
+}
+
+function paintRoomLine(line) {
+  line.innerHTML = '';
+  const { state, detail } = roomStatus;
+  line.appendChild(h('span', {
+    class: `pill ${state === 'connected' ? 'ai' : 'warn'}`,
+    text: state === 'connected' ? 'together' : state === 'connecting' ? 'connecting' : 'offline',
+  }));
+  line.appendChild(h('span', { class: 'small muted', text: ` ${detail || ''}` }));
+  if (liveRoom && liveRoom.pending) {
+    line.appendChild(h('span', { class: 'small muted', text: ` ${liveRoom.pending} waiting to send.` }));
+  }
 }
 
 function renderWorkspace(root) {
@@ -2195,6 +2408,7 @@ function renderWorkspace(root) {
         class: 'btn small ghost', type: 'button',
         onclick: () => {
           persist.clearSession(store.activeProfile().id, 'workspace');
+          leaveRoom();
           workspace = null;
           flowAnswers = {};
           go('start');
@@ -2204,11 +2418,19 @@ function renderWorkspace(root) {
   ]));
 
   if (plan.shared || plan.sideBySide) {
-    root.appendChild(h('div', { class: 'caveat' }, [
-      h('strong', { text: 'One device for now. ' }),
-      'Everything here works, but the second device cannot join until the sync '
-      + 'service is deployed from study_api/. Until then, share a screen.',
-    ]));
+    const endpoint = store.syncEndpoint();
+    if (endpoint) {
+      ensureRoom();
+      const line = h('div', { class: 'roomline', id: 'roomline' });
+      paintRoomLine(line);
+      root.appendChild(line);
+    } else {
+      root.appendChild(h('div', { class: 'caveat' }, [
+        h('strong', { text: 'One device for now. ' }),
+        'The board works here, but the other device cannot join until the sync '
+        + 'service is deployed from study_api/ and its address is set in Settings.',
+      ]));
+    }
   }
 
   /* The problem, when there is one. */
@@ -2287,8 +2509,10 @@ function paintWorkspaceProblem(slot) {
     placeholder: inputHint(problem), value: workspace.lastAnswer || '',
     'aria-label': 'Your answer',
   });
-  const echo = ['expression', 'antiderivative', 'factored', 'expanded'].includes(problem.kind)
-    ? attachEcho(input, problem) : null;
+  const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
+    .includes(problem.kind);
+  const keys = expressionish ? mathKeys(input) : null;
+  const echo = expressionish ? attachEcho(input, problem) : null;
   const feedback = h('div', { class: 'wsfeedback' });
 
   const check = () => {
@@ -2313,6 +2537,7 @@ function paintWorkspaceProblem(slot) {
 
   card.appendChild(h('div', { class: 'answerform' }, [
     input,
+    keys,
     echo,
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: check }, 'Check'),
@@ -2402,7 +2627,15 @@ function mountBoard(body) {
     dark: darkNow(),
     /* Saving on every stroke is affordable because strokes are small and
        localStorage is synchronous. No debounce, no lost work. */
-    onChange: () => persist.saveStrokes(key, api.strokes),
+    onChange: (stroke, kind) => {
+      persist.saveStrokes(key, api.strokes);
+      /* The board is the source of truth locally; the room is a copy, so a
+         dropped connection never stops anybody drawing. */
+      if (!liveRoom) return;
+      if (kind === 'stroke' && stroke) liveRoom.stroke(stroke);
+      else if (kind === 'erase' && stroke) liveRoom.erase(stroke.id);
+      else if (kind === 'clear') liveRoom.clear();
+    },
   });
   workspace.board = api;
   const saved = persist.loadStrokes(key);
@@ -2527,8 +2760,12 @@ function mountPhotos(body) {
      finding one just adds the Read it button on the next repaint. */
   if (!visionState.checked) {
     refreshVision().then((state) => {
-      if (state.model && workspace && workspace.panel === 'photos') router();
+      if ((state.model || state.relay) && workspace && workspace.panel === 'photos') router();
     });
+  } else if (visionState.relay && !visionState.model) {
+    body.appendChild(h('p', { class: 'small muted' },
+      'Reading a photo here uses the model on the other computer, through the '
+      + 'relay. It only works while that machine is awake.'));
   }
   const mount = h('div', {});
   body.appendChild(mount);
@@ -2586,10 +2823,12 @@ function mountPhotos(body) {
 /* Whether this browser has a local model that can look at a picture. Checked
    once per load and remembered, because asking Ollama on every render would
    be a request per keystroke-ish repaint. */
-let visionState = { checked: false, model: '' };
+let visionState = { checked: false, model: '', relay: false };
 
 function ollamaVisionReady() {
-  return !!visionState.model;
+  /* Either this machine can read a picture, or the other one can and is
+     awake. A phone will never have a model of its own. */
+  return !!visionState.model || visionState.relay;
 }
 
 async function refreshVision() {
@@ -2602,15 +2841,27 @@ async function refreshVision() {
   } catch (err) {
     visionState.model = '';
   }
+  if (!visionState.model) {
+    /* No model here. Is one listening on the other side of the relay? */
+    const status = await room.relayStatus(store.syncEndpoint());
+    visionState.relay = !!(status && status.bridge);
+  }
   return visionState;
 }
 
 async function readPhoto(item) {
   const p = store.activeProfile();
-  const model = visionState.model;
-  if (!model) throw new Error('No model that can read an image is installed.');
-  const text = await ollama.readImage(p.settings.ollamaUrl, model, item.dataUrl);
-  return ollama.splitProblems(text);
+  if (visionState.model) {
+    const text = await ollama.readImage(p.settings.ollamaUrl, visionState.model, item.dataUrl);
+    return ollama.splitProblems(text);
+  }
+  if (visionState.relay) {
+    /* Out to the Worker, picked up by the bridge on the other machine, read
+       by the model there, and back. Nothing inbound, nothing stored. */
+    const text = await room.relayRead(store.syncEndpoint(), item.dataUrl);
+    return ollama.splitProblems(text);
+  }
+  throw new Error('Nothing available to read it: no model here, and nothing listening elsewhere.');
 }
 
 /* Turn a typed function into a problem the engine can mark. The answer comes
@@ -2665,6 +2916,18 @@ function problemFromText(raw) {
 
 let quizRun = null;
 
+function saveQuiz() {
+  if (!quizRun || quizRun.phase !== 'running') return;
+  persist.saveSession(store.activeProfile().id, 'quiz', {
+    plan: quizRun.plan,
+    problems: quizRun.problems.map((p) => persist.describeProblem(p)),
+    responses: quizRun.responses,
+    index: quizRun.index,
+    startedAt: quizRun.startedAt,
+    endsAt: quizRun.endsAt,
+  });
+}
+
 function startQuiz(plan) {
   const count = Math.max(1, Math.min(60, Number(plan.count) || 10));
   const problems = [];
@@ -2688,12 +2951,35 @@ function startQuiz(plan) {
     endsAt: plan.minutes ? Date.now() + plan.minutes * 60000 : 0,
     phase: problems.length ? 'running' : 'empty',
   };
+  saveQuiz();
   const before = location.hash;
   go('quiz');
   if (location.hash === before) router();
 }
 
 function renderQuiz(root) {
+  if (!quizRun) {
+    /* Losing a graded run to a stray refresh would be the worst of the
+       three, so it rebuilds the same way: the problems were described by
+       seed, the answers typed so far were kept, and the clock is an
+       absolute time rather than a countdown, so it has carried on without
+       anybody minding it. */
+    const saved = persist.loadSession(store.activeProfile().id, 'quiz');
+    if (saved && saved.problems && saved.problems.length) {
+      const problems = saved.problems.map((d) => rebuildProblem(d)).filter(Boolean);
+      if (problems.length === saved.problems.length) {
+        quizRun = {
+          plan: saved.plan,
+          problems,
+          index: Math.min(saved.index || 0, problems.length - 1),
+          responses: saved.responses || new Array(problems.length).fill(''),
+          startedAt: saved.startedAt || Date.now(),
+          endsAt: saved.endsAt || 0,
+          phase: 'running',
+        };
+      }
+    }
+  }
   if (!quizRun) {
     root.appendChild(h('section', { class: 'card' }, [
       h('h1', { text: 'No quiz running' }),
@@ -2744,12 +3030,15 @@ function renderQuiz(root) {
     const next = quizRun.index + delta;
     if (next >= quizRun.problems.length) { finishQuiz(); return; }
     quizRun.index = Math.max(0, next);
+    saveQuiz();
     router();
   };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); advance(1); } });
 
   card.appendChild(h('div', { class: 'answerform' }, [
     input,
+    ['expression', 'antiderivative', 'factored', 'expanded'].includes(q.kind)
+      ? mathKeys(input) : null,
     ['expression', 'antiderivative', 'factored', 'expanded'].includes(q.kind)
       ? attachEcho(input, q) : null,
     h('div', { class: 'cta' }, [
@@ -2812,10 +3101,34 @@ function markQuiz() {
 
 function finishQuiz(timedOut = false) {
   if (quizTimer) { clearInterval(quizTimer); quizTimer = null; }
+  /* Marked is finished: there is nothing left to resume. */
+  persist.clearSession(store.activeProfile().id, 'quiz');
   const marked = markQuiz();
   quizRun.phase = 'done';
   quizRun.marked = marked;
   quizRun.timedOut = timedOut;
+  /* Keep the result alongside the mock tests, so a quiz is something you can
+     look back at rather than a number that flashed past once. */
+  try {
+    store.saveTest({
+      id: `quiz_${Date.now()}`,
+      name: quizRun.plan.label || 'Quiz',
+      ts: Date.now(),
+      kind: 'quiz',
+      items: quizRun.problems.map((p, i) => ({
+        ...persist.describeProblem(p),
+        response: quizRun.responses[i] || '',
+        correct: marked.rows[i] ? marked.rows[i].res.correct : false,
+        credit: marked.rows[i] ? marked.rows[i].credit : 0,
+      })),
+      score: Math.round(marked.score * 100) / 100,
+      total: marked.total,
+      partial: !!quizRun.plan.partial,
+      updated: Date.now(),
+    });
+  } catch (err) {
+    /* A full store must not swallow the result that is on screen. */
+  }
   /* Record the attempts, so a quiz moves mastery the same way practice does. */
   for (const row of marked.rows) {
     store.recordAttempt({

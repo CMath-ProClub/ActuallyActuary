@@ -1028,3 +1028,30 @@ footer {
 .readlines { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .readlines .chip { font-family: var(--face-ui); max-width: 100%; }
 .shelfmeta { flex-wrap: wrap; }
+
+/* ---------------------------------------------------------- the math keys */
+
+/* Only ever rendered for a coarse pointer, so these sizes are thumb sizes.
+   One row that scrolls sideways beats two rows that push the problem off the
+   top of the screen. */
+.mathkeys {
+  display: flex; gap: 6px; margin: 10px 0 0;
+  overflow-x: auto; scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.mathkeys::-webkit-scrollbar { display: none; }
+.mathkey {
+  flex: none;
+  font-family: var(--face-ui); font-size: .92rem;
+  min-width: 46px; min-height: 44px; padding: 0 10px;
+  border: 1px solid var(--edge); background: var(--sunk); color: var(--ink);
+  cursor: pointer;
+}
+.mathkey:active { background: var(--accent-wash); transform: translate(1px, 1px); }
+
+/* The state of a shared session, in words rather than a silent dot. */
+.roomline {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: -6px 0 14px; padding: 8px 12px;
+  background: var(--sunk); border-left: 3px solid var(--accent);
+}

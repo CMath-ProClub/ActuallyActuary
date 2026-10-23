@@ -484,8 +484,13 @@ function buildIntegral(id, skill, built, level, seed) {
 }
 
 function buildForm(id, skill, built, level, seed) {
-  const { question, display } = built;
-  if (!question || !display) return null;
+  if (!built || !built.question || !built.display) return null;
+  /* A difference of squares is built with a zero middle coefficient, and
+     printing it as "x^2 + 0x - 36" is how a generated question announces
+     that nobody looked at it. Tidying both sides before anything is
+     rendered is the fix; the factored form is unaffected by it. */
+  const question = simplify(simplify(built.question));
+  const display = simplify(simplify(built.display));
   /* The two have to be the same thing written differently, or the problem
      asks for something impossible. */
   if (!equivalent(question, display).equal) return null;
@@ -725,7 +730,10 @@ export function buildProblem(spec, seed) {
   if (skill.integral) return buildIntegral(id, skill, built, level, seed);
   if (skill.form) return buildForm(id, skill, built, level, seed);
 
-  let f = built.f;
+  /* Tidy before anything is rendered, for the same reason buildForm does:
+     a term with a zero or one coefficient in a generated question is how it
+     announces that nobody looked at it. */
+  let f = simplify(built.f);
   /* At the top level, two skills at once is what "longer problems" means. */
   if (level === 3 && ids.length > 1 && r() < 0.5) {
     const otherId = r.pick(ids.filter((o) => o !== id && !SKILLS[o].implicit));
