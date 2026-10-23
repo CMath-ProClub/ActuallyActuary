@@ -64,6 +64,8 @@ function blankState() {
     profiles: { [p.id]: p },
     activeId: p.id,
     sync: { key: '', autoSync: true, lastPull: 0, lastPush: 0, lastError: '' },
+    /* Whole-install settings, as opposed to per-person ones. */
+    settings: { setupDone: false },
   };
 }
 
@@ -192,6 +194,16 @@ export function removeProfile(id) {
     if (st.activeId === id) st.activeId = Object.keys(st.profiles)[0];
   });
   return true;
+}
+
+/* The who-studies-here card is offered once. Answering it or dismissing it
+   both count, because a prompt that keeps coming back is worse than a
+   default name. */
+export function markSetupDone() {
+  update((st) => {
+    if (!st.settings) st.settings = {};
+    st.settings.setupDone = true;
+  });
 }
 
 export function setSetting(key, value) {

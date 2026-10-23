@@ -7,7 +7,11 @@
 import MathKit from './math.js';
 import { COURSES, TOPIC_BY_ID, COURSE_BY_ID, topicsIn, unitsIn, searchTopics } from './topics.js';
 import { generate, grade, inputHint, hasGenerator, generatableTopics, freshSeed } from './generators.js';
-import { buildProblem } from './gen-sandbox.js';
+import { buildProblem, distractorsFor as sandboxDistractors } from './gen-sandbox.js';
+import Expr from './expr.js';
+import * as board from './board.js';
+import * as graph from './graph.js';
+import * as photo from './photo.js';
 import * as flow from './flow.js';
 import * as ask from './ask.js';
 import * as store from './store.js';
@@ -50,6 +54,8 @@ const ALL_TOPIC_IDS = generatableTopics();
 const ROUTES = {
   '': renderStart,
   start: renderStart,
+  workspace: renderWorkspace,
+  quiz: renderQuiz,
   dashboard: renderDashboard,
   practice: renderPractice,
   test: renderTest,
@@ -1293,6 +1299,8 @@ function renderSettings(root) {
   root.appendChild(prefs);
 
   /* Ollama. */
+  root.appendChild(graphCard(p));
+
   root.appendChild(ollamaCard(p));
 
   /* Sync. */
@@ -1328,6 +1336,38 @@ function renderSettings(root) {
     ]),
   ]));
   root.appendChild(data);
+}
+
+/* Where the Desmos key lives. Without one the graph panel uses the built-in
+   plotter, which is why this is a convenience rather than a requirement. */
+function graphCard(p) {
+  const key = h('input', {
+    class: 'textinput', type: 'text', value: p.settings.desmosKey || '',
+    placeholder: 'paste your Desmos API key', 'aria-label': 'Desmos API key',
+    autocomplete: 'off', spellcheck: 'false',
+  });
+  const status = h('p', { class: 'small muted', role: 'status' });
+  const save = () => {
+    store.setSetting('desmosKey', key.value.trim());
+    status.textContent = key.value.trim()
+      ? 'Saved. The graph panel will use Desmos from now on.'
+      : 'Cleared. The graph panel uses the built-in plotter.';
+  };
+  return h('section', { class: 'card' }, [
+    h('h2', { text: 'Graphing' }),
+    h('p', { class: 'muted' }, [
+      'The graph panel draws your answer against the real derivative. It works '
+      + 'out of the box with a built-in plotter that needs no network. Desmos is '
+      + 'better, and free for non-commercial use: get a key at ',
+      h('a', { href: 'https://www.desmos.com/my-api', target: '_blank', rel: 'noreferrer' }, 'desmos.com/my-api'),
+      ' and paste it here.',
+    ]),
+    h('div', { class: 'field' }, [h('label', { text: 'Desmos API key' }), key]),
+    h('div', { class: 'cta' }, [
+      h('button', { class: 'btn small', type: 'button', onclick: save }, 'Save key'),
+    ]),
+    status,
+  ]);
 }
 
 function ollamaCard(p) {
@@ -1553,6 +1593,10 @@ function flowPeople() {
 }
 
 function renderStart(root) {
+  if (needsProfileSetup()) {
+    root.appendChild(profileSetupCard(() => router()));
+    return;
+  }
   const profiles = flowPeople();
   const names = profiles.map((p) => p.name);
   const step = flow.currentStep(flowAnswers, names);
@@ -1760,8 +1804,7 @@ function formPanel(step, names) {
   return wrap;
 }
 
-/* The flow is finished: act on it. Anything not built yet says so plainly
-   rather than quietly starting something else. */
+/* The flow is finished: open the screen it asked for. */
 function launch(plan, root) {
   if (!plan) { root.appendChild(h('p', { text: 'Nothing to start.' })); return; }
 
@@ -1776,36 +1819,685 @@ function launch(plan, root) {
     return;
   }
 
-  const pending = {
-    quiz: ['Quizzes are next.', 'The flow records your settings - '
-      + `${plan.count} questions, ${plan.partial ? 'partial credit on' : 'no partial credit'}`
-      + `${plan.minutes ? `, ${plan.minutes} minutes` : ', untimed'} - but the graded run is `
-      + 'not wired up yet. Practice works now.'],
-    'homework-walkthrough': ['Homework help is next.',
-      'The photo path reads a worksheet with the local model and the engine solves it, '
-      + 'which is proven end to end, but this screen is not built yet.'],
-    'homework-extra': ['Homework help is next.',
-      'Generating more problems like the ones on your page needs the photo screen first.'],
-  }[plan.mode];
+  if (plan.mode === 'quiz') { startQuiz(plan); return; }
 
-  root.appendChild(h('section', { class: 'card' }, [
-    h('p', { class: 'eyebrow', text: 'Not built yet' }),
-    h('h1', { text: pending ? pending[0] : 'Not built yet' }),
-    h('p', { text: pending ? pending[1] : '' }),
+  /* Homework, and anything with two people in it, opens the workspace: the
+     problem, a board, a graph and the photos you are working from. */
+  startWorkspace(plan);
+}
+
+/* ================================================================= profiles */
+
+/* A fresh install has one profile called "Me", which is a fine default for
+   one person and the wrong thing for two. Offer the setup once, and never
+   nag: if it is dismissed, or either name is filled in, it does not come
+   back. */
+function needsProfileSetup() {
+  const all = store.allProfiles();
+  if (all.length > 1) return false;
+  if (store.getState().settings && store.getState().settings.setupDone) return false;
+  const only = all[0];
+  return !!only && only.name === 'Me' && only.attempts.length === 0;
+}
+
+function profileSetupCard(onDone) {
+  const first = h('input', { class: 'textinput', type: 'text', placeholder: 'Carter', 'aria-label': 'First name' });
+  const second = h('input', { class: 'textinput', type: 'text', placeholder: 'Lilly', 'aria-label': 'Second name' });
+
+  const save = () => {
+    const a = first.value.trim();
+    const b = second.value.trim();
+    const all = store.allProfiles();
+    if (a) store.renameProfile(all[0].id, a);
+    if (b) store.addProfile(b);
+    /* Switch back to the first person, since whoever is setting this up is
+       almost certainly the first name they typed. */
+    if (a) store.switchProfile(store.allProfiles()[0].id);
+    store.markSetupDone();
+    onDone();
+  };
+
+  return h('section', { class: 'flowstep' }, [
+    h('p', { class: 'flowcount', text: 'First time here' }),
+    h('h1', { class: 'flowq', text: 'Who studies here?' }),
+    h('p', { class: 'pickblurb', text: 'Each person gets their own history, schedule and mastery. '
+      + 'You can add or rename people later in Settings.' }),
+    h('div', { class: 'setupgrid' }, [
+      h('div', { class: 'field' }, [h('label', { text: 'Person one' }), first]),
+      h('div', { class: 'field' }, [h('label', { text: 'Person two (optional)' }), second]),
+    ]),
     h('div', { class: 'cta' }, [
+      h('button', { class: 'btn', type: 'button', onclick: save }, 'Save'),
       h('button', {
-        class: 'btn ghost', type: 'button',
-        onclick: () => { flowAnswers = {}; router(); },
-      }, 'Start over'),
-      h('a', { class: 'btn', href: '#/dashboard' }, 'Dashboard'),
+        class: 'linkish small', type: 'button',
+        onclick: () => { store.markSetupDone(); onDone(); },
+      }, 'Skip for now'),
+    ]),
+  ]);
+}
+
+/* ================================================================ workspace */
+
+/* The room where the work happens: the problem, a board to work it out on, a
+   graph to check it against, and the photos you are working from. Used by
+   homework help and by a session with two people in it.
+
+   The panels are built lazily. A canvas that is never looked at should not
+   cost anything, and Desmos should not be fetched until a graph is asked
+   for. */
+
+let workspace = null;
+
+function startWorkspace(plan) {
+  workspace = {
+    plan,
+    problem: null,
+    panel: plan.mode === 'practice' || plan.mode === 'quiz' ? 'board' : 'photos',
+    board: null,
+    graph: null,
+    shelf: null,
+    lastAnswer: '',
+  };
+  const before = location.hash;
+  go('workspace');
+  if (location.hash === before) router();
+}
+
+function darkNow() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function renderWorkspace(root) {
+  if (!workspace) {
+    root.appendChild(h('section', { class: 'card' }, [
+      h('h1', { text: 'Nothing open' }),
+      h('p', { text: 'Start from the front page and it will bring you back here.' }),
+      h('div', { class: 'cta' }, [h('a', { class: 'btn', href: '#/start' }, 'Start')]),
+    ]));
+    return;
+  }
+  const plan = workspace.plan;
+
+  root.appendChild(h('div', { class: 'sessionbar' }, [
+    h('div', {}, [
+      h('strong', { text: workspaceTitle(plan) }),
+      h('span', { class: 'muted', text: ` · ${plan.who}` }),
+    ]),
+    h('div', { class: 'tbarright' }, [
+      h('button', {
+        class: 'btn small ghost', type: 'button',
+        onclick: () => { workspace = null; flowAnswers = {}; go('start'); },
+      }, 'Finish'),
     ]),
   ]));
 
   if (plan.shared || plan.sideBySide) {
     root.appendChild(h('div', { class: 'caveat' }, [
-      h('strong', { text: 'Working together needs the sync service. ' }),
-      'The shared board runs on a Cloudflare Durable Object, which is free at our size '
-      + 'but has to be deployed once from study_api/ before two devices can see each other.',
+      h('strong', { text: 'One device for now. ' }),
+      'Everything here works, but the second device cannot join until the sync '
+      + 'service is deployed from study_api/. Until then, share a screen.',
     ]));
   }
+
+  /* The problem, when there is one. */
+  const problemSlot = h('div', { class: 'wsproblem' });
+  root.appendChild(problemSlot);
+  paintWorkspaceProblem(problemSlot);
+
+  /* The panels. */
+  const tabs = h('div', { class: 'tabstrip', role: 'tablist' });
+  const body = h('div', { class: 'tabbody' });
+  const PANELS = [
+    { id: 'board', label: 'Whiteboard' },
+    { id: 'graph', label: 'Graph' },
+    { id: 'photos', label: 'Photos' },
+  ];
+  for (const panel of PANELS) {
+    tabs.appendChild(h('button', {
+      class: `tab${workspace.panel === panel.id ? ' on' : ''}`,
+      type: 'button', role: 'tab',
+      'aria-selected': workspace.panel === panel.id ? 'true' : 'false',
+      onclick: () => { workspace.panel = panel.id; router(); },
+    }, panel.label));
+  }
+  root.appendChild(h('section', { class: 'card wspanels' }, [tabs, body]));
+
+  if (workspace.panel === 'board') mountBoard(body);
+  else if (workspace.panel === 'graph') mountGraph(body);
+  else mountPhotos(body);
+}
+
+function workspaceTitle(plan) {
+  if (plan.mode === 'homework-walkthrough') return 'Homework help';
+  if (plan.mode === 'homework-extra') return 'More like your homework';
+  if (plan.shared) return 'Working together';
+  if (plan.sideBySide) return 'Side by side';
+  return plan.label || 'Workspace';
+}
+
+/* ------------------------------------------------------------ the problem */
+
+function paintWorkspaceProblem(slot) {
+  slot.innerHTML = '';
+  const problem = workspace.problem;
+  if (!problem) {
+    slot.appendChild(h('section', { class: 'card' }, [
+      h('p', { class: 'eyebrow', text: 'No problem loaded' }),
+      h('p', { text: workspace.plan.mode === 'homework-walkthrough'
+        ? 'Add a photo of the page, type what it says underneath it, and press Use this.'
+        : 'Type a function in the Photos panel, or pick a topic to generate one.' }),
+      h('div', { class: 'cta' }, [
+        h('button', {
+          class: 'btn small ghost', type: 'button',
+          onclick: () => { workspace.panel = 'photos'; router(); },
+        }, 'Open photos'),
+        h('button', {
+          class: 'btn small ghost', type: 'button',
+          onclick: () => {
+            const made = buildProblem({ skills: ['chain', 'trig', 'product'], level: 2 }, freshSeed());
+            if (made) { workspace.problem = made; router(); }
+          },
+        }, 'Give me one'),
+      ]),
+    ]));
+    return;
+  }
+
+  const card = h('section', { class: 'card problem' });
+  card.appendChild(h('div', { class: 'ptop' }, [
+    h('span', { class: 'ptopic', text: problem.topicName || 'Your problem' }),
+    problem.fromPhoto ? h('span', { class: 'pill', text: 'from your page' }) : null,
+  ]));
+  card.appendChild(h('div', { class: 'stem', html: problem.stem }));
+
+  const input = h('input', {
+    type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
+    placeholder: inputHint(problem), value: workspace.lastAnswer || '',
+    'aria-label': 'Your answer',
+  });
+  const feedback = h('div', { class: 'wsfeedback' });
+
+  const check = () => {
+    workspace.lastAnswer = input.value;
+    const res = grade(problem, input.value);
+    feedback.innerHTML = '';
+    feedback.appendChild(h('div', {
+      class: `feedback ${res.correct ? 'good' : res.decided === false ? 'warn' : 'bad'}`,
+    }, [
+      h('strong', { text: res.correct ? 'That works' : res.decided === false ? 'Cannot check that one' : 'Not quite' }),
+      res.detail ? h('p', { class: 'small', text: res.detail }) : null,
+      !res.correct && problem.answerHtml
+        ? h('p', { html: `The answer is <strong>${problem.answerHtml}</strong>` })
+        : null,
+    ]));
+    /* A wrong answer is exactly when the picture helps most. */
+    if (!res.correct && workspace.panel === 'graph') mountGraph($('.tabbody'));
+  };
+
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); check(); } });
+
+  card.appendChild(h('div', { class: 'answerform' }, [
+    input,
+    h('div', { class: 'cta' }, [
+      h('button', { class: 'btn', type: 'button', onclick: check }, 'Check'),
+      h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => {
+          workspace.panel = 'graph';
+          workspace.lastAnswer = input.value;
+          router();
+        },
+      }, 'See it graphed'),
+      problem.steps && problem.steps.length
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => {
+            feedback.innerHTML = '';
+            feedback.appendChild(stepsBlock(problem));
+          },
+        }, 'Walk me through it')
+        : null,
+      workspace.plan.mode !== 'homework-walkthrough'
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => {
+            const next = similarProblem(problem);
+            if (next) { workspace.problem = next; workspace.lastAnswer = ''; router(); }
+          },
+        }, 'Another like it')
+        : null,
+    ]),
+    feedback,
+  ]));
+
+  slot.appendChild(card);
+}
+
+function stepsBlock(problem) {
+  const list = h('ol', { class: 'steps' });
+  for (const step of problem.steps || []) {
+    list.appendChild(h('li', {}, [
+      h('span', { class: 'steptitle', text: step.title }),
+      h('div', { class: 'stepbody', html: step.html }),
+    ]));
+  }
+  return h('div', { class: 'explain' }, [
+    h('p', { class: 'eyebrow', text: 'How to get there' }),
+    list,
+  ]);
+}
+
+/* Another problem of the same shape, which is the "more like these" ask. */
+function similarProblem(problem) {
+  const skill = problem.skill || 'chain';
+  for (let i = 0; i < 12; i++) {
+    const made = buildProblem({ skills: [skill], level: problem.difficulty || 2 }, freshSeed());
+    if (made && made.stem !== problem.stem) return made;
+  }
+  return null;
+}
+
+/* --------------------------------------------------------------- the board */
+
+function mountBoard(body) {
+  body.innerHTML = '';
+  const canvas = h('canvas', { class: 'boardcanvas', 'aria-label': 'Whiteboard' });
+  const tools = h('div', { class: 'boardtools' });
+  body.appendChild(tools);
+  body.appendChild(canvas);
+
+  const api = board.createBoard(canvas, {
+    author: workspace.plan.who || 'me',
+    dark: darkNow(),
+  });
+  workspace.board = api;
+
+  const toolButton = (id, label) => {
+    const btn = h('button', {
+      class: `chip${api.tool() === id ? ' on' : ''}`, type: 'button',
+      onclick: () => {
+        api.setTool(id);
+        for (const other of tools.querySelectorAll('.chip[data-tool]')) {
+          other.classList.toggle('on', other.dataset.tool === id);
+        }
+      },
+      dataset: { tool: id },
+    }, label);
+    return btn;
+  };
+  tools.appendChild(toolButton('pen', 'Pen'));
+  tools.appendChild(toolButton('marker', 'Highlighter'));
+  tools.appendChild(toolButton('eraser', 'Eraser'));
+
+  for (const colour of board.BOARD_COLORS) {
+    const swatch = h('button', {
+      class: `inkdot${api.color() === colour.id ? ' on' : ''}`, type: 'button',
+      title: colour.label, 'aria-label': colour.label,
+      dataset: { ink: colour.id },
+      onclick: () => {
+        api.setColor(colour.id);
+        for (const other of tools.querySelectorAll('.inkdot')) {
+          other.classList.toggle('on', other.dataset.ink === colour.id);
+        }
+      },
+    });
+    swatch.style.background = darkNow() ? colour.dark : colour.light;
+    tools.appendChild(swatch);
+  }
+
+  tools.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.undo(),
+  }, 'Undo'));
+  tools.appendChild(h('button', {
+    class: 'linkish small danger', type: 'button', onclick: () => api.clear(),
+  }, 'Clear'));
+}
+
+/* --------------------------------------------------------------- the graph */
+
+function mountGraph(body) {
+  body.innerHTML = '';
+  const note = h('p', { class: 'small muted', text: 'Loading the graph...' });
+  const host = h('div', { class: 'graphhost' });
+  body.appendChild(host);
+  body.appendChild(note);
+
+  const problem = workspace.problem;
+  graph.createGraph(host, { dark: darkNow(), key: store.activeProfile().settings.desmosKey })
+    .then((api) => {
+      workspace.graph = api;
+      const series = problem
+        ? graph.derivativeSeries(problem, workspace.lastAnswer)
+        : [];
+      if (!series.length) {
+        note.textContent = 'Load a problem and your answer appears here against the real derivative.';
+        return;
+      }
+      api.setFunctions(series);
+      const names = series.map((s) => s.label).join(', ');
+      note.innerHTML = '';
+      note.appendChild(h('span', { text: `Showing ${names}. ` }));
+      if (series.some((s) => s.role === 'yours')) {
+        note.appendChild(h('span', {
+          text: 'If your answer is right, the dashed line sits exactly on the solid one.',
+        }));
+      } else {
+        note.appendChild(h('span', { text: 'Type an answer and it joins the picture, dashed.' }));
+      }
+      note.appendChild(h('span', {
+        class: 'pill', style: 'margin-left:8px',
+        text: api.kind === 'desmos' ? 'Desmos' : 'built-in plotter',
+      }));
+      if (api.kind !== 'desmos') {
+        note.appendChild(h('p', { class: 'small muted' }, [
+          'This is the built-in plotter, which needs no network. For the full '
+          + 'Desmos calculator, put a free key from ',
+          h('a', { href: 'https://www.desmos.com/my-api', target: '_blank', rel: 'noreferrer' }, 'desmos.com/my-api'),
+          ' into Settings.',
+        ]));
+      }
+    });
+}
+
+/* -------------------------------------------------------------- the photos */
+
+function mountPhotos(body) {
+  body.innerHTML = '';
+  const mount = h('div', {});
+  body.appendChild(mount);
+
+  workspace.shelf = photo.createShelf({
+    h,
+    mount,
+    onUse: (item, text) => {
+      const made = problemFromText(text);
+      if (!made) {
+        alert('I could not read that as a function. Try something like sin(3x^2) or x^2*e^(5x).');
+        return;
+      }
+      made.fromPhoto = true;
+      workspace.problem = made;
+      workspace.lastAnswer = '';
+      router();
+    },
+  });
+
+  mount.appendChild(h('div', { class: 'typedrow' }, [
+    h('p', { class: 'eyebrow', text: 'Or just type it' }),
+    (() => {
+      const box = h('input', {
+        class: 'textinput math', type: 'text',
+        placeholder: 'sin(3x^2)', 'aria-label': 'Type the function',
+      });
+      const go2 = h('button', { class: 'btn small', type: 'button' }, 'Use this');
+      go2.addEventListener('click', () => {
+        const made = problemFromText(box.value);
+        if (!made) { alert('I could not read that as a function.'); return; }
+        workspace.problem = made;
+        workspace.lastAnswer = '';
+        router();
+      });
+      return h('div', { class: 'shelfrow' }, [box, go2]);
+    })(),
+  ]));
+}
+
+/* Turn a typed function into a problem the engine can mark. The answer comes
+   from differentiating it, so there is no answer key to be wrong. */
+function problemFromText(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  /* "f(x) = sin(3x)" and "y = sin(3x)" both mean the right hand side. */
+  const sides = text.split('=');
+  const body = sides.length === 2 && /^[a-z]\s*(\([a-z]\))?\s*$/i.test(sides[0])
+    ? sides[1] : text;
+  const f = Expr.tryParse(body, { vars: ['x'] });
+  if (!f) return null;
+  let reference;
+  try {
+    reference = Expr.derivative(f);
+  } catch {
+    return null;
+  }
+  if (Expr.isIdenticallyZero(reference)) return null;
+  return {
+    source: 'typed',
+    kind: 'expression',
+    skill: 'chain',
+    topicName: 'Your problem',
+    topicId: 'calc.chain',
+    difficulty: 2,
+    seed: 0,
+    key: `typed:${text}`,
+    variable: 'x',
+    stem: `Differentiate <span class="eq">f(x) = ${Expr.html(f)}</span>`,
+    instruction: 'Any correct form counts.',
+    functionText: Expr.text(f),
+    answerNode: reference,
+    answerText: Expr.text(reference),
+    answerHtml: Expr.html(reference),
+    distractors: sandboxDistractors(f, reference),
+    original: f,
+    hints: [`The answer is ${Expr.html(reference)}, in one of its forms.`],
+    steps: [{ title: 'Differentiate', html: Expr.html(reference) }],
+  };
+}
+
+/* ===================================================================== quiz */
+
+let quizRun = null;
+
+function startQuiz(plan) {
+  const count = Math.max(1, Math.min(60, Number(plan.count) || 10));
+  const problems = [];
+  let guard = 0;
+  while (problems.length < count && guard++ < count * 20) {
+    const made = plan.skills && plan.skills.length
+      ? buildProblem({ skills: plan.skills, level: plan.level }, freshSeed())
+      : generate(plan.topicIds && plan.topicIds.length
+        ? plan.topicIds[Math.floor(Math.random() * plan.topicIds.length)]
+        : ALL_TOPIC_IDS[Math.floor(Math.random() * ALL_TOPIC_IDS.length)], plan.level);
+    if (!made) continue;
+    if (problems.some((p) => p.stem === made.stem)) continue;
+    problems.push(made);
+  }
+  quizRun = {
+    plan,
+    problems,
+    index: 0,
+    responses: new Array(problems.length).fill(''),
+    startedAt: Date.now(),
+    endsAt: plan.minutes ? Date.now() + plan.minutes * 60000 : 0,
+    phase: problems.length ? 'running' : 'empty',
+  };
+  const before = location.hash;
+  go('quiz');
+  if (location.hash === before) router();
+}
+
+function renderQuiz(root) {
+  if (!quizRun) {
+    root.appendChild(h('section', { class: 'card' }, [
+      h('h1', { text: 'No quiz running' }),
+      h('div', { class: 'cta' }, [h('a', { class: 'btn', href: '#/start' }, 'Start one')]),
+    ]));
+    return;
+  }
+  if (quizRun.phase === 'empty') {
+    root.appendChild(h('section', { class: 'card error' }, [
+      h('h1', { text: 'Could not build that quiz' }),
+      h('p', { text: 'No problems came out of that selection. Try different topics.' }),
+      h('div', { class: 'cta' }, [h('a', { class: 'btn', href: '#/start' }, 'Back')]),
+    ]));
+    return;
+  }
+  if (quizRun.phase === 'done') { paintQuizResults(root); return; }
+
+  const q = quizRun.problems[quizRun.index];
+  const bar = h('div', { class: 'sessionbar' }, [
+    h('div', {}, [
+      h('strong', { text: `Question ${quizRun.index + 1} of ${quizRun.problems.length}` }),
+      h('span', { class: 'muted', text: ` · ${quizRun.plan.label || 'Quiz'}` }),
+    ]),
+    h('div', { class: 'tbarright' }, [
+      quizRun.endsAt ? h('span', { class: 'clock', id: 'qclock', text: '--:--' }) : null,
+      h('button', {
+        class: 'btn small ghost', type: 'button',
+        onclick: () => { if (confirm('End the quiz and mark what you have?')) finishQuiz(); },
+      }, 'Finish now'),
+    ]),
+  ]);
+  root.appendChild(bar);
+
+  const card = h('section', { class: 'card problem' });
+  card.appendChild(h('div', { class: 'ptop' }, [
+    h('span', { class: 'ptopic', text: q.topicName || '' }),
+    h('span', { class: 'plevel', text: `level ${q.difficulty}` }),
+  ]));
+  card.appendChild(h('div', { class: 'stem', html: q.stem }));
+
+  const input = h('input', {
+    type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
+    placeholder: inputHint(q), value: quizRun.responses[quizRun.index] || '',
+    'aria-label': 'Your answer',
+  });
+  const advance = (delta) => {
+    quizRun.responses[quizRun.index] = input.value;
+    const next = quizRun.index + delta;
+    if (next >= quizRun.problems.length) { finishQuiz(); return; }
+    quizRun.index = Math.max(0, next);
+    router();
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); advance(1); } });
+
+  card.appendChild(h('div', { class: 'answerform' }, [
+    input,
+    h('div', { class: 'cta' }, [
+      quizRun.index > 0
+        ? h('button', { class: 'btn ghost', type: 'button', onclick: () => advance(-1) }, 'Back')
+        : null,
+      h('button', { class: 'btn', type: 'button', onclick: () => advance(1) },
+        quizRun.index === quizRun.problems.length - 1 ? 'Finish' : 'Next'),
+    ]),
+    h('p', { class: 'small muted', text: quizRun.plan.hints
+      ? 'Hints are on for this one.'
+      : 'No hints and no answers until the end. That is what makes it a quiz.' }),
+  ]));
+  root.appendChild(card);
+
+  if (quizRun.endsAt) startQuizClock();
+}
+
+let quizTimer = null;
+function startQuizClock() {
+  if (quizTimer) clearInterval(quizTimer);
+  const paint = () => {
+    const el = $('#qclock');
+    if (!el || !quizRun || quizRun.phase !== 'running') { clearInterval(quizTimer); quizTimer = null; return; }
+    const left = Math.max(0, quizRun.endsAt - Date.now());
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+    el.classList.toggle('low', left < 60000);
+    if (left <= 0) { clearInterval(quizTimer); quizTimer = null; finishQuiz(true); }
+  };
+  paint();
+  quizTimer = setInterval(paint, 1000);
+}
+
+/* Mark it. Partial credit, when it is on, comes from the term matching in
+   expr.js: two of three terms right is two thirds of a mark. Anything else
+   is all or nothing, and the results page says which it used, because the
+   two numbers are not comparable. */
+function markQuiz() {
+  const rows = [];
+  for (let i = 0; i < quizRun.problems.length; i++) {
+    const problem = quizRun.problems[i];
+    const response = quizRun.responses[i] || '';
+    const res = grade(problem, response);
+    let credit = res.correct ? 1 : 0;
+    if (!res.correct && quizRun.plan.partial && res.diagnosis === 'partial') {
+      const judged = Expr.judge(response, problem.answerNode, {
+        distractors: problem.distractors,
+        original: problem.original,
+        scopes: problem.scopes,
+      });
+      if (judged.matched && judged.total) credit = judged.matched / judged.total;
+    }
+    rows.push({ problem, response, res, credit });
+  }
+  const score = rows.reduce((a, r) => a + r.credit, 0);
+  return { rows, score, total: rows.length };
+}
+
+function finishQuiz(timedOut = false) {
+  if (quizTimer) { clearInterval(quizTimer); quizTimer = null; }
+  const marked = markQuiz();
+  quizRun.phase = 'done';
+  quizRun.marked = marked;
+  quizRun.timedOut = timedOut;
+  /* Record the attempts, so a quiz moves mastery the same way practice does. */
+  for (const row of marked.rows) {
+    store.recordAttempt({
+      topicId: row.problem.topicId,
+      correct: row.res.correct,
+      ms: 0,
+      difficulty: row.problem.difficulty,
+      hintsUsed: 0,
+      seed: row.problem.seed,
+      mode: 'quiz',
+    });
+  }
+  router();
+}
+
+function paintQuizResults(root) {
+  const { rows, score, total } = quizRun.marked;
+  const pct = total ? Math.round((score / total) * 100) : 0;
+
+  root.appendChild(h('div', { class: 'pagehead' }, [
+    h('p', { class: 'eyebrow', text: quizRun.timedOut ? 'Time ran out' : 'Quiz finished' }),
+    h('h1', { text: `${Math.round(score * 100) / 100} out of ${total}` }),
+    h('p', { class: 'lead', text: `${pct}% · ${quizRun.plan.partial
+      ? 'partial credit counted on answers that were partly right'
+      : 'marked right or wrong, no partial credit'}.` }),
+  ]));
+
+  if (total < 30) {
+    root.appendChild(h('div', { class: 'caveat' }, [
+      h('strong', { text: 'A short quiz is a noisy measurement. ' }),
+      `${total} questions tells you roughly where you are, not precisely. `
+      + 'Two attempts on the same topic can differ by a lot without anything changing.',
+    ]));
+  }
+
+  for (const [i, row] of rows.entries()) {
+    const card = h('section', { class: `card quizrow ${row.res.correct ? 'ok' : 'no'}` });
+    card.appendChild(h('div', { class: 'ptop' }, [
+      h('span', { class: 'ptopic', text: `${i + 1}. ${row.problem.topicName || ''}` }),
+      h('span', {
+        class: `pill ${row.res.correct ? 'ai' : 'warn'}`,
+        text: row.credit === 1 ? 'right' : row.credit > 0
+          ? `${Math.round(row.credit * 100)}% credit` : 'wrong',
+      }),
+    ]));
+    card.appendChild(h('div', { class: 'stem', html: row.problem.stem }));
+    card.appendChild(h('p', { class: 'small' }, [
+      h('span', { class: 'muted', text: 'You wrote: ' }),
+      h('code', { text: row.response || '(nothing)' }),
+    ]));
+    if (!row.res.correct) {
+      card.appendChild(h('p', { html: `<span class="muted">The answer: </span><strong>${row.problem.answerHtml || ''}</strong>` }));
+      if (row.res.detail) card.appendChild(h('p', { class: 'small muted', text: row.res.detail }));
+    }
+    root.appendChild(card);
+  }
+
+  root.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn', type: 'button',
+      onclick: () => { startQuiz(quizRun.plan); },
+    }, 'Another quiz like this'),
+    h('a', { class: 'btn ghost', href: '#/start' }, 'Back to the start'),
+  ]));
 }

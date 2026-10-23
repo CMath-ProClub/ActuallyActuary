@@ -794,3 +794,97 @@ footer {
   .flowstep { padding: 20px 16px 18px; }
   .flowq { font-size: 1.5rem; }
 }
+
+/* --------------------------------------------------------------- workspace */
+
+.setupgrid {
+  display: grid; gap: 14px; margin: 16px 0 4px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.wsproblem .card { margin-bottom: 14px; }
+.wsfeedback:empty { display: none; }
+.wsfeedback { margin-top: 14px; }
+
+.wspanels { padding: 0; overflow: hidden; }
+
+.tabstrip {
+  display: flex; gap: 0; border-bottom: 1px solid var(--edge);
+  background: var(--sunk);
+}
+.tab {
+  font-family: var(--face-ui); font-size: .72rem;
+  text-transform: uppercase; letter-spacing: .1em;
+  padding: 11px 16px; border: 0; border-right: 1px solid var(--edge);
+  background: none; color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--ink); background: var(--paper); border-bottom-color: var(--accent); }
+
+.tabbody { padding: 16px 18px 18px; }
+
+/* the board */
+.boardtools {
+  display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.inkdot {
+  width: 20px; height: 20px; padding: 0; cursor: pointer;
+  border: 1px solid var(--edge); background: none;
+}
+.inkdot.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+.boardcanvas {
+  display: block; width: 100%; height: 420px;
+  background: var(--paper);
+  /* Ruled, like the pad you would otherwise be using. */
+  background-image: repeating-linear-gradient(
+    to bottom, transparent, transparent 27px, var(--hair) 27px, var(--hair) 28px);
+  border: 1px solid var(--edge);
+  cursor: crosshair;
+}
+
+/* the graph */
+.graphhost { width: 100%; height: 420px; border: 1px solid var(--edge); background: var(--paper); }
+.plotcanvas, .desmoshost { display: block; width: 100%; height: 100%; }
+
+/* the photo shelf */
+.dropzone {
+  border: 1px dashed var(--edge); background: var(--sunk);
+  padding: 18px; text-align: center; margin-bottom: 12px;
+}
+.dropzone.over { border-color: var(--accent); background: var(--accent-wash); }
+.dropzone .cta { justify-content: center; }
+.dropline {
+  font-family: var(--face-ui); font-size: .78rem;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+}
+
+.shelf { display: flex; flex-direction: column; gap: 14px; }
+.shelfitem { margin: 0; border: 1px solid var(--edge); background: var(--paper); padding: 10px; }
+.shelfimg {
+  display: block; width: 100%; max-height: 220px; object-fit: contain;
+  background: var(--sunk); cursor: zoom-in;
+}
+.shelfimg.big { max-height: none; cursor: zoom-out; }
+.shelfrow { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.shelfrow .textinput { flex: 1 1 auto; }
+.shelfmeta { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.typedrow { margin-top: 20px; border-top: 1px solid var(--hair); padding-top: 14px; }
+
+/* quiz review */
+.quizrow { border-left: 3px solid var(--edge); }
+.quizrow.ok { border-left-color: var(--good); }
+.quizrow.no { border-left-color: var(--bad); }
+.steps { margin: 8px 0 0; padding-left: 20px; }
+.steps li { margin-bottom: 10px; }
+.steptitle {
+  font-family: var(--face-ui); font-size: .68rem; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--faint); display: block;
+}
+.stepbody { font-family: var(--face-math); font-size: 1.05rem; color: var(--ink); }
+
+@media (max-width: 560px) {
+  .boardcanvas, .graphhost { height: 320px; }
+  .tab { padding: 10px 11px; font-size: .66rem; letter-spacing: .06em; }
+}
