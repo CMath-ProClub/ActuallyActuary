@@ -1487,3 +1487,71 @@ body.noscroll { overflow: hidden; }
   font-size: 0.78rem;
 }
 .watchline { margin-top: 4px; }
+
+
+/* ------------------------------------------------------------- the graph */
+
+.graphwrap { position: relative; }
+.graphtools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.examgraph { height: 360px; }
+
+/* The whole window, for when a curve needs room. */
+.graphwrap.full {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--desk);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+}
+.graphwrap.full .examgraph { flex: 1 1 auto; height: auto; }
+.graphwrap.full .graphgrip { display: none; }
+
+.graphgrip {
+  height: 12px;
+  margin-top: -1px;
+  border: 1px solid var(--edge);
+  border-top: 0;
+  background-image: repeating-linear-gradient(
+    90deg, var(--edge) 0 10px, transparent 10px 20px
+  );
+  background-position: center;
+  background-size: 20px 1px;
+  background-repeat: repeat-x;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+/* Three unlabelled curves is a puzzle, not a graph. */
+.graphlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.legenditem { display: inline-flex; align-items: center; gap: 6px; }
+.legendswatch {
+  width: 16px;
+  height: 3px;
+  display: inline-block;
+  background: var(--muted);
+}
+.legenditem.truth .legendswatch { background: #3987e5; }
+.legenditem.yours .legendswatch {
+  background: repeating-linear-gradient(90deg, #d95926 0 5px, transparent 5px 8px);
+}
+.legenditem.original .legendswatch { background: #6c7482; }
+
+@media (max-width: 620px) {
+  .examgraph { height: 280px; }
+}

@@ -3738,6 +3738,9 @@ function paintPeekProblem(slot, description, person) {
 /* ===================================================================== quiz */
 
 let quizRun = null;
+/* Whether the graph panel is open. Kept out of the run itself because it is
+   a view preference, not part of the attempt. */
+let graphOpen = false;
 /* ====================================================== the calculus exam */
 
 /* ===================================================================== lock in */
@@ -3995,23 +3998,112 @@ function startExam(count) {
    even look like" is exactly the question a wrong answer raises.
 
    Some questions do not get one at all - see noGraph. */
+/* The graph, as somewhere to stay rather than something that flashes up.
+
+   It used to be a one-shot: press the button, get a picture, lose it the
+   moment you moved on. A graph is worth more than that - it is where "my
+   answer is wrong" turns into "my answer is wrong HERE" - so this one
+   stays open across questions, can be dragged and zoomed and traced, and
+   can be made as big as the window. */
 function examGraph(problem, answer, slot) {
   slot.innerHTML = '';
+  const wrap = h('div', { class: 'graphwrap' });
+  const tools = h('div', { class: 'graphtools' });
   const host = h('div', { class: 'graphhost examgraph' });
   const note = h('p', { class: 'small muted', text: 'Drawing...' });
-  slot.appendChild(host);
-  slot.appendChild(note);
+  const grip = h('div', { class: 'graphgrip', title: 'Drag to resize' });
+  wrap.appendChild(tools);
+  wrap.appendChild(host);
+  wrap.appendChild(grip);
+  wrap.appendChild(note);
+  slot.appendChild(wrap);
+
+  const key = `graph:${store.activeProfile().id}`;
+  const saved = persist.loadNumber(key, 0);
+  if (saved) host.style.height = `${saved}px`;
+
+  let api = null;
+  let full = false;
+
+  const chip = (label, onclick, title) => h('button', {
+    class: 'chip', type: 'button', onclick, title: title || label,
+  }, label);
+
+  const sizeBy = (delta) => {
+    if (full) return;
+    const now = host.getBoundingClientRect().height;
+    const next = Math.max(200, Math.min(900, now + delta));
+    host.style.height = `${next}px`;
+    persist.saveNumber(key, next);
+    if (api && api.resize) setTimeout(() => api.resize(), 30);
+  };
+
+  const fullBtn = chip('Expand', () => {
+    full = !full;
+    wrap.classList.toggle('full', full);
+    fullBtn.textContent = full ? 'Shrink' : 'Expand';
+    document.body.classList.toggle('noscroll', full);
+    if (api && api.resize) setTimeout(() => api.resize(), 30);
+  });
+
+  tools.appendChild(chip('\u2212', () => api && api.zoomOut && api.zoomOut(), 'Zoom out'));
+  tools.appendChild(chip('+', () => api && api.zoomIn && api.zoomIn(), 'Zoom in'));
+  tools.appendChild(chip('Fit', () => api && api.resetView && api.resetView(), 'Back to the whole picture'));
+  tools.appendChild(chip('Taller', () => sizeBy(140)));
+  tools.appendChild(chip('Shorter', () => sizeBy(-140)));
+  tools.appendChild(fullBtn);
+  tools.appendChild(chip('Close', () => {
+    if (full) { full = false; document.body.classList.remove('noscroll'); }
+    graphOpen = false;
+    slot.innerHTML = '';
+  }));
+
+  /* Drag the bottom edge, the same as the scratch paper. */
+  let dragging = null;
+  grip.addEventListener('pointerdown', (e) => {
+    if (full) return;
+    grip.setPointerCapture(e.pointerId);
+    dragging = { y: e.clientY, from: host.getBoundingClientRect().height };
+  });
+  grip.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const next = Math.max(200, Math.min(900, dragging.from + (e.clientY - dragging.y)));
+    host.style.height = `${next}px`;
+    if (api && api.resize) api.resize();
+  });
+  const stopDrag = () => {
+    if (!dragging) return;
+    dragging = null;
+    persist.saveNumber(key, host.getBoundingClientRect().height);
+  };
+  grip.addEventListener('pointerup', stopDrag);
+  grip.addEventListener('pointercancel', stopDrag);
+
   graph.createGraph(host, { dark: darkNow(), key: store.activeProfile().settings.desmosKey })
-    .then((api) => {
+    .then((made) => {
+      api = made;
       const series = graph.derivativeSeries(problem, answer);
       if (!series.length) {
         note.textContent = 'There is nothing to draw for this one.';
         return;
       }
       api.setFunctions(series);
-      note.textContent = series.some((s) => s.role === 'yours')
+      /* Desmos has its own controls; the plotter's are the chips above. */
+      const how = api.kind === 'plotter'
+        ? ' Drag to move it, scroll to zoom, hover to read the values off.'
+        : '';
+      note.textContent = (series.some((s) => s.role === 'yours')
         ? 'Your answer is dashed. Where it leaves the solid line is where it went wrong.'
-        : 'The function and its derivative.';
+        : 'The function and its derivative.') + how;
+      /* A legend, because three unlabelled curves is a puzzle. */
+      const legend = h('div', { class: 'graphlegend' });
+      for (const s of series) {
+        legend.appendChild(h('span', { class: `legenditem ${s.role}` }, [
+          h('span', { class: 'legendswatch' }),
+          h('span', { text: s.label || s.role }),
+        ]));
+      }
+      wrap.insertBefore(legend, note);
     });
 }
 
@@ -4195,6 +4287,11 @@ function renderQuiz(root) {
      learning. */
   const marking = h('div', { class: 'exammark' });
   const graphSlot = h('div', { class: 'examgraphslot' });
+  /* Opened once, open until closed: moving to the next question should not
+     take the graph away. */
+  if (graphOpen && !q.noGraph) {
+    setTimeout(() => examGraph(q, lastLine(quizRun.responses[quizRun.index] || ''), graphSlot), 0);
+  }
   const immediate = !!(quizRun.plan && quizRun.plan.immediate);
   let marked = !!(quizRun.verdicts && quizRun.verdicts[quizRun.index]);
 
@@ -4309,7 +4406,7 @@ function renderQuiz(root) {
       immediate && !q.noGraph
         ? h('button', {
           class: 'btn ghost', type: 'button',
-          onclick: () => examGraph(q, lastLine(readAnswer()), graphSlot),
+          onclick: () => { graphOpen = true; examGraph(q, lastLine(readAnswer()), graphSlot); },
         }, 'See it graphed')
         : null,
       /* Paper is not a reward for finishing - it is how you get there. */

@@ -77,6 +77,31 @@ function niceStep(range, target = 6) {
 /* A y-range that ignores poles. tan(x) and 1/x run to infinity, and letting
    them set the scale flattens every other curve to a horizontal line, so the
    range comes from the middle of the sorted values rather than the extremes. */
+/* Zoom a window about a point, keeping that point where it is.
+
+   Pulled out of the plotter because it is the part where being wrong is
+   silent: the picture still moves, it just drifts away from whatever you
+   were pointing at, and nobody can tell by looking whether the maths was
+   right. tools/test_workspace.mjs checks the fixed point directly. */
+export function zoomWindow(view, factor, ax, ay) {
+  return {
+    xmin: ax + (view.xmin - ax) * factor,
+    xmax: ax + (view.xmax - ax) * factor,
+    ymin: ay + (view.ymin - ay) * factor,
+    ymax: ay + (view.ymax - ay) * factor,
+  };
+}
+
+/* Move a window by a drag, in data units. */
+export function panWindow(view, dx, dy) {
+  return {
+    xmin: view.xmin - dx,
+    xmax: view.xmax - dx,
+    ymin: view.ymin + dy,
+    ymax: view.ymax + dy,
+  };
+}
+
 export function robustRange(values, pad = 0.12) {
   const finite = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   if (!finite.length) return { lo: -5, hi: 5 };
@@ -98,6 +123,19 @@ export function robustRange(values, pad = 0.12) {
   return { lo, hi };
 }
 
+/* The built-in plotter.
+
+   Canvas, no network, no key. It draws the same curves Desmos would and
+   answers the same question - does my derivative match the real one - but
+   it also has to be somewhere you would WANT to spend time, because on a
+   locked-down school network it is the only graph there is.
+
+   So it pans, it zooms about the cursor, and it traces: put the pointer
+   anywhere and it reads off x and the y of every curve at that x. That last
+   one is the whole point of plotting your answer against the truth. "Where
+   it leaves the solid line is where it went wrong" is only useful if you
+   can see WHERE, and a number under the crosshair is a better answer than
+   squinting at two lines. */
 function createPlotter(container, opts = {}) {
   const canvas = document.createElement('canvas');
   canvas.className = 'plotcanvas';
@@ -105,15 +143,31 @@ function createPlotter(container, opts = {}) {
   const ctx = canvas.getContext('2d');
 
   let series = [];
-  let window_ = { xmin: -6, xmax: 6 };
   let dark = !!opts.dark;
   let size = { w: 1, h: 1 };
+
+  /* The window on the plane. Set from the curves the first time they
+     arrive, and owned by the person after that - until they ask for it
+     back. */
+  const view = { xmin: -6, xmax: 6, ymin: -4, ymax: 4 };
+  let framed = false;
+  let drag = null;
+  let trace = null;
 
   const ink = () => (dark ? '#c3c9d2' : '#3b434e');
   const grid = () => (dark ? '#262c36' : '#e6e1d5');
   const axis = () => (dark ? '#39414d' : '#c9c2b2');
   const tick = () => (dark ? '#8b93a0' : '#7b8290');
   const surface = () => (dark ? '#161a21' : '#fffdf8');
+
+  const PAD = { left: 46, right: 12, top: 12, bottom: 26 };
+  const plotW = () => Math.max(1, size.w - PAD.left - PAD.right);
+  const plotH = () => Math.max(1, size.h - PAD.top - PAD.bottom);
+
+  const X = (x) => PAD.left + ((x - view.xmin) / (view.xmax - view.xmin)) * plotW();
+  const Y = (y) => PAD.top + plotH() - ((y - view.ymin) / (view.ymax - view.ymin)) * plotH();
+  const xAt = (px) => view.xmin + ((px - PAD.left) / plotW()) * (view.xmax - view.xmin);
+  const yAt = (py) => view.ymin + ((PAD.top + plotH() - py) / plotH()) * (view.ymax - view.ymin);
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -125,101 +179,238 @@ function createPlotter(container, opts = {}) {
     draw();
   }
 
-  function sample() {
-    const { xmin, xmax } = window_;
-    const steps = Math.max(120, Math.floor(size.w));
-    const out = [];
-    for (const s of series) {
-      if (!s.fn) continue;
-      const points = [];
-      for (let i = 0; i <= steps; i++) {
-        const x = xmin + ((xmax - xmin) * i) / steps;
-        let y = NaN;
-        try { y = s.fn({ x }); } catch { y = NaN; }
-        points.push({ x, y: Number.isFinite(y) ? y : NaN });
-      }
-      out.push({ ...s, points });
+  function valueAt(s, x) {
+    if (!s.fn) return NaN;
+    try {
+      const y = s.fn({ x });
+      return Number.isFinite(y) ? y : NaN;
+    } catch (err) {
+      return NaN;
     }
-    return out;
   }
 
-  function draw() {
-    const plotted = sample();
+  function sample() {
+    const steps = Math.max(160, Math.floor(size.w * 1.5));
+    return series.filter((s) => s.fn).map((s) => {
+      const points = [];
+      for (let i = 0; i <= steps; i++) {
+        const x = view.xmin + ((view.xmax - view.xmin) * i) / steps;
+        points.push({ x, y: valueAt(s, x) });
+      }
+      return { ...s, points };
+    });
+  }
+
+  /* Frame the picture on the curves, once. A derivative that oscillates
+     between -40 and 40 and an f that sits near zero need the same axes, so
+     the range comes from all of them together. */
+  function frame() {
     const all = [];
-    for (const s of plotted) for (const p of s.points) if (Number.isFinite(p.y)) all.push(p.y);
+    for (const s of series) {
+      if (!s.fn) continue;
+      for (let i = 0; i <= 200; i++) {
+        const x = -6 + (12 * i) / 200;
+        const y = valueAt(s, x);
+        if (Number.isFinite(y)) all.push(y);
+      }
+    }
     const { lo, hi } = robustRange(all);
+    view.xmin = -6;
+    view.xmax = 6;
+    view.ymin = lo;
+    view.ymax = hi;
+    framed = true;
+  }
 
-    const pad = { left: 44, right: 12, top: 12, bottom: 26 };
-    const w = size.w - pad.left - pad.right;
-    const h = size.h - pad.top - pad.bottom;
-    const X = (x) => pad.left + ((x - window_.xmin) / (window_.xmax - window_.xmin)) * w;
-    const Y = (y) => pad.top + h - ((y - lo) / (hi - lo)) * h;
-
-    ctx.save();
-    ctx.fillStyle = surface();
-    ctx.fillRect(0, 0, size.w, size.h);
-
-    /* grid and ticks */
+  function drawAxes() {
     ctx.font = '11px ui-monospace, Consolas, monospace';
     ctx.strokeStyle = grid();
     ctx.fillStyle = tick();
     ctx.lineWidth = 1;
-    const xStep = niceStep(window_.xmax - window_.xmin);
-    for (let x = Math.ceil(window_.xmin / xStep) * xStep; x <= window_.xmax; x += xStep) {
+
+    const xStep = niceStep(view.xmax - view.xmin);
+    for (let x = Math.ceil(view.xmin / xStep) * xStep; x <= view.xmax; x += xStep) {
       const px = Math.round(X(x)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(px, pad.top);
-      ctx.lineTo(px, pad.top + h);
+      ctx.moveTo(px, PAD.top);
+      ctx.lineTo(px, PAD.top + plotH());
       ctx.stroke();
-      if (Math.abs(x) > 1e-9) {
-        ctx.textAlign = 'center';
-        ctx.fillText(String(Number(x.toFixed(2))), px, pad.top + h + 16);
-      }
+      ctx.textAlign = 'center';
+      ctx.fillText(trim(x), px, size.h - 9);
     }
-    const yStep = niceStep(hi - lo);
-    for (let y = Math.ceil(lo / yStep) * yStep; y <= hi; y += yStep) {
+
+    const yStep = niceStep(view.ymax - view.ymin);
+    for (let y = Math.ceil(view.ymin / yStep) * yStep; y <= view.ymax; y += yStep) {
       const py = Math.round(Y(y)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(pad.left, py);
-      ctx.lineTo(pad.left + w, py);
+      ctx.moveTo(PAD.left, py);
+      ctx.lineTo(PAD.left + plotW(), py);
       ctx.stroke();
       ctx.textAlign = 'right';
-      ctx.fillText(String(Number(y.toFixed(2))), pad.left - 7, py + 4);
+      ctx.fillText(trim(y), PAD.left - 7, py + 4);
     }
 
-    /* axes */
+    /* The axes themselves, darker, and only when they are on screen. */
     ctx.strokeStyle = axis();
     ctx.lineWidth = 1.4;
-    if (lo <= 0 && hi >= 0) {
+    if (view.ymin < 0 && view.ymax > 0) {
       const py = Math.round(Y(0)) + 0.5;
-      ctx.beginPath(); ctx.moveTo(pad.left, py); ctx.lineTo(pad.left + w, py); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, py);
+      ctx.lineTo(PAD.left + plotW(), py);
+      ctx.stroke();
     }
-    if (window_.xmin <= 0 && window_.xmax >= 0) {
+    if (view.xmin < 0 && view.xmax > 0) {
       const px = Math.round(X(0)) + 0.5;
-      ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, pad.top + h); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px, PAD.top);
+      ctx.lineTo(px, PAD.top + plotH());
+      ctx.stroke();
     }
+  }
 
-    /* curves */
+  function trim(v) {
+    const r = Math.round(v * 1000) / 1000;
+    if (Math.abs(r) < 1e-9) return '0';
+    return String(r);
+  }
+
+  function drawCurves(plotted) {
+    const span = view.ymax - view.ymin;
     for (const s of plotted) {
       ctx.strokeStyle = (SERIES[s.role] || SERIES.truth)[dark ? 1 : 0];
       ctx.lineWidth = s.role === 'yours' ? 2.6 : s.role === 'original' ? 1.4 : 2;
       ctx.setLineDash(s.role === 'yours' ? [7, 5] : []);
       ctx.beginPath();
       let down = false;
+      let lastY = NaN;
       for (const p of s.points) {
-        if (!Number.isFinite(p.y) || p.y < lo - (hi - lo) || p.y > hi + (hi - lo)) {
-          down = false;
-          continue;
-        }
+        /* A pole is a break in the line, not a vertical stripe across the
+           picture: tan(x) must not be joined up through infinity. */
+        const offScreen = !Number.isFinite(p.y)
+          || p.y < view.ymin - span * 2 || p.y > view.ymax + span * 2;
+        const jumped = Number.isFinite(lastY) && Number.isFinite(p.y)
+          && Math.abs(p.y - lastY) > span * 1.5;
+        if (offScreen || jumped) { down = false; lastY = p.y; continue; }
         const px = X(p.x);
         const py = Y(p.y);
         if (!down) { ctx.moveTo(px, py); down = true; } else ctx.lineTo(px, py);
+        lastY = p.y;
       }
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
+
+  /* The crosshair, and what every curve is worth where it sits. */
+  function drawTrace() {
+    if (trace == null) return;
+    const x = trace;
+    const px = X(x);
+    if (px < PAD.left || px > PAD.left + plotW()) return;
+
+    ctx.save();
+    ctx.strokeStyle = axis();
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(px) + 0.5, PAD.top);
+    ctx.lineTo(Math.round(px) + 0.5, PAD.top + plotH());
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const rows = [];
+    for (const s of series) {
+      if (!s.fn) continue;
+      const y = valueAt(s, x);
+      if (!Number.isFinite(y)) continue;
+      const py = Y(y);
+      if (py >= PAD.top && py <= PAD.top + plotH()) {
+        ctx.fillStyle = (SERIES[s.role] || SERIES.truth)[dark ? 1 : 0];
+        ctx.beginPath();
+        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      rows.push({ label: s.label || s.role, y, role: s.role });
+    }
+
+    /* The readout, kept on screen whichever side the pointer is. */
+    const lines = [`x = ${trim(Math.round(x * 1000) / 1000)}`]
+      .concat(rows.map((r) => `${r.label}: ${trim(Math.round(r.y * 1000) / 1000)}`));
+    ctx.font = '11px ui-monospace, Consolas, monospace';
+    const wide = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14;
+    const tall = lines.length * 15 + 8;
+    const left = px + wide + 12 < size.w ? px + 10 : px - wide - 10;
+    const top = PAD.top + 6;
+    ctx.fillStyle = dark ? 'rgba(12,14,19,0.92)' : 'rgba(255,255,255,0.94)';
+    ctx.strokeStyle = axis();
+    ctx.lineWidth = 1;
+    ctx.fillRect(left, top, wide, tall);
+    ctx.strokeRect(left + 0.5, top + 0.5, wide, tall);
+    ctx.textAlign = 'left';
+    lines.forEach((line, i) => {
+      ctx.fillStyle = i === 0 ? ink()
+        : (SERIES[rows[i - 1].role] || SERIES.truth)[dark ? 1 : 0];
+      ctx.fillText(line, left + 7, top + 17 + i * 15);
+    });
     ctx.restore();
   }
+
+  function draw() {
+    if (!framed && series.length) frame();
+    ctx.save();
+    ctx.fillStyle = surface();
+    ctx.fillRect(0, 0, size.w, size.h);
+    drawAxes();
+    drawCurves(sample());
+    drawTrace();
+    ctx.restore();
+  }
+
+  /* ---------------------------------------------------------- handling */
+
+  function zoomBy(factor, px, py) {
+    const ax = px == null ? (view.xmin + view.xmax) / 2 : xAt(px);
+    const ay = py == null ? (view.ymin + view.ymax) / 2 : yAt(py);
+    Object.assign(view, zoomWindow(view, factor, ax, ay));
+    draw();
+  }
+
+  function onWheel(ev) {
+    ev.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomBy(ev.deltaY > 0 ? 1.12 : 1 / 1.12, ev.clientX - rect.left, ev.clientY - rect.top);
+  }
+
+  function onDown(ev) {
+    canvas.setPointerCapture(ev.pointerId);
+    drag = { x: ev.clientX, y: ev.clientY };
+  }
+
+  function onMove(ev) {
+    const rect = canvas.getBoundingClientRect();
+    if (drag) {
+      const dx = (ev.clientX - drag.x) / plotW() * (view.xmax - view.xmin);
+      const dy = (ev.clientY - drag.y) / plotH() * (view.ymax - view.ymin);
+      Object.assign(view, panWindow(view, dx, dy));
+      drag = { x: ev.clientX, y: ev.clientY };
+      draw();
+      return;
+    }
+    trace = xAt(ev.clientX - rect.left);
+    draw();
+  }
+
+  function onUp() { drag = null; }
+  function onLeave() { drag = null; trace = null; draw(); }
+
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('pointerleave', onLeave);
+  canvas.style.touchAction = 'none';
 
   const observer = typeof ResizeObserver !== 'undefined'
     ? new ResizeObserver(() => resize()) : null;
@@ -228,11 +419,34 @@ function createPlotter(container, opts = {}) {
 
   return {
     kind: 'plotter',
-    setFunctions(list) { series = list || []; draw(); },
-    setWindow(xmin, xmax) { window_ = { xmin, xmax }; draw(); },
+    setFunctions(list) {
+      series = list || [];
+      framed = false;
+      draw();
+    },
+    setWindow(xmin, xmax) {
+      view.xmin = xmin;
+      view.xmax = xmax;
+      framed = true;
+      draw();
+    },
     setDark(flag) { dark = !!flag; draw(); },
+    zoomIn() { zoomBy(1 / 1.3); },
+    zoomOut() { zoomBy(1.3); },
+    resetView() { framed = false; draw(); },
+    view: () => ({ ...view }),
     redraw: draw,
-    destroy() { if (observer) observer.disconnect(); container.innerHTML = ''; },
+    resize,
+    destroy() {
+      if (observer) observer.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('pointerleave', onLeave);
+      container.innerHTML = '';
+    },
   };
 }
 
