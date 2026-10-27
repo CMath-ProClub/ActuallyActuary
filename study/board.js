@@ -21,12 +21,20 @@
    No dependency, no framework: a canvas, pointer events, and a redraw. */
 
 const TOOLS = {
-  pen: { width: 2.6, alpha: 1, composite: 'source-over' },
-  marker: { width: 9, alpha: 0.38, composite: 'source-over' },
+  /* `vary` is how much a stylus's pressure is allowed to change the width.
+     A pen varies a lot, a highlighter barely at all - a highlighter that
+     thins out under a light touch looks broken rather than expressive. */
+  pen: { width: 2.6, alpha: 1, composite: 'source-over', vary: 0.75 },
+  marker: { width: 9, alpha: 0.38, composite: 'source-over', vary: 0.15 },
   /* A thin pen for annotating a graph, where the drawing has to stay
      readable over a grid. */
-  fine: { width: 1.6, alpha: 1, composite: 'source-over' },
+  fine: { width: 1.6, alpha: 1, composite: 'source-over', vary: 0.5 },
 };
+
+/* A mouse reports pressure 0.5 and never moves off it; a finger reports
+   either 0 or 1. Only a real stylus reports anything in between, so only a
+   real stylus gets variable width. */
+const PEN_POINTER = 'pen';
 
 /* Paper is white, in both themes.
 
@@ -118,6 +126,14 @@ export function createBoard(canvas, options = {}) {
      it back, and a stroke that was undone on one device still merges. */
   const undone = [];
 
+  /* Once a stylus has been seen, fingers stop drawing.
+
+     This is palm rejection, and on a touchscreen laptop it is the
+     difference between writing on the board and smearing across it: the
+     hand resting on the screen arrives as a touch pointer at the same time
+     as the pen tip. Touch still pans and scrolls, it just stops marking. */
+  let sawPen = false;
+
   const notify = (stroke, kind) => {
     if (typeof options.onChange === 'function') options.onChange(stroke, kind);
   };
@@ -138,10 +154,16 @@ export function createBoard(canvas, options = {}) {
   const toNorm = (ev) => {
     const rect = canvas.getBoundingClientRect();
     const span = size.w * view.zoom;
-    return {
+    const point = {
       x: (ev.clientX - rect.left) / span + view.x,
       y: (ev.clientY - rect.top) / span + view.y,
     };
+    /* Pressure, but only from something that actually has any. */
+    if (ev.pointerType === PEN_POINTER && typeof ev.pressure === 'number'
+      && ev.pressure > 0) {
+      point.p = Math.max(0.05, Math.min(1, ev.pressure));
+    }
+    return point;
   };
   const toPixels = (p) => ({
     x: (p.x - view.x) * size.w * view.zoom,
@@ -191,37 +213,61 @@ export function createBoard(canvas, options = {}) {
     ctx.restore();
   }
 
+  /* The width of the ink at one point of one stroke. */
+  function widthAt(stroke, spec, point) {
+    const base = spec.width * (stroke.scale || 1) * view.zoom;
+    const vary = spec.vary || 0;
+    if (!vary || !point || point.p == null) return base;
+    /* 0.5 is the resting value, so a firm press thickens and a light one
+       thins, around the width the pen would have had anyway. */
+    return base * (1 + vary * (point.p - 0.5) * 2);
+  }
+
+  /* One segment of a stroke, drawn with the midpoint smoothing the whole
+     stroke uses, so an incrementally drawn line and a redrawn one are the
+     same line. */
+  function drawSegment(stroke, spec, i) {
+    const pts = stroke.points;
+    if (i < 1) return;
+    const prev = toPixels(pts[i - 1]);
+    const cur = toPixels(pts[i]);
+    const before = i >= 2 ? toPixels(pts[i - 2]) : prev;
+    const from = { x: (before.x + prev.x) / 2, y: (before.y + prev.y) / 2 };
+    const to = { x: (prev.x + cur.x) / 2, y: (prev.y + cur.y) / 2 };
+    ctx.beginPath();
+    ctx.lineWidth = widthAt(stroke, spec, pts[i]);
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(prev.x, prev.y, to.x, to.y);
+    ctx.stroke();
+  }
+
+  function penFor(stroke, spec) {
+    ctx.globalAlpha = spec.alpha;
+    ctx.strokeStyle = colorFor(stroke);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+
   function drawStroke(stroke) {
     if (stroke.dead) return;
     const spec = TOOLS[stroke.tool] || TOOLS.pen;
     const pts = stroke.points;
     if (!pts.length) return;
     ctx.save();
-    ctx.globalAlpha = spec.alpha;
-    ctx.strokeStyle = colorFor(stroke);
-    /* Ink has a real width on the page, so zooming in makes it thicker on
-       screen - the same as moving closer to paper. */
-    ctx.lineWidth = spec.width * (stroke.scale || 1) * view.zoom;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    const first = toPixels(pts[0]);
-    ctx.moveTo(first.x, first.y);
+    penFor(stroke, spec);
     if (pts.length === 1) {
       /* A tap is a dot, not nothing. */
-      ctx.lineTo(first.x + 0.1, first.y);
+      const only = toPixels(pts[0]);
+      ctx.beginPath();
+      ctx.lineWidth = widthAt(stroke, spec, pts[0]);
+      ctx.moveTo(only.x, only.y);
+      ctx.lineTo(only.x + 0.1, only.y);
+      ctx.stroke();
     } else {
-      /* Midpoint curves: cheap smoothing that keeps handwriting legible
-         without turning it into someone else's handwriting. */
-      for (let i = 1; i < pts.length - 1; i++) {
-        const a = toPixels(pts[i]);
-        const b = toPixels(pts[i + 1]);
-        ctx.quadraticCurveTo(a.x, a.y, (a.x + b.x) / 2, (a.y + b.y) / 2);
-      }
-      const last = toPixels(pts[pts.length - 1]);
-      ctx.lineTo(last.x, last.y);
+      /* Segment at a time, because the width can change along the stroke
+         and a single path can only have one. */
+      for (let i = 1; i < pts.length; i++) drawSegment(stroke, spec, i);
     }
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -237,7 +283,13 @@ export function createBoard(canvas, options = {}) {
 
   function begin(ev) {
     if (state.readOnly) return;
-    if (ev.button !== undefined && ev.button !== 0) return;
+    if (ev.pointerType === PEN_POINTER) sawPen = true;
+    /* The hand resting on a touchscreen is not trying to write. */
+    if (sawPen && ev.pointerType === 'touch') return;
+    /* The far end of a stylus is an eraser, and people turn it round
+       without thinking about it. */
+    const inverted = ev.pointerType === PEN_POINTER && (ev.buttons & 32) !== 0;
+    if (ev.button !== undefined && ev.button !== 0 && !inverted) return;
     canvas.setPointerCapture(ev.pointerId);
     /* The hand tool drags the sheet instead of marking it. */
     if (state.tool === 'pan') {
@@ -245,7 +297,7 @@ export function createBoard(canvas, options = {}) {
       return;
     }
     const point = toNorm(ev);
-    if (state.tool === 'eraser') {
+    if (state.tool === 'eraser' || inverted) {
       eraseAt(point);
       drawing = { erasing: true };
       return;
@@ -263,11 +315,22 @@ export function createBoard(canvas, options = {}) {
       at: Date.now(),
     };
     state.strokes.push(drawing);
-    redraw();
+    /* A new stroke only has to draw ITSELF. Redrawing the whole board on
+       every pointer sample is what made writing feel like dragging. */
+    ctx.save();
+    penFor(drawing, TOOLS[drawing.tool] || TOOLS.pen);
+    const only = toPixels(point);
+    ctx.beginPath();
+    ctx.lineWidth = widthAt(drawing, TOOLS[drawing.tool] || TOOLS.pen, point);
+    ctx.moveTo(only.x, only.y);
+    ctx.lineTo(only.x + 0.1, only.y);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function extend(ev) {
     if (!drawing) return;
+    if (sawPen && ev.pointerType === 'touch' && !drawing.panning) return;
     if (drawing.panning) {
       const span = size.w * view.zoom;
       view.x -= (ev.clientX - drawing.from.x) / span;
@@ -277,16 +340,32 @@ export function createBoard(canvas, options = {}) {
       notifyView();
       return;
     }
-    const point = toNorm(ev);
-    if (drawing.erasing) { eraseAt(point); return; }
-    const pts = drawing.points;
-    const last = pts[pts.length - 1];
-    /* Drop points that add nothing. Fewer points means a smaller payload to
-       send to the other device and a faster redraw. The threshold is in
-       SCREEN terms, or zooming in would quietly coarsen the handwriting. */
-    if (Math.hypot(point.x - last.x, point.y - last.y) < 0.002 / view.zoom) return;
-    pts.push(point);
-    redraw();
+    if (drawing.erasing) { eraseAt(toNorm(ev)); return; }
+
+    /* Every sample the device took since the last frame, not just the one
+       the browser chose to tell us about. A quick stroke on a 120Hz pen
+       produces several of these per frame, and using them is the
+       difference between a curve and a polygon. */
+    const samples = typeof ev.getCoalescedEvents === 'function'
+      ? ev.getCoalescedEvents() : [];
+    const points = (samples.length ? samples : [ev]).map(toNorm);
+
+    const spec = TOOLS[drawing.tool] || TOOLS.pen;
+    ctx.save();
+    penFor(drawing, spec);
+    for (const point of points) {
+      const pts = drawing.points;
+      const last = pts[pts.length - 1];
+      /* Drop points that add nothing. Fewer points means a smaller payload
+         to send to the other device and a faster redraw. The threshold is
+         in SCREEN terms, or zooming in would quietly coarsen the
+         handwriting. */
+      if (Math.hypot(point.x - last.x, point.y - last.y) < 0.0012 / view.zoom) continue;
+      pts.push(point);
+      /* Draw only what was just added. */
+      drawSegment(drawing, spec, pts.length - 1);
+    }
+    ctx.restore();
   }
 
   function end() {
@@ -294,6 +373,11 @@ export function createBoard(canvas, options = {}) {
     const finished = drawing;
     drawing = null;
     if (finished.erasing || finished.panning) return;
+    /* One full redraw at the end, so the finished stroke is drawn by the
+       same code that will draw it from then on. Incremental drawing and a
+       redraw must agree, or a stroke would change shape the moment
+       anything else happened. */
+    redraw();
     notify(finished, 'stroke');
   }
 

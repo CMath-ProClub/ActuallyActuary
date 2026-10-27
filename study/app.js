@@ -22,7 +22,7 @@ import * as store from './store.js';
 import * as sched from './scheduler.js';
 import * as charts from './charts.js';
 import * as ollama from './ollama.js';
-import { EXAM_LENGTHS, examSlots } from './exam.js';
+import { EXAM_LENGTHS, examSlots, examConcepts } from './exam.js';
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 
@@ -1831,6 +1831,7 @@ function renderStart(root) {
       }, `${n}`)),
       h('span', { class: 'small muted', text: 'questions' }),
     ]),
+    examConceptSwitches(),
     /* The other half of it: a test is fixed, a drill reacts. */
     h('div', { class: 'drillcall' }, [
       h('button', {
@@ -3775,6 +3776,73 @@ function startLockIn() {
   startDrill({ focus: LOCK_IN_FOCUS, label: 'Lock in', lockin: true });
 }
 
+/* Choose what the paper is about.
+
+   "I do not need to practise the power rule" is a reasonable thing to say
+   three days before a test, and it is NOT the same as "never show me a
+   polynomial again" - which is why turning a concept off only stops
+   questions whose point is that concept. A chain rule question still uses
+   the power rule inside it. The copy says so, because a switch that
+   quietly means something else is worse than no switch. */
+function examConceptSwitches() {
+  const wrap = h('details', { class: 'concepts' });
+  const skipped = new Set(examSkips());
+  const all = examConcepts();
+  const on = all.length - skipped.size;
+
+  const summary = h('summary', {}, [
+    h('span', { text: 'Choose what is on it' }),
+    h('span', { class: 'conceptcount', text: skipped.size
+      ? `${on} of ${all.length} concepts` : 'everything' }),
+  ]);
+  wrap.appendChild(summary);
+
+  wrap.appendChild(h('p', { class: 'small muted', text: 'Turning one off stops '
+    + 'questions ABOUT it. You will still meet it inside other questions - a '
+    + 'chain rule question still uses the power rule.' }));
+
+  const grid = h('div', { class: 'conceptgrid' });
+  const paint = () => {
+    const off = new Set(examSkips());
+    summary.querySelector('.conceptcount').textContent = off.size
+      ? `${all.length - off.size} of ${all.length} concepts` : 'everything';
+  };
+
+  for (const concept of all) {
+    const skill = SANDBOX_SKILLS[concept.skill] || {};
+    const id = `concept-${concept.skill}`;
+    const box = h('input', {
+      type: 'checkbox', id, checked: !skipped.has(concept.skill),
+    });
+    box.addEventListener('change', () => {
+      const off = new Set(examSkips());
+      if (box.checked) off.delete(concept.skill); else off.add(concept.skill);
+      /* Everything off is not a paper. Keep the last one on and say so. */
+      if (off.size >= all.length) {
+        off.delete(concept.skill);
+        box.checked = true;
+        alert('A test needs at least one concept on it.');
+      }
+      store.setSetting('examSkip', [...off]);
+      paint();
+    });
+    grid.appendChild(h('label', { class: 'conceptrow', for: id }, [
+      box,
+      h('span', { class: 'conceptname', text: skill.name || concept.skill }),
+      h('span', { class: 'conceptshare', text: skill.ask || '' }),
+    ]));
+  }
+  wrap.appendChild(grid);
+
+  wrap.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn small ghost', type: 'button',
+      onclick: () => { store.setSetting('examSkip', []); router(); },
+    }, 'Turn everything back on'),
+  ]));
+  return wrap;
+}
+
 /* The endless drill, which is a different thing from a practice test.
 
    A test is fixed in advance - that is what makes it a test, and why the
@@ -3832,8 +3900,14 @@ function drillQuestion(state, index) {
   return null;
 }
 
+/* The concepts switched off for this profile, as a list of skill ids. */
+function examSkips() {
+  const raw = store.activeProfile().settings.examSkip;
+  return Array.isArray(raw) ? raw : [];
+}
+
 function startExam(count) {
-  const slots = examSlots(count || 30);
+  const slots = examSlots(count || 30, { skip: examSkips() });
   const problems = [];
   const seenStems = new Set();
   for (const slot of slots) {

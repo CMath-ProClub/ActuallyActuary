@@ -49,10 +49,30 @@ export const EXAM_LENGTHS = [20, 30, 40];
    allows. Trimming takes from whichever skill currently has the most slots,
    so a short test loses a second implicit question rather than losing
    implicit altogether. */
-export function examSlots(count) {
-  const total = EXAM_PLAN.reduce((s, e) => s + e.share, 0);
+/* Which concepts a paper is allowed to be ABOUT.
+
+   Turning one off does not mean never meeting it again: a chain rule
+   question still uses the power rule, a quotient still has a polynomial on
+   the bottom, and an implicit question is made of all of them. It means no
+   question whose POINT is that concept. That distinction is the whole
+   value of the switch - "I know the power rule, stop spending my revision
+   on it" is a different request from "never show me a polynomial". */
+export function planFor(skip = []) {
+  const off = new Set(skip || []);
+  const left = EXAM_PLAN.filter((e) => !off.has(e.skill));
+  return left.length ? left : EXAM_PLAN;
+}
+
+/* Everything a paper can be about, for the switches themselves. */
+export function examConcepts() {
+  return EXAM_PLAN.map((e) => ({ skill: e.skill, share: e.share, phase: e.phase }));
+}
+
+export function examSlots(count, opts = {}) {
+  const plan = planFor(opts.skip);
+  const total = plan.reduce((s, e) => s + e.share, 0);
   const slots = [];
-  for (const entry of EXAM_PLAN) {
+  for (const entry of plan) {
     const n = Math.max(1, Math.round((entry.share / total) * count));
     for (let i = 0; i < n; i++) {
       slots.push({
@@ -63,7 +83,7 @@ export function examSlots(count) {
     }
   }
   const countOf = (skill) => slots.filter((s) => s.skill === skill).length;
-  const shareOf = (skill) => (EXAM_PLAN.find((e) => e.skill === skill) || {}).share || 0;
+  const shareOf = (skill) => (plan.find((e) => e.skill === skill) || {}).share || 0;
   while (slots.length > count) {
     let worst = -1;
     let worstN = 1;
@@ -87,7 +107,7 @@ export function examSlots(count) {
   }
   /* Padding happens for a long test: go round again adding to the biggest
      shares, which is where more practice is actually wanted. */
-  const byShare = EXAM_PLAN.slice().sort((a, b) => b.share - a.share);
+  const byShare = plan.slice().sort((a, b) => b.share - a.share);
   let k = 0;
   while (slots.length < count) {
     const entry = byShare[k % byShare.length];

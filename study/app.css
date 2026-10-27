@@ -1413,3 +1413,54 @@ body.noscroll { overflow: hidden; }
   color: var(--accent);
   margin: 0 0 6px;
 }
+
+
+/* --------------------------------------------- choosing what is on a test */
+
+.concepts {
+  margin-top: 14px;
+  border-top: 1px solid var(--edge);
+  padding-top: 12px;
+}
+.concepts > summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--face-ui);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.conceptcount { color: var(--muted); text-transform: none; letter-spacing: 0; }
+.conceptgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 2px 18px;
+  margin: 10px 0 12px;
+}
+/* Box on the left, name and description stacked beside it. As a flex row
+   the description tried to sit alongside the name and both wrapped. */
+.conceptrow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 9px;
+  padding: 7px 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--hair);
+}
+.conceptrow input { margin: 3px 0 0; }
+.conceptname { font-weight: 600; }
+.conceptshare {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 620px) {
+  .conceptgrid { grid-template-columns: 1fr; }
+  .conceptrow { padding: 9px 0; }
+}
