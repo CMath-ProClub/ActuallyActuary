@@ -59,6 +59,29 @@ const DROP_AFTER = 3;
    You get it back often, you do not get it back every other question. */
 const MIN_REPEAT_SPACING = 4;
 
+/* The difficulty follows the answers.
+
+   Carter's rule, in his words: get an easy one wrong and stay on easy, get
+   a hard one right and stay on hard, and sit in the middle when the
+   answers are mixed. So each skill has a rung on a three-rung ladder,
+   starting in the middle:
+
+     - two right in a row moves up one rung
+     - one wrong moves down one rung, immediately
+
+   Two in a row to climb, one to fall, because a lucky guess should not
+   promote you and a slip should not cost much - the next two right answers
+   put it back. The ends are sticky by construction: max(1, ...) means a
+   missed easy question leaves you on easy, and min(3, ...) means a right
+   hard one leaves you on hard.
+
+   A skill nobody has tried yet starts wherever the student generally is,
+   rather than always at the middle: somebody who is plainly a level 3
+   should not be shown level 2 chain rule questions just because chain rule
+   has not come up yet. */
+const UP_AFTER = 2;
+const START_LEVEL = 2;
+
 export function createDrill(seed) {
   return {
     seed: (seed >>> 0) || 1,
@@ -71,6 +94,11 @@ export function createDrill(seed) {
     recent: [],
     /* When each skill last came back as a repeat, for the spacing rule. */
     lastServed: {},
+    /* The rung each skill is on, and how many right in a row at it. */
+    levels: {},
+    streaks: {},
+    /* The last move up or down, so the session can say it happened. */
+    moved: null,
   };
 }
 
@@ -117,9 +145,40 @@ export function nextSlot(state, index) {
   for (let tries = 0; tries < 6 && state.recent[0] === entry.skill; tries++) {
     entry = pool[Math.floor(r() * pool.length)];
   }
-  const level = entry.levels[Math.floor(r() * entry.levels.length)];
+  /* The difficulty is the rung this skill is on, not a dice roll - but a
+     skill that only offers one level still only offers that one. */
+  const level = offeredLevel(entry, ladderFor(state, entry.skill));
   remember(state, entry.skill);
   return { skill: entry.skill, level, why: 'mix', repeat: false };
+}
+
+/* The rung a skill is on. One that has not come up yet starts wherever the
+   student generally is. */
+export function ladderFor(state, skill) {
+  if (!state.levels) state.levels = {};
+  const known = state.levels[skill];
+  if (known) return known;
+  return overallLevel(state);
+}
+
+/* Where the student generally is, across the skills that have been tried.
+   The middle rung until there is anything to go on. */
+export function overallLevel(state) {
+  const values = Object.values((state && state.levels) || {});
+  if (!values.length) return START_LEVEL;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  return Math.max(1, Math.min(3, Math.round(mean)));
+}
+
+/* The closest level this skill actually offers. motion only has level 2
+   problems, so asking it for a level 3 gets a level 2 rather than nothing. */
+function offeredLevel(entry, want) {
+  const levels = entry.levels || [START_LEVEL];
+  let best = levels[0];
+  for (const level of levels) {
+    if (Math.abs(level - want) < Math.abs(best - want)) best = level;
+  }
+  return best;
 }
 
 function remember(state, skill) {
@@ -131,7 +190,9 @@ function remember(state, skill) {
    say out loud that it noticed - a drill that silently reorders itself
    looks like a drill that is picking questions at random. */
 export function recordResult(state, index, slot, correct) {
-  if (!slot || correct) return [];
+  if (!slot) return [];
+  moveLadder(state, slot, correct);
+  if (correct) return [];
   const key = keyOf(slot.skill, slot.level);
   const strikes = (state.strikes[key] || 0) + 1;
   state.strikes[key] = strikes;
@@ -157,6 +218,29 @@ export function recordResult(state, index, slot, correct) {
     added.push(item);
   }
   return added;
+}
+
+/* Up a rung after two right in a row, down a rung on a miss. */
+function moveLadder(state, slot, correct) {
+  if (!state.levels) state.levels = {};
+  if (!state.streaks) state.streaks = {};
+  const skill = slot.skill;
+  const from = ladderFor(state, skill);
+  let to = from;
+  if (correct) {
+    const streak = (state.streaks[skill] || 0) + 1;
+    if (streak >= UP_AFTER) {
+      to = Math.min(3, from + 1);
+      state.streaks[skill] = 0;
+    } else {
+      state.streaks[skill] = streak;
+    }
+  } else {
+    to = Math.max(1, from - 1);
+    state.streaks[skill] = 0;
+  }
+  state.levels[skill] = to;
+  state.moved = to === from ? null : { skill, from, to };
 }
 
 /* Keep two scheduled questions off the same slot, and keep everything the

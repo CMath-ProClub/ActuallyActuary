@@ -412,8 +412,94 @@ export const MathKit = (() => {
     return out;
   }
 
+
+  /* ------------------------------------------------- brackets, for typing */
+
+  /* The partner of the bracket at `index`, or -1 if it has none. Plain
+     counting: every bracket in between has to close before this one does. */
+  function matchBracket(text, index) {
+    const s2 = String(text == null ? '' : text);
+    const ch = s2[index];
+    if (ch === '(') {
+      let depth = 0;
+      for (let i = index; i < s2.length; i++) {
+        if (s2[i] === '(') depth++;
+        else if (s2[i] === ')') { depth--; if (depth === 0) return i; }
+      }
+      return -1;
+    }
+    if (ch === ')') {
+      let depth = 0;
+      for (let i = index; i >= 0; i--) {
+        if (s2[i] === ')') depth++;
+        else if (s2[i] === '(') { depth--; if (depth === 0) return i; }
+      }
+      return -1;
+    }
+    return -1;
+  }
+
+  /* The bracket the caret is touching, if any. The one BEFORE the caret wins,
+     because that is the one you just typed or just arrowed past. */
+  function bracketAt(text, caret) {
+    const s2 = String(text == null ? '' : text);
+    for (const index of [caret - 1, caret]) {
+      if (index < 0 || index >= s2.length) continue;
+      if (s2[index] !== '(' && s2[index] !== ')') continue;
+      return { index, partner: matchBracket(s2, index) };
+    }
+    return null;
+  }
+
+  /* Where the OPENING bracket belongs when a closing one is typed with
+     nothing open.
+
+     Typing (12x+2)/3x+4) should give (12x+2)/(3x+4): the bracket being
+     closed started after the division, not after the 4. So this walks left
+     from the caret, skipping any balanced pairs on the way, and stops at
+     the operator that the bracketed term hangs off - a times, a divide, a
+     power or a comma. Plus and minus do NOT stop it, because a+b is the
+     kind of thing people bracket, not the kind of thing they bracket
+     around.
+
+     Returns -1 when there is already an unmatched ( to the left, in which
+     case the typed bracket closes that one and nothing needs inserting. */
+  function groupStart(text, caret) {
+    const s2 = String(text == null ? '' : text);
+    const from = Math.min(caret, s2.length) - 1;
+
+    /* Two separate questions, and running them as one scan was a bug: with
+       (3*x+1 the term starts after the *, but there is also an unmatched (
+       further left, and THAT is what the typed bracket closes. So ask first
+       whether anything is open at all, looking the whole way back. */
+    let depth = 0;
+    for (let i = from; i >= 0; i--) {
+      const ch = s2[i];
+      if (ch === ')') depth++;
+      else if (ch === '(') {
+        if (depth === 0) return -1;
+        depth--;
+      }
+    }
+
+    /* Nothing is open, so this bracket closes a term that was never opened.
+       Find where that term began: walk left over balanced pairs and stop at
+       the operator it hangs off. Plus and minus do not stop it, because
+       a+b is the kind of thing people bracket, not bracket around. */
+    const stop = '*/^,';
+    depth = 0;
+    for (let i = from; i >= 0; i--) {
+      const ch = s2[i];
+      if (ch === ')') depth++;
+      else if (ch === '(') depth--;
+      else if (depth === 0 && stop.includes(ch)) return i + 1;
+    }
+    return 0;
+  }
+
   return { rng, hashSeed, Frac, F, gcd, sup, esc, frac, sqrt, coef, terms, poly,
     linFactor, parseNumber, numericEqual, textEqual, setEqual, setReport,
+    matchBracket, bracketAt, groupStart,
     num, money, pct,
     fact, nCr, nPr };
 })();

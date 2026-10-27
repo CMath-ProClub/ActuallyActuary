@@ -473,6 +473,43 @@ h3.unit {
 }
 .answerinput:focus { background: var(--paper); }
 
+/* ------------------------------------------- showing a bracket's partner */
+
+/* An <input> cannot colour part of its own text, so a layer holding the
+   same string sits exactly on top of it. Everything in the layer is
+   invisible except the pair being pointed at, which is drawn over the
+   input's own glyph - in the same monospace face, at the same size, with
+   the same padding, or the two copies would not line up. */
+.inputwrap {
+  position: relative;
+  width: 100%;
+  max-width: 46ch;
+}
+.inputwrap .answerinput { max-width: none; display: block; }
+.bracketlayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: pre;
+  color: transparent;
+  font-size: 1.02rem;
+  font-family: var(--face-ui);
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  line-height: normal;
+}
+.bracketlayer .match {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+/* A bracket with no partner. The most common reason an answer comes back
+   unreadable, so it is worth saying before the answer is submitted. */
+.bracketlayer .lonely {
+  color: #fff;
+  background: var(--bad);
+}
+
 .choices { display: flex; flex-direction: column; gap: 7px; }
 .choice {
   display: flex; gap: 10px; align-items: flex-start;

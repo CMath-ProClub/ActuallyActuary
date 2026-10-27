@@ -2208,14 +2208,19 @@ function touchDevice() {
 
 /* ------------------------------------------------- typing an answer */
 
-/* Brackets close themselves.
+/* Brackets, the way they are actually typed.
 
-   Typing (3*x+1)/(2*x-5) on a phone means counting brackets with a thumb,
-   and a mismatched one makes the whole answer unreadable - which the grader
-   then reports as an unreadable answer rather than as a wrong one. So an
-   opening bracket brings its partner, typing the closing one steps over it
-   rather than doubling it, and backspacing an empty pair removes both. The
-   same behaviour every code editor has, for the same reason. */
+   The first attempt at this closed the bracket the moment you opened one,
+   which is only half the job and the less useful half: it forces you to
+   decide a term is bracketed BEFORE you write it. Carter's case was
+   (12x+2)/3x+4) - he wrote the denominator and then closed it, and the
+   partner has to go in front of the 3, not after the 4.
+
+   So the closing bracket is the one that does the work. Type ) with
+   nothing open and it brackets the term you just wrote, back to whatever
+   operator the term hangs off. Type ( first and it still closes itself,
+   because that costs nothing once ) is smart. Either order works, which
+   was the point. */
 function autoPair(input) {
   input.addEventListener('keydown', (e) => {
     const el = e.currentTarget;
@@ -2224,32 +2229,105 @@ function autoPair(input) {
     if (start == null) return;
     const value = el.value;
     const fire = () => el.dispatchEvent(new Event('input', { bubbles: true }));
+    const put = (text, caret) => {
+      el.value = text;
+      el.setSelectionRange(caret, caret);
+      fire();
+    };
+
+    /* Either bracket wraps a selection, which is the fastest way to fix a
+       term you have already written. */
+    if ((e.key === '(' || e.key === ')') && start !== end) {
+      e.preventDefault();
+      const picked = value.slice(start, end);
+      put(`${value.slice(0, start)}(${picked})${value.slice(end)}`, start + picked.length + 2);
+      return;
+    }
 
     if (e.key === '(') {
       e.preventDefault();
-      const picked = value.slice(start, end);
-      el.value = `${value.slice(0, start)}(${picked})${value.slice(end)}`;
-      /* Wrapping a selection puts the caret after it; an empty bracket puts
-         the caret inside, which is where you were about to type. */
-      const caret = picked ? start + picked.length + 2 : start + 1;
-      el.setSelectionRange(caret, caret);
-      fire();
+      put(`${value.slice(0, start)}()${value.slice(start)}`, start + 1);
       return;
     }
-    if (e.key === ')' && start === end && value[start] === ')') {
+
+    if (e.key === ')') {
+      /* Something is open: this bracket closes it. Step over the partner if
+         it is already sitting there rather than doubling it. */
+      if (MathKit.groupStart(value, start) === -1) {
+        if (value[start] === ')') {
+          e.preventDefault();
+          el.setSelectionRange(start + 1, start + 1);
+          return;
+        }
+        return;
+      }
+      /* Nothing is open, so this bracket is closing a term that was never
+         opened. Find where that term began and open it there. */
       e.preventDefault();
-      el.setSelectionRange(start + 1, start + 1);
+      const at = MathKit.groupStart(value, start);
+      put(`${value.slice(0, at)}(${value.slice(at, start)})${value.slice(start)}`, start + 2);
       return;
     }
+
     if (e.key === 'Backspace' && start === end
       && value[start - 1] === '(' && value[start] === ')') {
       e.preventDefault();
-      el.value = value.slice(0, start - 1) + value.slice(start + 1);
-      el.setSelectionRange(start - 1, start - 1);
-      fire();
+      put(value.slice(0, start - 1) + value.slice(start + 1), start - 1);
     }
   });
   return input;
+}
+
+/* Show a bracket's partner, the way an editor does.
+
+   An <input> cannot colour part of its own text, so a layer sits exactly on
+   top of it holding the same string in the same monospace face, everything
+   transparent except the pair being pointed at. The character is drawn
+   twice, in the same place, which reads as one coloured character.
+
+   A bracket with no partner is marked differently, because an unclosed one
+   is the single most common reason an answer comes back unreadable. */
+function bracketAware(input) {
+  const layer = h('div', { class: 'bracketlayer', 'aria-hidden': 'true' });
+  const wrap = h('div', { class: 'inputwrap' }, [input, layer]);
+
+  const paint = () => {
+    const text = input.value;
+    const found = MathKit.bracketAt(text, input.selectionStart);
+    if (!found || document.activeElement !== input) {
+      layer.textContent = '';
+      return;
+    }
+    const marks = new Map();
+    const kind = found.partner === -1 ? 'lonely' : 'match';
+    marks.set(found.index, kind);
+    if (found.partner >= 0) marks.set(found.partner, kind);
+    let html = '';
+    for (let i = 0; i < text.length; i++) {
+      const ch = MathKit.esc(text[i]);
+      const cls = marks.get(i);
+      html += cls ? `<span class="${cls}">${ch}</span>` : ch;
+    }
+    layer.innerHTML = html;
+    layer.scrollLeft = input.scrollLeft;
+  };
+
+  /* Every way the caret can move. selectionchange is the only event that
+     catches an arrow key held down. */
+  for (const type of ['input', 'keyup', 'click', 'select', 'focus']) {
+    input.addEventListener(type, paint);
+  }
+  input.addEventListener('blur', () => { layer.textContent = ''; });
+  input.addEventListener('scroll', () => { layer.scrollLeft = input.scrollLeft; });
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === input) paint();
+  });
+  return wrap;
+}
+
+/* An answer box: brackets that close themselves, and a partner you can see. */
+function answerBox(input) {
+  return bracketAware(autoPair(input));
 }
 
 /* A question asked line by line.
@@ -2264,12 +2342,13 @@ function partsForm(problem, saved, submit) {
   const values = Array.isArray(saved) ? saved : [];
 
   problem.parts.forEach((part, i) => {
-    const input = autoPair(h('input', {
+    const input = h('input', {
       type: 'text', class: 'answerinput partinput', autocomplete: 'off',
       spellcheck: 'false', placeholder: part.placeholder || '',
       value: values[i] || '', 'aria-label': part.label,
-    }));
+    });
     inputs.push(input);
+    const field = answerBox(input);
     const row = h('div', { class: 'partrow' }, [
       h('div', { class: 'partlabel' }, [
         h('span', { class: 'partnum', text: String(i + 1) }),
@@ -2278,7 +2357,7 @@ function partsForm(problem, saved, submit) {
       part.promptHtml
         ? h('div', { class: 'partprompt eq', html: part.promptHtml })
         : null,
-      input,
+      field,
       attachEcho(input, { kind: 'expression', variable: 'x', vars: part.vars }),
     ]);
     wrap.appendChild(row);
@@ -3055,11 +3134,12 @@ function paintWorkspaceProblem(slot) {
   const multi = problem.kind === 'parts' && problem.parts
     ? partsForm(problem, workspace.lastAnswer, () => submitRef.fn())
     : null;
-  const input = multi ? multi.inputs[0] : autoPair(h('input', {
+  const input = multi ? multi.inputs[0] : h('input', {
     type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
     placeholder: inputHint(problem), value: workspace.lastAnswer || '',
     'aria-label': 'Your answer',
-  }));
+  });
+  const field = multi ? multi.wrap : answerBox(input);
   const readAnswer = () => (multi ? multi.read() : input.value);
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(problem.kind);
@@ -3095,7 +3175,7 @@ function paintWorkspaceProblem(slot) {
   }
 
   card.appendChild(h('div', { class: 'answerform' }, [
-    multi ? multi.wrap : input,
+    field,
     keys,
     echo,
     h('div', { class: 'cta' }, [
@@ -3872,11 +3952,12 @@ function renderQuiz(root) {
   const multi = q.kind === 'parts' && q.parts
     ? partsForm(q, quizRun.responses[quizRun.index], () => submitRef.fn())
     : null;
-  const input = multi ? multi.inputs[0] : autoPair(h('input', {
+  const input = multi ? multi.inputs[0] : h('input', {
     type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
     placeholder: inputHint(q), value: quizRun.responses[quizRun.index] || '',
     'aria-label': 'Your answer',
-  }));
+  });
+  const field = multi ? multi.wrap : answerBox(input);
   const readAnswer = () => (multi ? multi.read() : input.value);
   /* Somewhere to work it out, kept with the question. */
   const scratch = scratchPanel(q);
@@ -3961,6 +4042,15 @@ function renderQuiz(root) {
         ? 'Two more like this are coming up in the next few questions.'
         : 'Another one like this will turn up in a few questions.' }));
     }
+    /* The difficulty moved, so say so. A drill that quietly changes what it
+       is asking looks like a drill picking at random. */
+    const moved = quizRun.plan.endless && quizRun.drill ? quizRun.drill.moved : null;
+    if (moved) {
+      const name = (SANDBOX_SKILLS[moved.skill] || {}).name || moved.skill;
+      marking.appendChild(h('p', { class: 'small muted levelmove', text: moved.to > moved.from
+        ? `${name} moves up to level ${moved.to}. Two in a row.`
+        : `${name} drops to level ${moved.to} for a bit.` }));
+    }
     if (!res.correct && q.steps && q.steps.length) {
       const det = h('details', { class: 'steps', open: true });
       det.appendChild(h('summary', { text: 'How to get there' }));
@@ -3998,7 +4088,7 @@ function renderQuiz(root) {
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(q.kind);
   card.appendChild(h('div', { class: 'answerform' }, [
-    multi ? multi.wrap : input,
+    field,
     multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null),
     multi ? null : (expressionish ? attachEcho(input, q) : null),
     h('div', { class: 'cta' }, [
