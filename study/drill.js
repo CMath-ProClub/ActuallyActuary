@@ -25,6 +25,7 @@
 
 import MathKit from './math.js';
 import { EXAM_PLAN } from './exam.js';
+import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 
 /* How far ahead a repeat lands. The first is a single question five on; the
    second strike puts two inside the next seven, which is close enough to
@@ -82,9 +83,49 @@ const MIN_REPEAT_SPACING = 4;
 const UP_AFTER = 2;
 const START_LEVEL = 2;
 
-export function createDrill(seed) {
+/* ---------------------------------------------------------------- lock in */
+
+/* A drill pointed at a handful of named shapes.
+
+   Carter sat a quiz the night before his test and came back knowing
+   exactly which four kinds of implicit differentiation he could not do. A
+   general drill would show him one of those every seventh question, which
+   is no use with a test in the morning.
+
+   So lock-in starts at mostly-focus and EASES OFF as he gets them right:
+   every correct focus question drops their share a little, every miss puts
+   it back up faster than it came down. Getting good at the four shapes is
+   what turns the rest of the unit back on, which is the behaviour he asked
+   for and also the right one - drilling something you have already got is
+   how revision time disappears.
+
+   The sprinkled-in questions favour the five skills the four shapes are
+   built out of, because those are what a wrong answer is usually made of:
+   the product rule, the chain rule, and the three function families. */
+const FOCUS_MAX = 0.85;
+const FOCUS_MIN = 0.3;
+
+/* What "I have got this one" means: three right in a row on that shape.
+   Counting total right answers instead let the session ease off after eight
+   of them, which with four shapes is two each - not knowing it, just not
+   having been caught yet. A miss sets that shape's run back to nothing, so
+   the share goes straight back up. */
+const FOCUS_RUN = 3;
+
+export const SUPPORT_SKILLS = ['product', 'chain', 'trig', 'exp', 'log'];
+const SUPPORT_WEIGHT = 3;
+
+export function createDrill(seed, opts = {}) {
+  /* A lock-in drill names the shapes it is pointed at; an ordinary one has
+     none and behaves exactly as it did. */
+  const focus = (opts.focus || []).filter((f) => f && f.family);
   return {
     seed: (seed >>> 0) || 1,
+    focus,
+    /* How much of the session the focus shapes take, right now. */
+    share: focus.length ? FOCUS_MAX : 0,
+    /* Right and wrong on each focus shape, so the worst one comes up most. */
+    tally: {},
     /* Questions scheduled by a wrong answer, each {at, skill, level, why}. */
     scheduled: [],
     /* How many times each skill-and-level has been missed. */
@@ -102,13 +143,18 @@ export function createDrill(seed) {
   };
 }
 
-const keyOf = (skill, level) => `${skill}:${level}`;
+/* A focus shape is its own thing to get right or wrong: two of them are
+   both implicit differentiation, and treating them as one skill would mean
+   missing the logarithm one brings back the exponential one. */
+const keyOf = (skill, level, family) => `${family || skill}:${level}`;
+const trackOf = (slot) => (slot && slot.family) || (slot && slot.skill) || '';
 
 /* The skills a drill draws from, weighted the way the review sheet is. */
-function mix() {
+function mix(weighted = false) {
   const out = [];
   for (const entry of EXAM_PLAN) {
-    for (let i = 0; i < entry.share; i++) out.push(entry);
+    const extra = weighted && SUPPORT_SKILLS.includes(entry.skill) ? SUPPORT_WEIGHT : 1;
+    for (let i = 0; i < entry.share * extra; i++) out.push(entry);
   }
   return out;
 }
@@ -118,28 +164,99 @@ function mix() {
    A question that was scheduled by a miss takes priority, oldest first, so
    a backlog drains rather than piling up. Otherwise it is a weighted draw
    from the blueprint, avoiding whatever was just asked. */
+/* Which of the focus shapes to ask about. Weighted by how badly it is
+   going: a shape that has been missed twice is three times as likely as one
+   that has been missed once, and a shape nobody has tried yet counts as one
+   miss so that it gets a turn early. */
+function pickFocus(state, r) {
+  const focus = state.focus || [];
+  if (!focus.length) return null;
+  const weights = focus.map((f) => {
+    const t = (state.tally || {})[f.family] || { right: 0, wrong: 0, run: 0 };
+    const tried = t.right + t.wrong;
+    /* Capped, or a shape missed ten times crowds the other three out
+       entirely - which is how you walk into the test having practised one
+       of the four. */
+    const struggling = Math.min(t.wrong, 3) * 1.5;
+    /* One that is already solid steps back but never disappears. */
+    const solid = (t.run || 0) >= FOCUS_RUN ? -0.6 : 0;
+    return Math.max(0.4, 1 + struggling + solid + (tried === 0 ? 1 : 0));
+  });
+  const total = weights.reduce((a, b) => a + b, 0);
+  let roll = r() * total;
+  for (let i = 0; i < focus.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return focus[i];
+  }
+  return focus[focus.length - 1];
+}
+
+/* The share of the session the focus shapes currently take, from how much
+   of the focus set has been shown to be solid. All four at three in a row
+   eases it to the floor; one miss anywhere puts it back up. */
+export function focusShare(state) {
+  if (!state || !state.focus || !state.focus.length) return 0;
+  const tally = state.tally || {};
+  let sum = 0;
+  for (const f of state.focus) {
+    const run = (tally[f.family] || {}).run || 0;
+    sum += Math.min(1, run / FOCUS_RUN);
+  }
+  const solid = sum / state.focus.length;
+  return FOCUS_MAX - (FOCUS_MAX - FOCUS_MIN) * solid;
+}
+
+/* How each shape is going, for the panel that lists them. */
+export function focusProgress(state) {
+  const tally = (state && state.tally) || {};
+  return ((state && state.focus) || []).map((f) => {
+    const t = tally[f.family] || { right: 0, wrong: 0, run: 0 };
+    return {
+      family: f.family,
+      right: t.right || 0,
+      wrong: t.wrong || 0,
+      run: t.run || 0,
+      solid: (t.run || 0) >= FOCUS_RUN,
+    };
+  });
+}
+
 export function nextSlot(state, index) {
   if (!state.lastServed) state.lastServed = {};
-  const due = state.scheduled
-    .map((s, i) => ({ s, i }))
-    .filter(({ s }) => s.at <= index)
-    .sort((a, b) => a.s.at - b.s.at);
-  for (const { s: item, i } of due) {
-    const last = state.lastServed[item.skill];
-    /* Too soon after the last one of these. Push it on rather than dropping
-       it - it is still owed. */
-    if (last !== undefined && index - last < MIN_REPEAT_SPACING) {
-      state.scheduled[i] = { ...item, at: last + MIN_REPEAT_SPACING };
-      continue;
+  const r = MathKit.rng(MathKit.hashSeed(`${state.seed}:${index}`));
+  const locked = !!(state.focus && state.focus.length);
+
+  /* Decide what KIND of question this slot is before looking at the queue.
+
+     Serving the queue first looked right and was not: in a lock-in session
+     every sprinkled-in question that gets missed books a slot, and those
+     repeats crowded the focus shapes down to about 40% of the session when
+     the share said 85%. The roll comes first now, and the queue is read for
+     the kind of question the roll asked for. The first question is always a
+     focus one, because opening a cram session with a quotient rule question
+     is not what anybody pressed the button for. */
+  const wantFocus = locked && (index === 0 || r() < focusShare(state));
+  const served = serveDue(state, index, locked ? (item) => !!item.family === wantFocus : null);
+  if (served) return served;
+
+  if (wantFocus) {
+    const chosen = pickFocus(state, r);
+    if (chosen) {
+      const level = offeredLevel({ levels: [2, 3] }, ladderFor(state, chosen.family));
+      remember(state, chosen.family);
+      return {
+        skill: chosen.skill || 'implicit',
+        family: chosen.family,
+        level,
+        why: 'focus',
+        repeat: false,
+      };
     }
-    state.scheduled.splice(i, 1);
-    state.lastServed[item.skill] = index;
-    remember(state, item.skill);
-    return { ...item, repeat: true };
   }
 
-  const r = MathKit.rng(MathKit.hashSeed(`${state.seed}:${index}`));
-  const pool = mix();
+  /* In a lock-in session the sprinkled-in questions lean towards the rules
+     the focus shapes are made of. */
+  const pool = mix(locked);
   let entry = pool[Math.floor(r() * pool.length)];
   /* Two of the same in a row is how a drill starts feeling like a rut. */
   for (let tries = 0; tries < 6 && state.recent[0] === entry.skill; tries++) {
@@ -150,6 +267,32 @@ export function nextSlot(state, index) {
   const level = offeredLevel(entry, ladderFor(state, entry.skill));
   remember(state, entry.skill);
   return { skill: entry.skill, level, why: 'mix', repeat: false };
+}
+
+/* The oldest question that is owed and allowed right now, or nothing.
+   `wanted` filters by kind in a lock-in session; without it every owed
+   question is fair game, which is how an ordinary drill works. */
+function serveDue(state, index, wanted) {
+  const due = state.scheduled
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => s.at <= index && (!wanted || wanted(s)))
+    .sort((a, b) => a.s.at - b.s.at);
+  for (const { s: item } of due) {
+    const last = state.lastServed[trackOf(item)];
+    /* Too soon after the last one of these. Push it on rather than dropping
+       it - it is still owed. */
+    if (last !== undefined && index - last < MIN_REPEAT_SPACING) {
+      const at = state.scheduled.indexOf(item);
+      if (at >= 0) state.scheduled[at] = { ...item, at: last + MIN_REPEAT_SPACING };
+      continue;
+    }
+    const at = state.scheduled.indexOf(item);
+    if (at >= 0) state.scheduled.splice(at, 1);
+    state.lastServed[trackOf(item)] = index;
+    remember(state, trackOf(item));
+    return { ...item, repeat: true };
+  }
+  return null;
 }
 
 /* The rung a skill is on. One that has not come up yet starts wherever the
@@ -192,14 +335,25 @@ function remember(state, skill) {
 export function recordResult(state, index, slot, correct) {
   if (!slot) return [];
   moveLadder(state, slot, correct);
+
+  /* A focus shape going right eases the session off it; going wrong puts
+     it back, faster than it came down. */
+  if (slot.family && state.focus && state.focus.length) {
+    if (!state.tally) state.tally = {};
+    const t = state.tally[slot.family] || { right: 0, wrong: 0, run: 0 };
+    if (correct) { t.right++; t.run = (t.run || 0) + 1; } else { t.wrong++; t.run = 0; }
+    state.tally[slot.family] = t;
+    state.share = focusShare({ ...state, tally: { ...state.tally, [slot.family]: t } });
+  }
+
   if (correct) return [];
-  const key = keyOf(slot.skill, slot.level);
+  const key = keyOf(slot.skill, slot.level, slot.family);
   const strikes = (state.strikes[key] || 0) + 1;
   state.strikes[key] = strikes;
 
   /* Keep missing it and it comes back easier, not harder and not forever. */
   const level = strikes > DROP_AFTER ? Math.max(1, slot.level - 1) : slot.level;
-  const waiting = state.scheduled.filter((x) => x.skill === slot.skill).length;
+  const waiting = state.scheduled.filter((x) => trackOf(x) === trackOf(slot)).length;
   const room = Math.min(MAX_PENDING_PER_KEY - waiting, MAX_PENDING - state.scheduled.length);
   if (room <= 0) return [];
 
@@ -210,6 +364,7 @@ export function recordResult(state, index, slot, correct) {
     const item = {
       at,
       skill: slot.skill,
+      family: slot.family || null,
       level,
       why: 'missed',
       easier: level < slot.level,
@@ -224,7 +379,7 @@ export function recordResult(state, index, slot, correct) {
 function moveLadder(state, slot, correct) {
   if (!state.levels) state.levels = {};
   if (!state.streaks) state.streaks = {};
-  const skill = slot.skill;
+  const skill = trackOf(slot);
   const from = ladderFor(state, skill);
   let to = from;
   if (correct) {

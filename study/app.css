@@ -1366,3 +1366,50 @@ body.noscroll { overflow: hidden; }
 .aibox p { margin: 0 0 6px; }
 .aibox p:last-child { margin-bottom: 0; }
 .aibox .aitag { margin: 8px 0 0; }
+
+
+/* ------------------------------------------------------------- lock in */
+
+/* The four shapes, and how each is going. */
+.focuslist {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  counter-reset: shape;
+}
+.focuslist li {
+  border-left: 3px solid var(--edge);
+  padding: 0 0 0 14px;
+  margin: 0 0 16px;
+  counter-increment: shape;
+}
+.focuslist li.solid { border-left-color: var(--good); }
+/* The number is a marker beside the shape, not a word in front of it: as
+   inline content it pulled the next line up alongside the heading. */
+.focuslist li::before {
+  content: counter(shape);
+  display: block;
+  font-family: var(--face-ui);
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.focusname {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.focuslist p { display: block; margin: 4px 0 0; }
+.focusscore { font-family: var(--face-ui); font-size: 0.78rem; }
+.pill.good { color: var(--good-ink); border-color: var(--good); }
+
+/* Which of the four a question is, shown on the question. */
+.focustag {
+  font-family: var(--face-ui);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 6px;
+}

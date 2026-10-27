@@ -24,6 +24,7 @@ import * as charts from './charts.js';
 import * as ollama from './ollama.js';
 import { EXAM_LENGTHS, examSlots } from './exam.js';
 import * as drill from './drill.js';
+import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -60,6 +61,7 @@ const ALL_TOPIC_IDS = generatableTopics();
 const ROUTES = {
   '': renderStart,
   start: renderStart,
+  lockin: renderLockIn,
   workspace: renderWorkspace,
   quiz: renderQuiz,
   dashboard: renderDashboard,
@@ -3698,6 +3700,81 @@ function paintPeekProblem(slot, description, person) {
 let quizRun = null;
 /* ====================================================== the calculus exam */
 
+/* ===================================================================== lock in */
+
+/* Four shapes, drilled until they are solid.
+
+   Carter took a quiz the night before his test and came back with exactly
+   which four kinds of implicit differentiation he could not do. This is the
+   page for that: the four shapes, how each is going, and a button. The
+   scheduling is in drill.js - mostly these, easing off as each one comes
+   good, with the rules they are built out of sprinkled through.
+
+   It is a tab rather than a mode inside the drill because it has a deadline
+   attached to it and wants to be one tap away. */
+const LOCK_IN_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
+
+function renderLockIn(root) {
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: 'Lock in' }),
+    h('p', { class: 'lead', text: 'The four shapes from the quiz, drilled until '
+      + 'they are solid. Each one eases off once you have had three in a row '
+      + 'right, and the rules they are built out of get sprinkled through.' }),
+  ]));
+
+  /* A lock-in session already running is resumed rather than restarted, or
+     a stray tap on the tab would wipe the run. */
+  const running = quizRun && quizRun.plan && quizRun.plan.lockin
+    && quizRun.phase === 'running';
+  const state = running ? quizRun.drill : null;
+  const progress = state ? drill.focusProgress(state) : [];
+  const byFamily = new Map(progress.map((p) => [p.family, p]));
+
+  const list = h('ol', { class: 'focuslist' });
+  for (const entry of LOCK_IN_FOCUS) {
+    const family = focusFamily(entry.family);
+    if (!family) continue;
+    const seen = byFamily.get(entry.family);
+    list.appendChild(h('li', { class: seen && seen.solid ? 'solid' : '' }, [
+      h('div', { class: 'focusname' }, [
+        h('strong', { text: family.label }),
+        seen && seen.solid ? h('span', { class: 'pill good', text: 'solid' }) : null,
+      ]),
+      h('p', { class: 'small muted', text: `Study: ${family.study}.` }),
+      seen && (seen.right || seen.wrong)
+        ? h('p', { class: 'small focusscore', text: `${seen.right} right, `
+          + `${seen.wrong} wrong${seen.run ? ` \u00b7 ${seen.run} in a row` : ''}` })
+        : null,
+    ]));
+  }
+
+  root.appendChild(h('section', { class: 'card lockin' }, [
+    list,
+    h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn big', type: 'button',
+        onclick: () => (running ? go('quiz') : startLockIn()),
+      }, running ? 'Carry on' : 'Start locking in'),
+      running
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => { if (confirm('Start again from the top?')) startLockIn(); },
+        }, 'Start again')
+        : null,
+    ]),
+    state
+      ? h('p', { class: 'small muted', text: `Right now ${Math.round(drill.focusShare(state) * 100)}% `
+        + 'of the questions are these four. That drops as they come good.' })
+      : h('p', { class: 'small muted', text: 'It never ends - stop when you have '
+        + 'had enough. Everything is marked as you go, with the working for '
+        + 'anything you miss.' }),
+  ]));
+}
+
+function startLockIn() {
+  startDrill({ focus: LOCK_IN_FOCUS, label: 'Lock in', lockin: true });
+}
+
 /* The endless drill, which is a different thing from a practice test.
 
    A test is fixed in advance - that is what makes it a test, and why the
@@ -3707,12 +3784,13 @@ let quizRun = null;
 
    There is no end to it, so there is no mark out of anything: the only
    number worth showing is how you are doing lately. */
-function startDrill() {
-  const state = drill.createDrill(freshSeed());
+function startDrill(opts = {}) {
+  const state = drill.createDrill(freshSeed(), { focus: opts.focus || [] });
   const first = drillQuestion(state, 0);
   quizRun = {
     plan: {
-      label: 'Study, no end',
+      label: opts.label || 'Study, no end',
+      lockin: !!opts.lockin,
       who: store.activeProfile().name,
       immediate: true,
       endless: true,
@@ -3743,7 +3821,12 @@ function startDrill() {
 function drillQuestion(state, index) {
   for (let tries = 0; tries < 30; tries++) {
     const slot = drill.nextSlot(state, index);
-    const problem = buildProblem({ skills: [slot.skill], level: slot.level }, freshSeed());
+    const problem = buildProblem({
+      skills: [slot.skill],
+      level: slot.level,
+      /* A focus slot names the exact shape it wants. */
+      family: slot.family || null,
+    }, freshSeed());
     if (problem) return { slot, problem };
   }
   return null;
@@ -3939,6 +4022,10 @@ function renderQuiz(root) {
      missed one like it. A drill that silently reorders itself looks like a
      drill picking at random. */
   const slot = (quizRun.slots || [])[quizRun.index];
+  if (slot && slot.family && focusFamily(slot.family)) {
+    card.appendChild(h('p', { class: 'small focustag',
+      text: focusFamily(slot.family).label }));
+  }
   if (slot && slot.repeat) {
     card.appendChild(h('p', { class: 'small backagain', text: slot.easier
       ? 'Back again, a step easier: you have missed a few of these.'

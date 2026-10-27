@@ -314,6 +314,9 @@ const SKILLS = {
        are asked for, the equation is drawn from the families that have a
        trig function in them. */
     build(r, level, spec) {
+      /* Lock-in asks for one of the four shapes by name. */
+      const family = spec && spec.family ? FOCUS_FAMILIES[spec.family] : null;
+      if (family) return family.pick(r, level);
       const wantsTrig = !!(spec && spec.skills
         && spec.skills.some((k) => k === 'trig' || k === 'invtrig'));
       if (!wantsTrig) return implicitEquation(r, level);
@@ -348,6 +351,181 @@ const SKILLS = {
 /* Everything after this point asks a different question - integrate this,
    factor this - and is marked differently, so the builders live apart and
    join SKILLS at the bottom of the file. */
+
+/* ------------------------------------------------- the four shapes on the quiz */
+
+/* Carter sat a quiz on implicit differentiation and came back with exactly
+   which four kinds of question he could not do. They are all the same move -
+   implicit differentiation combined with the chain rule - over four
+   different outsides, and the thing that makes each hard is that the inside
+   is a PRODUCT: differentiating xy brings the product rule with it before
+   the chain rule has finished.
+
+   These are named families rather than extra shapes in the pile, because
+   the lock-in mode has to be able to ask for one on purpose. Everything
+   else about them is ordinary: the engine still derives dy/dx, and
+   test_sandbox still walks each one against its own curve. */
+const FOCUS_FAMILIES = {
+  'trig-xy': {
+    label: 'Implicit + chain + product, inside a trig function',
+    study: 'derivatives of trig functions, and differentiating xy',
+    pick(r, level) {
+      const a = level === 1 ? 1 : r.nz(1, 3);
+      const inner = a === 1 ? mul(X, Y) : mul(num(a), mul(X, Y));
+      const shape = r.int(0, 3);
+      if (shape === 0) {
+        return {
+          left: fn('sin', inner),
+          right: add(X, Y),
+          note: 'The outside is sine, the inside is a product. Chain rule first, '
+            + 'then the product rule on xy.',
+        };
+      }
+      if (shape === 1) {
+        return {
+          left: add(fn('cos', inner), X),
+          right: Y,
+          note: 'd/dx cos(u) is MINUS sin(u) times u prime, and u = xy needs '
+            + 'the product rule.',
+        };
+      }
+      if (shape === 2) {
+        return {
+          left: fn('tan', inner),
+          right: add(X, mul(num(r.nz(1, 3)), Y)),
+          note: 'd/dx tan(u) is sec squared u, times the derivative of xy.',
+        };
+      }
+      return {
+        left: add(mul(X, fn('sin', Y)), mul(Y, fn('cos', X))),
+        right: num(r.int(1, 5)),
+        note: 'Two products, and each one contains a function of the other '
+          + 'variable. Product rule on both, chain rule inside each.',
+      };
+    },
+  },
+
+  'cos-powers': {
+    label: 'Implicit + chain: cosine and powers of y',
+    study: 'derivatives of cosine, and powers of y',
+    pick(r, level) {
+      const n = level === 1 ? 2 : r.int(2, 4);
+      const shape = r.int(0, 2);
+      if (shape === 0) {
+        return {
+          left: fn('cos', pow(Y, num(n))),
+          right: X,
+          note: `A power of y inside a cosine: the chain rule runs cos, then `
+            + `y^${n}, then the dy/dx.`,
+        };
+      }
+      if (shape === 1) {
+        return {
+          left: add(fn('cos', Y), pow(Y, num(n))),
+          right: pow(X, num(2)),
+          note: 'Both terms on the left are functions of y, so both bring a '
+            + 'dy/dx with them. Collect them.',
+        };
+      }
+      return {
+        left: add(pow(Y, num(3)), mul(num(r.nz(2, 4)), fn('cos', Y))),
+        right: X,
+        note: 'Everything on the left carries a dy/dx. Factor it out once you '
+          + 'have differentiated.',
+      };
+    },
+  },
+
+  'exp-xy': {
+    label: 'Implicit + e to a power + product rule',
+    study: 'derivatives of e^u, and differentiating xy',
+    pick(r, level) {
+      const shape = r.int(0, 3);
+      if (shape === 0) {
+        return {
+          left: fn('exp', mul(X, Y)),
+          right: add(pow(X, num(2)), Y),
+          note: 'e^(xy) reproduces itself, then multiplies by the derivative of '
+            + 'xy - which is a product.',
+        };
+      }
+      if (shape === 1) {
+        /* The one he had on the quiz, give or take the numbers. */
+        return {
+          left: mul(X, fn('exp', Y)),
+          right: add(mul(num(r.int(2, 4)), Y), pow(Y, num(3))),
+          note: 'Product rule on the left, and every term on the right carries '
+            + 'a dy/dx.',
+        };
+      }
+      if (shape === 2) {
+        return {
+          left: add(mul(X, fn('exp', Y)), mul(Y, fn('exp', X))),
+          right: num(r.int(1, 4)),
+          note: 'Two products, one with e^y and one with e^x. Only the first '
+            + 'brings a dy/dx out of the exponential.',
+        };
+      }
+      return {
+        left: mul(Y, fn('exp', mul(X, Y))),
+        right: X,
+        note: 'A product whose second factor is e^(xy), so the chain rule '
+          + 'produces another product inside the first one.',
+      };
+    },
+  },
+
+  'log-xy': {
+    label: 'Implicit + ln + chain + product rule',
+    study: 'derivatives of ln(u), the chain rule, and differentiating xy',
+    pick(r, level) {
+      const shape = r.int(0, 2);
+      if (shape === 0) {
+        /* Getting the right side of this one right took three goes, and
+           the curve solver caught both wrong ones by finding no points to
+           test - which is the system working, but an equation with an empty
+           graph is not a question.
+
+           ln(xy) = x + y has no real solutions anywhere: ln t - t is at
+           most -1, so the left can never catch the right. ln(xy) = ay only
+           has them for x >= a*e, which is outside the range the solver
+           samples. ln(xy) = x - ay always has exactly one: for any x it
+           reduces to ln y + ay = x - ln x, and the left of that is strictly
+           increasing from -infinity to infinity. */
+        const a = r.int(1, 2);
+        return {
+          left: fn('ln', mul(X, Y)),
+          right: sub(X, a === 1 ? Y : mul(num(a), Y)),
+          domain: 'both-positive',
+          note: 'd/dx ln(u) is u prime over u. Here u = xy, so u prime needs '
+            + 'the product rule.',
+        };
+      }
+      if (shape === 1) {
+        return {
+          left: fn('ln', mul(X, pow(Y, num(2)))),
+          right: X,
+          domain: 'both-positive',
+          note: 'Either use the product rule inside the logarithm, or split it '
+            + 'first: ln(xy^2) is ln x + 2 ln y.',
+        };
+      }
+      return {
+        left: mul(X, fn('ln', Y)),
+        right: add(Y, num(r.int(1, 4))),
+        domain: 'y-positive',
+        note: 'A product with a logarithm of y in it: product rule outside, '
+          + 'and ln(y) differentiates to dy/dx over y.',
+      };
+    },
+  },
+};
+
+export const FOCUS_IDS = Object.keys(FOCUS_FAMILIES);
+
+export function focusFamily(id) {
+  return FOCUS_FAMILIES[id] || null;
+}
 
 /* Does this expression contain a trig function anywhere in it? */
 function hasTrig(node) {
@@ -1293,12 +1471,13 @@ function curveScopes(F, c, seed, opts = {}) {
   const domain = opts.domain || 'any';
   const residual = (x, y) => f({ x, y }) - c;
 
+  const positiveY = domain === 'y-positive' || domain === 'both-positive';
   const pickX = () => {
-    if (domain === 'x-positive') return 0.25 + r() * 3.5;
+    if (domain === 'x-positive' || domain === 'both-positive') return 0.25 + r() * 3.5;
     return (r() < 0.5 ? -1 : 1) * (0.3 + r() * 2.6);
   };
   const yStart = () => {
-    if (domain === 'y-positive') return 0.2 + r() * 3;
+    if (positiveY) return 0.2 + r() * 3;
     return (r() < 0.5 ? -1 : 1) * (0.3 + r() * 2.6);
   };
 
@@ -1319,7 +1498,7 @@ function curveScopes(F, c, seed, opts = {}) {
   /* Scan for a sign change and bisect. Slower, but it finds roots Newton
      walks straight past on a periodic equation. */
   const bisect = (x) => {
-    const lo = domain === 'y-positive' ? 0.05 : -6;
+    const lo = positiveY ? 0.05 : -6;
     const hi = 6;
     const steps = 240;
     let previousY = lo;
@@ -1355,7 +1534,7 @@ function curveScopes(F, c, seed, opts = {}) {
     }
     if (y === null) y = bisect(x);
     if (y === null || !isFinite(y)) continue;
-    if (domain === 'y-positive' && y <= 0) continue;
+    if (positiveY && y <= 0) continue;
     if (Math.abs(residual(x, y)) > 1e-8 * Math.max(1, Math.abs(c))) continue;
     const slope = fy({ x, y });
     /* A vertical tangent, or a point where the implicit function theorem
