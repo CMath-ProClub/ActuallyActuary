@@ -103,6 +103,22 @@ function weightedPick(spec) {
    typed a correct value in an unreadable format deserves to know which it was. */
 export function grade(problem, response) {
   if (problem == null) return { correct: false, detail: '' };
+  /* A question asked in parts arrives as an array of lines. Everything
+     else is one string. */
+  if (problem.kind === 'parts') {
+    const lines = Array.isArray(response) ? response : [response];
+    if (!lines.some((l) => String(l == null ? '' : l).trim())) {
+      return { correct: false, detail: 'No answer given.' };
+    }
+    const v = gradeExpression(problem, lines);
+    return {
+      correct: v.correct,
+      detail: v.hint || '',
+      decided: v.decided !== false,
+      diagnosis: v.kind || '',
+      parts: v.parts || [],
+    };
+  }
   const raw = response == null ? '' : String(response).trim();
   if (!raw) return { correct: false, detail: 'No answer given.' };
 
@@ -115,6 +131,9 @@ export function grade(problem, response) {
        than counted as wrong. */
     /* All four are marked by the expression engine; gradeExpression picks
        the right question to ask of the answer. */
+    /* A multi-line answer. `raw` is an array of lines, and the sandbox
+       grader marks each against its own reference. */
+    case 'parts':
     case 'antiderivative':
     case 'factored':
     case 'expanded':
@@ -232,6 +251,7 @@ export function inputHint(problem) {
         : 'the derivative, e.g. 6*x*cos(3*x^2)';
     case 'numeric': return 'a number, e.g. 12, -3.5, 3/4, 2*pi/3';
     case 'set': return problem.ordered ? 'two values, e.g. 3, -1' : 'all values, separated by commas';
+    case 'parts': return 'one line at a time';
     case 'text': return 'your answer';
     default: return '';
   }

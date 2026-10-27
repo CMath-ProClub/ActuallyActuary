@@ -551,27 +551,52 @@ const EXAM_EXTRAS = {
     name: 'Limit definition',
     topicId: 'calc.power',
     ask: 'the derivative from the difference quotient',
+    /* Asked line by line rather than as one answer, because one answer can
+       be reached with the chain rule and the question is about the limit. */
+    parts: true,
     build(r, level) {
-      /* The three shapes the review uses: a cube, a root and a
-         reciprocal. Each is chosen because the algebra works out, which is
-         the whole point of the exercise. */
+      /* The three shapes the review uses: a cube, a root and a reciprocal.
+         Each is chosen because the algebra works out, which is the whole
+         point of the exercise.
+
+         `cancelled` is what the quotient becomes once the h is gone. It is
+         stated here because this engine cannot do polynomial division or
+         conjugates symbolically - and then checked three ways against the
+         engine in buildLimitDefinition before anybody sees it. */
       const shape = r.int(0, 2);
       const a = r.nz(1, 4);
       const b = r.int(1, 5);
       if (shape === 0) {
+        const base = add(X, num(b));
         return {
-          f: pow(add(X, num(b)), num(3)),
-          note: 'Expand (x + h + b)^3, subtract, and every term left has an h in it.',
+          f: pow(base, num(3)),
+          /* 3(x+b)^2 + 3(x+b)h + h^2 */
+          cancelled: add(
+            add(mul(num(3), pow(base, num(2))), mul(mul(num(3), base), vr('h'))),
+            pow(vr('h'), num(2)),
+          ),
+          note: 'Expand (x + h + b)³, subtract, and every term left has an h in it.',
         };
       }
       if (shape === 1) {
+        const k = a === 1 ? 2 : a;
         return {
-          f: fn('sqrt', add(mul(num(a === 1 ? 2 : a), X), num(b))),
+          f: fn('sqrt', add(mul(num(k), X), num(b))),
+          /* k / (√(k(x+h)+b) + √(kx+b)), which is what the conjugate gives. */
+          cancelled: div(num(k), add(
+            fn('sqrt', add(mul(num(k), add(X, vr('h'))), num(b))),
+            fn('sqrt', add(mul(num(k), X), num(b))),
+          )),
           note: 'Multiply above and below by the conjugate to clear the roots.',
         };
       }
       return {
         f: div(num(1), add(X, num(b))),
+        /* -1 / ((x+h+b)(x+b)) */
+        cancelled: neg(div(num(1), mul(
+          add(add(X, vr('h')), num(b)),
+          add(X, num(b)),
+        ))),
         note: 'Put the two fractions over a common denominator first.',
       };
     },
@@ -1365,6 +1390,7 @@ export function buildProblem(spec, seed) {
   if (skill.implicit) return implicitProblem(id, skill, built, level, seed);
   if (skill.integral) return buildIntegral(id, skill, built, level, seed);
   if (skill.form) return buildForm(id, skill, built, level, seed);
+  if (skill.parts) return buildLimitDefinition(id, skill, built, level, seed);
   if (skill.tangent) return buildTangent(id, skill, built, level, seed);
   if (skill.zeroset) return buildZeroSet(id, skill, built, level, seed);
   if (skill.motion || skill.order === 2) return buildRepeated(id, skill, built, level, seed);
@@ -1607,7 +1633,7 @@ function limitDefHints(f, reference, built) {
   ];
 }
 
-function limitDefSteps(f, reference, built) {
+function limitDefSteps(f, reference, built, cancelled) {
   const shifted = substituteShift(f);
   const quotient = MathKit.frac(
     `${html(shifted)} \u2212 ${html(f)}`,
@@ -1616,13 +1642,15 @@ function limitDefSteps(f, reference, built) {
   return [
     { title: 'The difference quotient', html: `f\u2032(x) = lim<sub>h\u21920</sub> ${quotient}` },
     { title: 'The move that makes it work', html: built.note || 'Simplify the top.' },
-    { title: 'Cancel the h and let it go to zero', html: html(reference) },
-  ];
+    cancelled
+      ? { title: 'Once the h cancels', html: `lim<sub>h→0</sub> ${html(cancelled)}` }
+      : null,
+    { title: 'Now let h go to zero', html: html(reference) },
+  ].filter(Boolean);
 }
 
 /* f(x + h), which is f with every x replaced by x + h. */
 function substituteShift(node) {
-  const H = vr('h');
   const walk = (n) => {
     if (!n) return n;
     if (n.t === 'var' && n.n === 'x') return add(X, H);
@@ -1903,6 +1931,210 @@ function buildZeroSet(id, skill, built, level, seed) {
   };
 }
 
+/* ------------------------------------------- the limit definition, properly */
+
+/* A limit definition question that cannot be answered with the chain rule.
+
+   The old one asked for f'(x) and accepted it however you got there, which
+   means it was not a limit definition question at all - it was a
+   differentiate-this question with a sentence in front of it. Carter found
+   that out the honest way: he chain-ruled it and was marked correct.
+
+   So it is asked in four parts, which are the four lines you would write on
+   paper:
+
+     1. f(x + h)
+     2. the difference quotient, before anything cancels
+     3. the quotient after the h cancels
+     4. the limit as h goes to zero
+
+   Part 3 is the one that does the work. Its answer has to agree with the
+   quotient everywhere h is not zero AND be defined AT h = 0, which is
+   exactly what "the h cancelled" means and is not something you can produce
+   by differentiating. Writing the uncancelled quotient there gets told that
+   the h is still in the denominator.
+
+   The cancelled form is stated by the builder rather than derived, because
+   cancelling it symbolically needs polynomial division and conjugates that
+   this engine does not do. It is then CHECKED against the engine three
+   ways before the question is allowed out - agrees with the quotient, is
+   finite at h = 0, and equals f'(x) there - so a wrong statement of it
+   cannot reach a student. */
+
+const H = vr('h');
+
+function buildLimitDefinition(id, skill, built, level, seed) {
+  const f = simplify(built.f);
+  const cancelled = built.cancelled;
+  if (!cancelled) return null;
+  const shifted = substituteShift(f);
+  const quotient = div(sub(shifted, f), H);
+  const reference = simplify(derivative(f));
+  if (Expr.isIdenticallyZero(reference)) return null;
+  if (!checkCancellation(quotient, cancelled, reference)) return null;
+
+  const frac = (a, b) => MathKit.frac(a, b);
+  const lim = (inner) => `lim<sub>h→0</sub> ${inner}`;
+
+  return {
+    source: 'sandbox',
+    kind: 'parts',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Use the limit definition to find <span class="eq">f′(x)</span> for `
+      + `<span class="eq">f(x) = ${html(f)}</span>. Write it out line by line.`,
+    instruction: 'Four lines, the way you would write them on paper. Use h for '
+      + 'the step.',
+    functionText: text(f),
+    parts: [
+      {
+        id: 'shifted',
+        label: 'Substitute',
+        promptHtml: `f(x + h) = `,
+        answerNode: shifted,
+        vars: ['x', 'h'],
+        placeholder: 'f with every x replaced by (x + h)',
+        hint: 'Every x in f becomes (x + h). Nothing else changes.',
+      },
+      {
+        id: 'quotient',
+        label: 'The difference quotient',
+        promptHtml: `f′(x) = ${lim(frac('f(x + h) − f(x)', '<i>h</i>'))} = ${lim('')}`,
+        answerNode: quotient,
+        vars: ['x', 'h'],
+        placeholder: '(f(x+h) - f(x))/h, written out',
+        hint: 'Put what you wrote above over h, and subtract f(x) from it.',
+      },
+      {
+        id: 'cancelled',
+        label: 'After the h cancels',
+        promptHtml: `= ${lim('')}`,
+        answerNode: cancelled,
+        vars: ['x', 'h'],
+        /* The whole point of the question. */
+        mustBeFiniteAtZero: true,
+        placeholder: 'the same thing, with no h left on the bottom',
+        hint: built.note || 'Simplify the top until every term has an h in it, '
+          + 'then cancel it against the h underneath.',
+      },
+      {
+        id: 'limit',
+        label: 'Let h go to zero',
+        promptHtml: `f′(x) = `,
+        answerNode: reference,
+        vars: ['x'],
+        placeholder: 'put h = 0 into the line above',
+        hint: 'Everything with an h in it goes to zero.',
+      },
+    ],
+    answerNode: reference,
+    answerText: text(reference),
+    answerHtml: html(reference),
+    answerLatex: latex(reference),
+    partAnswers: [text(shifted), text(quotient), text(cancelled), text(reference)],
+    original: f,
+    note: built.note || null,
+    hints: limitDefHints(f, reference, built),
+    steps: limitDefSteps(f, reference, built, cancelled),
+    graph: { f: latex(f), derivative: latex(reference) },
+  };
+}
+
+/* The three checks that let a stated cancelled form be trusted. Sampled at
+   points where everything involved is actually defined, because a square
+   root family has x values where neither side means anything. */
+function checkCancellation(quotient, cancelled, reference) {
+  const q = Expr.compile(quotient);
+  const c = Expr.compile(cancelled);
+  const d = Expr.compile(reference);
+  let good = 0;
+  for (let i = 0; i < 60 && good < 12; i++) {
+    const x = ((i * 37) % 97) / 7 - 5;
+    const h = (((i * 53) % 89) / 400) + 0.01;
+    const qv = q({ x, h });
+    const cv = c({ x, h });
+    const zero = c({ x, h: 0 });
+    const dv = d({ x });
+    if (![qv, cv, zero, dv].every((v) => isFinite(v) && Math.abs(v) < 1e6)) continue;
+    const scale = Math.max(1, Math.abs(qv), Math.abs(cv));
+    /* Agrees with the quotient away from zero ... */
+    if (Math.abs(qv - cv) > 1e-6 * scale) return false;
+    /* ... and at h = 0 it IS the derivative. */
+    if (Math.abs(zero - dv) > 1e-6 * Math.max(1, Math.abs(dv))) return false;
+    good++;
+  }
+  return good >= 12;
+}
+
+/* Mark a part-by-part answer.
+
+   Each part is an expression in x and h, graded the way every other
+   expression here is. The third part has one extra condition, and it is the
+   reason the question exists: it has to still be defined when h is zero. */
+export function gradeParts(problem, answers) {
+  const list = Array.isArray(answers) ? answers : [answers];
+  const parts = problem.parts || [];
+  const verdicts = parts.map((part, i) => {
+    const raw = list[i] == null ? '' : String(list[i]).trim();
+    if (!raw) {
+      return { correct: false, decided: true, kind: 'blank', hint: 'Nothing written here yet.' };
+    }
+    const v = Expr.judge(raw, part.answerNode, { vars: part.vars || ['x', 'h'] });
+    if (!v.correct || !part.mustBeFiniteAtZero) return v;
+    /* Equal to the quotient is not enough on this line: so is the
+       quotient, and writing it again is exactly the step being tested. */
+    const node = Expr.tryParse(raw, { vars: part.vars || ['x', 'h'] });
+    if (node && !finiteAtZero(node)) {
+      return {
+        correct: false,
+        decided: true,
+        kind: 'h-not-cancelled',
+        hint: 'That is right, but the h is still on the bottom. It has to cancel '
+          + 'before you can let h go to zero - otherwise this line is 0/0.',
+      };
+    }
+    return v;
+  });
+  const firstWrong = verdicts.findIndex((v) => !v.correct);
+  if (firstWrong === -1) {
+    return { correct: true, decided: true, kind: '', hint: '', parts: verdicts };
+  }
+  const part = parts[firstWrong];
+  return {
+    correct: false,
+    decided: verdicts[firstWrong].decided !== false,
+    kind: verdicts[firstWrong].kind || 'wrong',
+    hint: `Line ${firstWrong + 1} (${part.label}): ${verdicts[firstWrong].hint
+      || 'that is not it.'}`,
+    parts: verdicts,
+  };
+}
+
+/* Is this expression still finite when h is zero? Checked at several x so
+   that one unlucky point does not decide it. */
+function finiteAtZero(node) {
+  const fn0 = Expr.compile(node);
+  let seen = 0;
+  for (let i = 0; i < 40 && seen < 6; i++) {
+    const x = ((i * 29) % 61) / 5 - 4;
+    const v = fn0({ x, h: 0 });
+    if (!isFinite(v) || Math.abs(v) > 1e9) {
+      /* Undefined at this x for a reason that has nothing to do with h? */
+      const near = fn0({ x, h: 1e-6 });
+      if (isFinite(near) && Math.abs(near) < 1e9) return false;
+      continue;
+    }
+    seen++;
+  }
+  return seen > 0;
+}
+
 /* Grade a typed expression for a sandbox problem. Thin wrapper over
    Expr.judge that hands it everything the problem knows: the broken
    derivations, the original function, the inside function, and the curve
@@ -1924,6 +2156,8 @@ export function gradeExpression(problem, raw) {
   if (problem.kind === 'factored' || problem.kind === 'expanded') {
     return Expr.judgeForm(raw, problem.answerNode, problem.kind, context);
   }
+  /* A question asked line by line is marked line by line. */
+  if (problem.kind === 'parts') return gradeParts(problem, raw);
   /* "Find every x where ..." is answered with a set of values, not a
      function, so it is marked by comparing sets. */
   if (problem.kind === 'set') {

@@ -1151,3 +1151,95 @@ footer {
   .examsizes { margin-top: 10px; }
   .examsizes .btn { min-height: 40px; }
 }
+
+
+/* ------------------------------------------- a question asked in lines */
+
+/* Four boxes for four lines of working. The numbers down the side are what
+   make it read as a page of working rather than four separate questions. */
+.parts { display: block; }
+.partrow {
+  border-left: 2px solid var(--edge);
+  padding: 0 0 0 14px;
+  margin: 0 0 16px;
+}
+.partrow:last-child { margin-bottom: 8px; }
+.partlabel {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.partnum {
+  display: inline-block;
+  min-width: 1.4em;
+  text-align: center;
+  border: 1px solid var(--edge);
+  color: var(--ink);
+}
+.partprompt {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+}
+.partinput { margin-bottom: 2px; }
+.echo:empty { display: none; }
+
+/* How each line was marked. */
+.partmarks {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.partmarks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.partmarks li:last-child { border-bottom: 0; }
+.marktick { font-weight: 700; }
+.partmarks li.ok .marktick { color: var(--good); }
+.partmarks li.no .marktick { color: var(--bad); }
+.marklabel {
+  font-family: var(--face-ui);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.markwhy {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 0.92rem;
+  padding-left: 1.6em;
+}
+
+/* --------------------------------------------------- scratch paper */
+
+.scratchslot:empty { display: none; }
+.scratchslot { margin-top: 14px; }
+.scratchboard {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: 1px solid var(--edge);
+  background: var(--paper);
+  touch-action: none;
+}
+.scratchtools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 620px) {
+  .scratchboard { height: 260px; }
+  .partrow { padding-left: 10px; }
+}

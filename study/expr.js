@@ -689,7 +689,11 @@ function html(node, parent = 0) {
     case 'num': return String(round(node.v)).replace('-', '−');
     case 'const': return node.n === 'pi' ? 'π' : node.n;
     case 'var': return `<i>${MathKit.esc(node.n)}</i>`;
-    case 'neg': return wrap(`−${html(node.a, PREC.neg)}`);
+    case 'neg':
+      /* A stacked fraction needs no brackets after a minus sign: it is
+         already one visual object, and −( 1/(x+1)² ) is not how an answer
+         is written down. */
+      return wrap(`−${html(node.a, node.a.t === 'div' ? 0 : PREC.neg)}`);
     case 'add': {
       const flip = negativePart(node.b);
       if (flip) return wrap(`${html(node.a, 1)} − ${html(flip, 2)}`);
@@ -762,7 +766,9 @@ function latex(node, parent = 0) {
     case 'num': return String(round(node.v));
     case 'const': return node.n === 'pi' ? '\\pi' : node.n === 'tau' ? '\\tau' : 'e';
     case 'var': return node.n;
-    case 'neg': return wrap(`-${latex(node.a, PREC.neg)}`);
+    case 'neg':
+      /* \frac is atomic too. */
+      return wrap(`-${latex(node.a, node.a.t === 'div' ? 0 : PREC.neg)}`);
     case 'add': {
       const flip = negativePart(node.b);
       if (flip) return wrap(`${latex(node.a, 1)}-${latex(flip, 2)}`);

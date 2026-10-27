@@ -2206,8 +2206,187 @@ function touchDevice() {
     && window.matchMedia('(pointer: coarse)').matches;
 }
 
-function mathKeys(input) {
+/* ------------------------------------------------- typing an answer */
+
+/* Brackets close themselves.
+
+   Typing (3*x+1)/(2*x-5) on a phone means counting brackets with a thumb,
+   and a mismatched one makes the whole answer unreadable - which the grader
+   then reports as an unreadable answer rather than as a wrong one. So an
+   opening bracket brings its partner, typing the closing one steps over it
+   rather than doubling it, and backspacing an empty pair removes both. The
+   same behaviour every code editor has, for the same reason. */
+function autoPair(input) {
+  input.addEventListener('keydown', (e) => {
+    const el = e.currentTarget;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start == null) return;
+    const value = el.value;
+    const fire = () => el.dispatchEvent(new Event('input', { bubbles: true }));
+
+    if (e.key === '(') {
+      e.preventDefault();
+      const picked = value.slice(start, end);
+      el.value = `${value.slice(0, start)}(${picked})${value.slice(end)}`;
+      /* Wrapping a selection puts the caret after it; an empty bracket puts
+         the caret inside, which is where you were about to type. */
+      const caret = picked ? start + picked.length + 2 : start + 1;
+      el.setSelectionRange(caret, caret);
+      fire();
+      return;
+    }
+    if (e.key === ')' && start === end && value[start] === ')') {
+      e.preventDefault();
+      el.setSelectionRange(start + 1, start + 1);
+      return;
+    }
+    if (e.key === 'Backspace' && start === end
+      && value[start - 1] === '(' && value[start] === ')') {
+      e.preventDefault();
+      el.value = value.slice(0, start - 1) + value.slice(start + 1);
+      el.setSelectionRange(start - 1, start - 1);
+      fire();
+    }
+  });
+  return input;
+}
+
+/* A question asked line by line.
+
+   The limit definition is the one that needs it: asked as a single answer it
+   can be done with the chain rule, which is not the question. Four boxes,
+   each with the line of working it wants, and Enter moves down them rather
+   than submitting - you are filling in a page, not answering a prompt. */
+function partsForm(problem, saved, submit) {
+  const wrap = h('div', { class: 'parts' });
+  const inputs = [];
+  const values = Array.isArray(saved) ? saved : [];
+
+  problem.parts.forEach((part, i) => {
+    const input = autoPair(h('input', {
+      type: 'text', class: 'answerinput partinput', autocomplete: 'off',
+      spellcheck: 'false', placeholder: part.placeholder || '',
+      value: values[i] || '', 'aria-label': part.label,
+    }));
+    inputs.push(input);
+    const row = h('div', { class: 'partrow' }, [
+      h('div', { class: 'partlabel' }, [
+        h('span', { class: 'partnum', text: String(i + 1) }),
+        h('span', { text: part.label }),
+      ]),
+      part.promptHtml
+        ? h('div', { class: 'partprompt eq', html: part.promptHtml })
+        : null,
+      input,
+      attachEcho(input, { kind: 'expression', variable: 'x', vars: part.vars }),
+    ]);
+    wrap.appendChild(row);
+  });
+
+  for (let i = 0; i < inputs.length; i++) {
+    inputs[i].addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (i + 1 < inputs.length) inputs[i + 1].focus();
+      else if (submit) submit();
+    });
+  }
+
+  return {
+    wrap,
+    inputs,
+    read: () => inputs.map((el) => el.value),
+    keysFor: () => {
+      const active = inputs.find((el) => el === document.activeElement);
+      return active || inputs[0];
+    },
+  };
+}
+
+/* How each line was marked, which is the part worth reading when a
+   four-line answer comes back wrong. */
+function partsVerdict(problem, res) {
+  if (!problem.parts || !res || !res.parts) return null;
+  const list = h('ol', { class: 'partmarks' });
+  problem.parts.forEach((part, i) => {
+    const v = res.parts[i] || {};
+    list.appendChild(h('li', { class: v.correct ? 'ok' : 'no' }, [
+      h('span', { class: 'marktick', text: v.correct ? '✓' : '✗' }),
+      h('span', { class: 'marklabel', text: part.label }),
+      !v.correct && v.hint ? h('span', { class: 'markwhy', text: v.hint }) : null,
+    ]));
+  });
+  return list;
+}
+
+/* ------------------------------------------------------- scratch paper */
+
+/* Paper, on the test.
+
+   There is a whiteboard in the workspace, but not where the questions are,
+   and "show your working" with nowhere to work is an empty instruction.
+   This is the same board, scoped to the one question, folded away until
+   asked for and kept afterwards: come back to the question and the working
+   is still there. */
+function scratchPanel(problem) {
+  const slot = h('div', { class: 'scratchslot' });
+  const key = persist.workspaceKey(
+    store.activeProfile().id, `scratch:${problem.key || 'question'}`,
+  );
+  let open = false;
+  let api = null;
+
+  const toggle = h('button', { class: 'btn ghost', type: 'button' }, 'Scratch paper');
+  const label = () => {
+    const kept = open ? 0 : persist.loadStrokes(key).length;
+    toggle.textContent = open ? 'Put the paper away'
+      : (kept ? 'Scratch paper (has working on it)' : 'Scratch paper');
+  };
+
+  toggle.addEventListener('click', () => {
+    open = !open;
+    if (!open) { slot.innerHTML = ''; api = null; label(); return; }
+    slot.innerHTML = '';
+    const canvas = h('canvas', { class: 'boardcanvas scratchboard', 'aria-label': 'Scratch paper' });
+    const tools = h('div', { class: 'boardtools scratchtools' });
+    slot.appendChild(tools);
+    slot.appendChild(canvas);
+    api = board.createBoard(canvas, {
+      author: store.activeProfile().name || 'me',
+      dark: darkNow(),
+      onChange: () => persist.saveStrokes(key, api.snapshot()),
+    });
+    const saved = persist.loadStrokes(key);
+    if (saved.length) api.load(saved);
+    const toolBtn = (id, text) => h('button', {
+      class: `chip${api.tool() === id ? ' on' : ''}`, type: 'button',
+      dataset: { tool: id },
+      onclick: () => {
+        api.setTool(id);
+        for (const other of tools.querySelectorAll('.chip[data-tool]')) {
+          other.classList.toggle('on', other.dataset.tool === id);
+        }
+      },
+    }, text);
+    tools.appendChild(toolBtn('pen', 'Pen'));
+    tools.appendChild(toolBtn('eraser', 'Eraser'));
+    tools.appendChild(h('button', {
+      class: 'chip', type: 'button',
+      onclick: () => { api.clear(); persist.saveStrokes(key, api.snapshot()); },
+    }, 'Clear'));
+    label();
+  });
+
+  label();
+  return { toggle, slot };
+}
+
+function mathKeys(target) {
   if (!touchDevice()) return null;
+  /* `target` may be an input or a function returning one, so a single row of
+     keys can serve a four-box answer. Resolved at tap time, not now. */
+  const pick = () => (typeof target === 'function' ? target() : target);
   const row = h('div', { class: 'mathkeys', role: 'group', 'aria-label': 'Maths keys' });
   for (const key of MATH_KEYS) {
     row.appendChild(h('button', {
@@ -2216,6 +2395,8 @@ function mathKeys(input) {
          and the on-screen keyboard does not flap shut between taps. */
       onmousedown: (e) => e.preventDefault(),
       onclick: () => {
+        const input = pick();
+        if (!input) return;
         const start = input.selectionStart == null ? input.value.length : input.selectionStart;
         const end = input.selectionEnd == null ? start : input.selectionEnd;
         const before = input.value.slice(0, start);
@@ -2230,6 +2411,16 @@ function mathKeys(input) {
     }, key.label));
   }
   return row;
+}
+
+/* The line a graph or a progress check should look at: the last one with
+   anything in it, which for a parts answer is the derivative itself. */
+function lastLine(value) {
+  if (!Array.isArray(value)) return value;
+  for (let i = value.length - 1; i >= 0; i--) {
+    if (String(value[i] || '').trim()) return value[i];
+  }
+  return '';
 }
 
 /* What a progress check calls each state, in words rather than a colour. */
@@ -2261,8 +2452,9 @@ function trackLabel(state) {
 function attachEcho(input, problem) {
   const echo = h('p', { class: 'echo', 'aria-live': 'polite' });
   const variable = problem && problem.variable ? problem.variable : 'x';
-  const allowed = problem && problem.kind === 'expression' && problem.implicit
-    ? [variable, 'y'] : null;
+  const allowed = (problem && problem.vars)
+    || (problem && problem.kind === 'expression' && problem.implicit
+      ? [variable, 'y'] : null);
 
   const paint = () => {
     const raw = input.value;
@@ -2609,21 +2801,26 @@ function paintWorkspaceProblem(slot) {
   ]));
   card.appendChild(h('div', { class: 'stem', html: problem.stem }));
 
-  const input = h('input', {
+  const submitRef = { fn: () => {} };
+  const multi = problem.kind === 'parts' && problem.parts
+    ? partsForm(problem, workspace.lastAnswer, () => submitRef.fn())
+    : null;
+  const input = multi ? multi.inputs[0] : autoPair(h('input', {
     type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
     placeholder: inputHint(problem), value: workspace.lastAnswer || '',
     'aria-label': 'Your answer',
-  });
+  }));
+  const readAnswer = () => (multi ? multi.read() : input.value);
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(problem.kind);
-  const keys = expressionish ? mathKeys(input) : null;
-  const echo = expressionish ? attachEcho(input, problem) : null;
+  const keys = multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null);
+  const echo = multi ? null : (expressionish ? attachEcho(input, problem) : null);
   const feedback = h('div', { class: 'wsfeedback' });
 
   const check = () => {
-    workspace.lastAnswer = input.value;
+    workspace.lastAnswer = readAnswer();
     saveWorkspace();
-    const res = grade(problem, input.value);
+    const res = grade(problem, readAnswer());
     feedback.innerHTML = '';
     feedback.appendChild(h('div', {
       class: `feedback ${res.correct ? 'good' : res.decided === false ? 'warn' : 'bad'}`,
@@ -2634,14 +2831,21 @@ function paintWorkspaceProblem(slot) {
         ? h('p', { html: `The answer is <strong>${problem.answerHtml}</strong>` })
         : null,
     ]));
+    const lines = partsVerdict(problem, res);
+    if (lines) feedback.appendChild(lines);
     /* A wrong answer is exactly when the picture helps most. */
     if (!res.correct && workspace.panel === 'graph') mountGraph($('.tabbody'));
   };
 
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); check(); } });
+  submitRef.fn = check;
+  if (!multi) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); check(); }
+    });
+  }
 
   card.appendChild(h('div', { class: 'answerform' }, [
-    input,
+    multi ? multi.wrap : input,
     keys,
     echo,
     h('div', { class: 'cta' }, [
@@ -3392,13 +3596,23 @@ function renderQuiz(root) {
   }
   card.appendChild(h('div', { class: 'stem', html: q.stem }));
 
-  const input = h('input', {
+  /* A question asked line by line gets a box per line. Everything else
+     gets the one box it always had. */
+  const submitRef = { fn: () => {} };
+  const multi = q.kind === 'parts' && q.parts
+    ? partsForm(q, quizRun.responses[quizRun.index], () => submitRef.fn())
+    : null;
+  const input = multi ? multi.inputs[0] : autoPair(h('input', {
     type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
     placeholder: inputHint(q), value: quizRun.responses[quizRun.index] || '',
     'aria-label': 'Your answer',
-  });
+  }));
+  const readAnswer = () => (multi ? multi.read() : input.value);
+  /* Somewhere to work it out, kept with the question. */
+  const scratch = scratchPanel(q);
+
   const advance = (delta) => {
-    quizRun.responses[quizRun.index] = input.value;
+    quizRun.responses[quizRun.index] = readAnswer();
     const next = quizRun.index + delta;
     if (next >= quizRun.problems.length) {
       /* A drill does not run out. It makes the next one. */
@@ -3431,8 +3645,8 @@ function renderQuiz(root) {
 
   const markNow = () => {
     if (marked) { advance(1); return; }
-    quizRun.responses[quizRun.index] = input.value;
-    const res = grade(q, input.value);
+    quizRun.responses[quizRun.index] = readAnswer();
+    const res = grade(q, readAnswer());
     if (!quizRun.verdicts) quizRun.verdicts = [];
     quizRun.verdicts[quizRun.index] = res;
     marked = true;
@@ -3468,6 +3682,8 @@ function renderQuiz(root) {
          marking now rather than at the end. */
       res.detail ? h('p', { text: res.detail }) : null,
     ]));
+    const lines = partsVerdict(q, res);
+    if (lines) marking.appendChild(lines);
     if (comingBack.length) {
       marking.appendChild(h('p', { class: 'small muted comingback', text: comingBack.length > 1
         ? 'Two more like this are coming up in the next few questions.'
@@ -3496,18 +3712,23 @@ function renderQuiz(root) {
   }, immediate ? 'Check'
     : (quizRun.index === quizRun.problems.length - 1 && !endless ? 'Finish' : 'Next'));
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    if (immediate) markNow(); else advance(1);
-  });
+  submitRef.fn = () => { if (immediate) markNow(); else advance(1); };
+  /* A single-box answer submits on Enter. A parts form moves down its boxes
+     instead, and submits from the last one - partsForm handles that. */
+  if (!multi) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      submitRef.fn();
+    });
+  }
 
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(q.kind);
   card.appendChild(h('div', { class: 'answerform' }, [
-    input,
-    expressionish ? mathKeys(input) : null,
-    expressionish ? attachEcho(input, q) : null,
+    multi ? multi.wrap : input,
+    multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null),
+    multi ? null : (expressionish ? attachEcho(input, q) : null),
     h('div', { class: 'cta' }, [
       quizRun.index > 0
         ? h('button', { class: 'btn ghost', type: 'button', onclick: () => advance(-1) }, 'Back')
@@ -3516,14 +3737,16 @@ function renderQuiz(root) {
       immediate && !q.noGraph
         ? h('button', {
           class: 'btn ghost', type: 'button',
-          onclick: () => examGraph(q, input.value, graphSlot),
+          onclick: () => examGraph(q, lastLine(readAnswer()), graphSlot),
         }, 'See it graphed')
         : null,
+      /* Paper is not a reward for finishing - it is how you get there. */
+      scratch.toggle,
       immediate && expressionish
         ? h('button', {
           class: 'btn ghost', type: 'button',
           onclick: () => {
-            const where = onTrack(q, input.value);
+            const where = onTrack(q, lastLine(readAnswer()));
             marking.innerHTML = '';
             marking.appendChild(h('div', { class: 'feedback track ' + where.state }, [
               h('strong', { text: trackLabel(where.state) }),
@@ -3543,6 +3766,7 @@ function renderQuiz(root) {
     q.noGraph && q.noGraphWhy
       ? h('p', { class: 'small muted nograph', text: q.noGraphWhy })
       : null,
+    scratch.slot,
     marking,
     graphSlot,
   ]));
@@ -3558,6 +3782,8 @@ function renderQuiz(root) {
         : null,
       res.detail ? h('p', { text: res.detail }) : null,
     ]));
+    const lines = partsVerdict(q, res);
+    if (lines) marking.appendChild(lines);
     checkBtn.textContent = lastOne() && !endless ? 'Finish' : 'Next';
   }
 
