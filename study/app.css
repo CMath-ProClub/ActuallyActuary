@@ -1464,3 +1464,26 @@ body.noscroll { overflow: hidden; }
   .conceptgrid { grid-template-columns: 1fr; }
   .conceptrow { padding: 9px 0; }
 }
+
+
+/* ------------------------------------------------ going outside for help */
+
+/* Folded away by default: a video link under every wrong answer is noise,
+   and the worked steps are usually what was wanted. */
+.watch { margin-top: 12px; }
+.watch > summary {
+  cursor: pointer;
+  font-family: var(--face-ui);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.watchlist { margin: 10px 0 6px; padding-left: 18px; }
+.watchlist li { margin-bottom: 8px; }
+.watchlist p { margin: 2px 0 0; }
+.watchwho {
+  color: var(--muted);
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+}
+.watchline { margin-top: 4px; }

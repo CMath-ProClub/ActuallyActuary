@@ -25,6 +25,7 @@ import * as ollama from './ollama.js';
 import { EXAM_LENGTHS, examSlots, examConcepts } from './exam.js';
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
+import * as help from './help.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -2691,6 +2692,44 @@ function mathKeys(target) {
   return row;
 }
 
+/* Somewhere to go when the working is not enough.
+
+   Folded away, because a video link under every wrong answer is noise and
+   the worked steps are usually what is actually wanted. Labelled with who
+   made it, because this sends you off the site to somebody else's
+   teaching and pretending otherwise would be shabby. */
+function helpPanel(problem, slot) {
+  const videos = (slot && slot.family ? help.helpForFamily(slot.family) : [])
+    .concat(help.helpFor(problem.skill || ''));
+  /* The same lecture twice is one lecture. */
+  const seenUrls = new Set();
+  const list = videos.filter((v) => {
+    if (seenUrls.has(v.url)) return false;
+    seenUrls.add(v.url);
+    return true;
+  });
+  if (!list.length) return null;
+
+  const box = h('details', { class: 'watch' });
+  box.appendChild(h('summary', { text: list.length > 1
+    ? `Still stuck? ${list.length} videos on this`
+    : 'Still stuck? A video on this' }));
+  const ol = h('ul', { class: 'watchlist' });
+  for (const video of list) {
+    ol.appendChild(h('li', {}, [
+      h('a', {
+        href: video.url, target: '_blank', rel: 'noreferrer noopener',
+      }, video.title),
+      video.who ? h('span', { class: 'watchwho', text: ` ${video.who}` }) : null,
+      video.why ? h('p', { class: 'small muted', text: video.why }) : null,
+    ]));
+  }
+  box.appendChild(ol);
+  box.appendChild(h('p', { class: 'small muted', text: 'These open YouTube in '
+    + 'another tab. They are other people’s lectures, not mine.' }));
+  return box;
+}
+
 /* Hand the working to the model on this machine.
 
    Only for a question asked line by line, only when a model is configured,
@@ -3742,6 +3781,12 @@ function renderLockIn(root) {
         seen && seen.solid ? h('span', { class: 'pill good', text: 'solid' }) : null,
       ]),
       h('p', { class: 'small muted', text: `Study: ${family.study}.` }),
+      ...help.helpForFamily(entry.family).map((video) => h('p', { class: 'small watchline' }, [
+        h('a', {
+          href: video.url, target: '_blank', rel: 'noreferrer noopener',
+        }, video.title),
+        video.who ? h('span', { class: 'watchwho', text: ` ${video.who}` }) : null,
+      ])),
       seen && (seen.right || seen.wrong)
         ? h('p', { class: 'small focusscore', text: `${seen.right} right, `
           + `${seen.wrong} wrong${seen.run ? ` \u00b7 ${seen.run} in a row` : ''}` })
@@ -4198,6 +4243,10 @@ function renderQuiz(root) {
     if (lines) marking.appendChild(lines);
     const review = workReview(q, readAnswer(), res);
     if (review) marking.appendChild(review);
+    if (!res.correct) {
+      const watch = helpPanel(q, (quizRun.slots || [])[quizRun.index]);
+      if (watch) marking.appendChild(watch);
+    }
     if (comingBack.length) {
       marking.appendChild(h('p', { class: 'small muted comingback', text: comingBack.length > 1
         ? 'Two more like this are coming up in the next few questions.'
