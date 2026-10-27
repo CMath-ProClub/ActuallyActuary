@@ -122,6 +122,37 @@ export const DIAGNOSES = {
     skills: ['implicit'],
     teachable: true,
   },
+  'tangent-slope-only': {
+    label: 'A slope where a line was wanted',
+    detail: 'A tangent line needs the point as well: y = f(a) + f\u2032(a)(x \u2212 a).',
+    skills: ['tangent'],
+    teachable: true,
+  },
+  'tangent-value-only': {
+    label: 'The height without the slope',
+    detail: 'f(a) is where the line touches. It still has to lean.',
+    skills: ['tangent'],
+    teachable: true,
+  },
+  'only-once': {
+    label: 'Stopping after the first derivative',
+    detail: 'A second derivative, or an acceleration, means differentiating twice.',
+    skills: ['secondderiv', 'motion'],
+    teachable: true,
+  },
+  'incomplete-set': {
+    label: 'Stopping at the first solution',
+    detail: 'A factored equation is zero wherever ANY factor is zero. Check each one.',
+    skills: ['horizontal'],
+    teachable: true,
+  },
+  'extra-root': {
+    label: 'A solution that is not one',
+    detail: 'Usually a factor that can never be zero, like e to a power, or a '
+      + 'value outside the interval the question gave.',
+    skills: ['horizontal'],
+    teachable: true,
+  },
   'not-differentiated': {
     label: 'Answering with f itself',
     detail: 'The question asked for its derivative.',

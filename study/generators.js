@@ -13,7 +13,7 @@ import * as ACT from './gen-actuarial.js';
 import * as CS from './gen-cs.js';
 import { gradeExpression } from './gen-sandbox.js';
 
-const { rng, hashSeed, parseNumber, numericEqual, textEqual, setEqual, esc } = MathKit;
+const { rng, hashSeed, parseNumber, numericEqual, textEqual, setReport, esc } = MathKit;
 
 export const REGISTRY = { ...ALG, ...CALC, ...ACT, ...CS };
 
@@ -165,12 +165,34 @@ export function grade(problem, response) {
         const ok = parts.every((p, i) => numericEqual(p, problem.answers[i], problem.tol || 1e-6));
         return { correct: ok, detail: '', diagnosis: ok ? '' : 'wrong' };
       }
-      const ok = setEqual(raw, problem.answers, problem.tol || 1e-6);
-      return {
-        correct: ok,
-        detail: ok ? '' : `Expected ${problem.answers.length} value${problem.answers.length === 1 ? '' : 's'}, in any order.`,
-        diagnosis: ok ? '' : 'wrong',
-      };
+      /* Which values are missing and which were invented, rather than a
+         count. Finding two of the three roots is most of the work and
+         deserves to be told apart from not knowing the method. */
+      const rep = setReport(raw, problem.answers, problem.tol || 1e-6);
+      if (rep.correct) return { correct: true, detail: '', diagnosis: '' };
+      const fmt = (v) => MathKit.num(v, 4);
+      const parts = [];
+      let diagnosis = 'wrong';
+      if (rep.unreadable) {
+        parts.push('I could not read part of that. Separate the values with commas, '
+          + 'like 0, -2 or pi/3, 5*pi/3.');
+        diagnosis = 'unreadable';
+      }
+      if (rep.duplicates) parts.push('The same value is in there twice.');
+      if (rep.found.length && rep.missing.length) {
+        parts.push(`You found ${rep.found.length} of the ${rep.wanted}: `
+          + `${rep.found.map(fmt).join(', ')}. There `
+          + `${rep.missing.length === 1 ? 'is one more' : `are ${rep.missing.length} more`}.`);
+        diagnosis = 'incomplete-set';
+      } else if (rep.missing.length === rep.wanted && !rep.extra.length && !rep.unreadable) {
+        parts.push(`Expected ${rep.wanted} value${rep.wanted === 1 ? '' : 's'}, in any order.`);
+      }
+      if (rep.extra.length) {
+        parts.push(`${rep.extra.map(fmt).join(', ')} `
+          + `${rep.extra.length === 1 ? 'is not one of them' : 'are not among them'}.`);
+        if (diagnosis === 'wrong') diagnosis = 'extra-root';
+      }
+      return { correct: false, detail: parts.join(' '), diagnosis };
     }
 
     case 'text':
@@ -203,9 +225,11 @@ export function inputHint(problem) {
     case 'expanded':
       return 'multiplied out, e.g. x^2+5*x+6';
     case 'expression':
+      /* Short enough to fit the box on a phone. The "no need to simplify"
+         note lives under the question, where it is not truncated. */
       return problem.implicit
         ? 'an expression in x and y, e.g. -x/y'
-        : 'the derivative, e.g. 6*x*cos(3*x^2) - no need to simplify';
+        : 'the derivative, e.g. 6*x*cos(3*x^2)';
     case 'numeric': return 'a number, e.g. 12, -3.5, 3/4, 2*pi/3';
     case 'set': return problem.ordered ? 'two values, e.g. 3, -1' : 'all values, separated by commas';
     case 'text': return 'your answer';

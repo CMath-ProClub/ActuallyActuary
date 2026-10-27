@@ -192,6 +192,16 @@ export const MathKit = (() => {
     if (!s) return null;
     s = s.replace(/−/g, '-').replace(/\s+/g, ' ');
     s = s.replace(/[π]/g, 'pi');
+    /* "x = 3" is how the answer gets written on paper, and the x is not part
+       of the number. Also drops "t =" and "y =". */
+    s = s.replace(/^[a-z]\s*=\s*/, '');
+    /* Implicit multiplication, for the forms people actually type: 5pi/6,
+       2sqrt(3), 3(x). Only before pi, sqrt and an open bracket - putting it
+       before every letter would turn 1e5 into 1*e*5. */
+    s = s.replace(/(\d)\s*(pi\b)/g, '$1*$2');
+    s = s.replace(/(\d)\s*(sqrt\b)/g, '$1*$2');
+    s = s.replace(/(\d)\s*\(/g, '$1*(');
+    s = s.replace(/(pi)\s*(sqrt\b|\()/g, '$1*$2');
 
     /* mixed number: "1 1/2" */
     const mixed = s.match(/^(-?\d+) (\d+)\/(\d+)$/);
@@ -323,18 +333,43 @@ export const MathKit = (() => {
 
   /* A set of numbers in any order, which is what "the roots are ..." needs. */
   function setEqual(gotRaw, want, tol = 1e-6) {
-    const got = String(gotRaw || '')
-      .split(/[,;]|\band\b/)
-      .map((p) => parseNumber(p))
-      .filter((v) => v !== null);
-    if (got.length !== want.length) return false;
+    return setReport(gotRaw, want, tol).correct;
+  }
+
+  /* The same comparison, but it says what went wrong.
+
+     Missing one of three answers is a different mistake from inventing a
+     fourth, and both are different from reading the question wrongly. A
+     student who found two of the three roots needs to hear "there is one
+     more", not "expected 3 values". */
+  function setReport(gotRaw, want, tol = 1e-6) {
+    const pieces = String(gotRaw || '').split(/[,;]|\band\b|\bor\b/);
+    const got = [];
+    let unreadable = 0;
+    for (const piece of pieces) {
+      if (!String(piece).trim()) continue;
+      const v = parseNumber(piece);
+      if (v === null) unreadable++; else got.push(v);
+    }
     const pool = want.map((w) => (w instanceof Frac ? w.valueOf() : Number(w)));
+    const found = [];
+    const extra = [];
     for (const g of got) {
       const idx = pool.findIndex((w) => numericEqual(g, w, tol));
-      if (idx === -1) return false;
-      pool.splice(idx, 1);
+      if (idx === -1) extra.push(g); else found.push(pool.splice(idx, 1)[0]);
     }
-    return true;
+    /* Writing the same root twice is not two answers. */
+    const duplicates = got.length - new Set(got.map((g) => Math.round(g * 1e6))).size;
+    return {
+      correct: unreadable === 0 && extra.length === 0 && pool.length === 0
+        && duplicates === 0,
+      found,
+      missing: pool,
+      extra,
+      unreadable,
+      duplicates,
+      wanted: want.length,
+    };
   }
 
   /* ------------------------------------------------------------- formatting */
@@ -378,7 +413,8 @@ export const MathKit = (() => {
   }
 
   return { rng, hashSeed, Frac, F, gcd, sup, esc, frac, sqrt, coef, terms, poly,
-    linFactor, parseNumber, numericEqual, textEqual, setEqual, num, money, pct,
+    linFactor, parseNumber, numericEqual, textEqual, setEqual, setReport,
+    num, money, pct,
     fact, nCr, nPr };
 })();
 

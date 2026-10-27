@@ -22,6 +22,8 @@ import * as store from './store.js';
 import * as sched from './scheduler.js';
 import * as charts from './charts.js';
 import * as ollama from './ollama.js';
+import { EXAM_LENGTHS, examSlots } from './exam.js';
+import * as drill from './drill.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -1810,6 +1812,34 @@ function renderStart(root) {
   const path = flow.pathFor(flowAnswers, names);
   const position = path.indexOf(step.id) + 1;
 
+  /* The exam is the thing being studied for this week, so it goes above
+     the flow rather than four questions into it. */
+  root.appendChild(h('section', { class: 'examcall' }, [
+    h('button', {
+      class: 'btn big exambtn', type: 'button', onclick: () => startExam(30),
+    }, 'Study for the calc exam'),
+    h('p', { class: 'small muted', text: 'Unit 2 end to end: the limit definition, '
+      + 'the four rules, the transcendental mixes, tangent lines, horizontal tangents, '
+      + 'second derivatives, implicit, logarithmic differentiation and motion. Mixed '
+      + 'difficulty, marked as you go, with the working for anything you miss.' }),
+    h('div', { class: 'examsizes' }, [
+      h('span', { class: 'small muted', text: 'Length:' }),
+      ...EXAM_LENGTHS.map((n) => h('button', {
+        class: 'btn small ghost', type: 'button', onclick: () => startExam(n),
+      }, `${n}`)),
+      h('span', { class: 'small muted', text: 'questions' }),
+    ]),
+    /* The other half of it: a test is fixed, a drill reacts. */
+    h('div', { class: 'drillcall' }, [
+      h('button', {
+        class: 'btn drillbtn', type: 'button', onclick: () => startDrill(),
+      }, 'Just study, no end to it'),
+      h('p', { class: 'small muted', text: 'Questions until you stop. Miss one and '
+        + 'another like it comes back a few questions later; miss that too and two '
+        + 'more taper in. Keep missing it and it comes back easier.' }),
+    ]),
+  ]));
+
   const panel = h('section', { class: 'flowstep' });
 
   /* Where you are, and a way back to any earlier answer. */
@@ -3112,6 +3142,122 @@ function paintPeekProblem(slot, description, person) {
 /* ===================================================================== quiz */
 
 let quizRun = null;
+/* ====================================================== the calculus exam */
+
+/* The endless drill, which is a different thing from a practice test.
+
+   A test is fixed in advance - that is what makes it a test, and why the
+   blueprint picks the questions before the first one is answered. A drill
+   reacts: miss something and it comes back, miss it again and it comes back
+   twice. drill.js holds the rule; this holds the session it runs in.
+
+   There is no end to it, so there is no mark out of anything: the only
+   number worth showing is how you are doing lately. */
+function startDrill() {
+  const state = drill.createDrill(freshSeed());
+  const first = drillQuestion(state, 0);
+  quizRun = {
+    plan: {
+      label: 'Study, no end',
+      who: store.activeProfile().name,
+      immediate: true,
+      endless: true,
+      partial: true,
+      hints: true,
+      count: 0,
+      minutes: 0,
+    },
+    drill: state,
+    slots: first ? [first.slot] : [],
+    problems: first ? [first.problem] : [],
+    index: 0,
+    responses: [''],
+    verdicts: [null],
+    startedAt: Date.now(),
+    endsAt: 0,
+    phase: first ? 'running' : 'empty',
+  };
+  saveQuiz();
+  const before = location.hash;
+  go('quiz');
+  if (location.hash === before) router();
+}
+
+/* One question from the drill's scheduler. Retries, because a generator is
+   allowed to decline a seed - it would rather build nothing than build a
+   question whose numbers are ugly. */
+function drillQuestion(state, index) {
+  for (let tries = 0; tries < 30; tries++) {
+    const slot = drill.nextSlot(state, index);
+    const problem = buildProblem({ skills: [slot.skill], level: slot.level }, freshSeed());
+    if (problem) return { slot, problem };
+  }
+  return null;
+}
+
+function startExam(count) {
+  const slots = examSlots(count || 30);
+  const problems = [];
+  const seenStems = new Set();
+  for (const slot of slots) {
+    let made = null;
+    for (let tries = 0; tries < 30 && !made; tries++) {
+      made = buildProblem({ skills: [slot.skill], level: slot.level }, freshSeed());
+      /* The same question twice in one test is a wasted question. */
+      if (made && seenStems.has(made.stem)) made = null;
+    }
+    if (made) { problems.push(made); seenStems.add(made.stem); }
+  }
+  quizRun = {
+    plan: {
+      label: 'Calculus Unit 2',
+      who: store.activeProfile().name,
+      /* Marked as you go, because being told at the end what you got wrong
+         is revision; being told now is learning. */
+      immediate: true,
+      partial: true,
+      hints: true,
+      count: problems.length,
+      minutes: 0,
+    },
+    problems,
+    index: 0,
+    responses: new Array(problems.length).fill(''),
+    verdicts: new Array(problems.length).fill(null),
+    startedAt: Date.now(),
+    endsAt: 0,
+    phase: problems.length ? 'running' : 'empty',
+  };
+  saveQuiz();
+  const before = location.hash;
+  go('quiz');
+  if (location.hash === before) router();
+}
+
+/* The graph for one question, built on demand and folded away again. A test
+   is not the place for a panel that is always open, but "what does that
+   even look like" is exactly the question a wrong answer raises.
+
+   Some questions do not get one at all - see noGraph. */
+function examGraph(problem, answer, slot) {
+  slot.innerHTML = '';
+  const host = h('div', { class: 'graphhost examgraph' });
+  const note = h('p', { class: 'small muted', text: 'Drawing...' });
+  slot.appendChild(host);
+  slot.appendChild(note);
+  graph.createGraph(host, { dark: darkNow(), key: store.activeProfile().settings.desmosKey })
+    .then((api) => {
+      const series = graph.derivativeSeries(problem, answer);
+      if (!series.length) {
+        note.textContent = 'There is nothing to draw for this one.';
+        return;
+      }
+      api.setFunctions(series);
+      note.textContent = series.some((s) => s.role === 'yours')
+        ? 'Your answer is dashed. Where it leaves the solid line is where it went wrong.'
+        : 'The function and its derivative.';
+    });
+}
 
 function saveQuiz() {
   if (!quizRun || quizRun.phase !== 'running') return;
@@ -3119,6 +3265,13 @@ function saveQuiz() {
     plan: quizRun.plan,
     problems: quizRun.problems.map((p) => persist.describeProblem(p)),
     responses: quizRun.responses,
+    /* Marked as you go means the marking is part of the session: losing it
+       to a stray refresh would show a question as unanswered that has
+       already been graded, and record the attempt twice. */
+    verdicts: quizRun.verdicts || null,
+    /* And an endless session is nothing but its scheduler state. */
+    drill: quizRun.drill || null,
+    slots: quizRun.slots || null,
     index: quizRun.index,
     startedAt: quizRun.startedAt,
     endsAt: quizRun.endsAt,
@@ -3170,6 +3323,9 @@ function renderQuiz(root) {
           problems,
           index: Math.min(saved.index || 0, problems.length - 1),
           responses: saved.responses || new Array(problems.length).fill(''),
+          verdicts: saved.verdicts || new Array(problems.length).fill(null),
+          drill: saved.drill || null,
+          slots: saved.slots || null,
           startedAt: saved.startedAt || Date.now(),
           endsAt: saved.endsAt || 0,
           phase: 'running',
@@ -3195,10 +3351,20 @@ function renderQuiz(root) {
   if (quizRun.phase === 'done') { paintQuizResults(root); return; }
 
   const q = quizRun.problems[quizRun.index];
+  const endless = !!(quizRun.plan && quizRun.plan.endless);
+  /* A drill has no total to count towards, so it counts what has happened
+     instead. */
+  const answered = (quizRun.verdicts || []).filter(Boolean).length;
+  const right = (quizRun.verdicts || []).filter((v) => v && v.correct).length;
   const bar = h('div', { class: 'sessionbar' }, [
     h('div', {}, [
-      h('strong', { text: `Question ${quizRun.index + 1} of ${quizRun.problems.length}` }),
+      h('strong', { text: endless
+        ? `Question ${quizRun.index + 1}`
+        : `Question ${quizRun.index + 1} of ${quizRun.problems.length}` }),
       h('span', { class: 'muted', text: ` · ${quizRun.plan.label || 'Quiz'}` }),
+      endless && answered
+        ? h('span', { class: 'muted', text: ` · ${right} of ${answered} right` })
+        : null,
     ]),
     h('div', { class: 'tbarright' }, [
       quizRun.endsAt ? h('span', { class: 'clock', id: 'qclock', text: '--:--' }) : null,
@@ -3215,6 +3381,15 @@ function renderQuiz(root) {
     h('span', { class: 'ptopic', text: q.topicName || '' }),
     h('span', { class: 'plevel', text: `level ${q.difficulty}` }),
   ]));
+  /* Why this question is in front of you, when it is here because you
+     missed one like it. A drill that silently reorders itself looks like a
+     drill picking at random. */
+  const slot = (quizRun.slots || [])[quizRun.index];
+  if (slot && slot.repeat) {
+    card.appendChild(h('p', { class: 'small backagain', text: slot.easier
+      ? 'Back again, a step easier: you have missed a few of these.'
+      : 'Back again, because you missed one like this.' }));
+  }
   card.appendChild(h('div', { class: 'stem', html: q.stem }));
 
   const input = h('input', {
@@ -3225,31 +3400,166 @@ function renderQuiz(root) {
   const advance = (delta) => {
     quizRun.responses[quizRun.index] = input.value;
     const next = quizRun.index + delta;
-    if (next >= quizRun.problems.length) { finishQuiz(); return; }
+    if (next >= quizRun.problems.length) {
+      /* A drill does not run out. It makes the next one. */
+      if (quizRun.plan.endless) {
+        const made = drillQuestion(quizRun.drill, next);
+        if (!made) { finishQuiz(); return; }
+        quizRun.problems.push(made.problem);
+        quizRun.slots.push(made.slot);
+        quizRun.responses.push('');
+        quizRun.verdicts.push(null);
+      } else {
+        finishQuiz();
+        return;
+      }
+    }
     quizRun.index = Math.max(0, next);
     saveQuiz();
     router();
   };
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); advance(1); } });
 
+  /* Marked as you go. Being told at the end what you got wrong is revision;
+     being told now, while you still remember what you were thinking, is
+     learning. */
+  const marking = h('div', { class: 'exammark' });
+  const graphSlot = h('div', { class: 'examgraphslot' });
+  const immediate = !!(quizRun.plan && quizRun.plan.immediate);
+  let marked = !!(quizRun.verdicts && quizRun.verdicts[quizRun.index]);
+
+  const lastOne = () => quizRun.index === quizRun.problems.length - 1;
+
+  const markNow = () => {
+    if (marked) { advance(1); return; }
+    quizRun.responses[quizRun.index] = input.value;
+    const res = grade(q, input.value);
+    if (!quizRun.verdicts) quizRun.verdicts = [];
+    quizRun.verdicts[quizRun.index] = res;
+    marked = true;
+    store.recordAttempt({
+      topicId: q.topicId,
+      correct: res.correct,
+      ms: 0,
+      difficulty: q.difficulty,
+      hintsUsed: 0,
+      seed: q.seed,
+      mode: 'exam',
+      diagnosis: res.diagnosis || '',
+    });
+    /* The drill is told how it went, and says out loud what it did about
+       it, because an adaptive thing that never explains itself is
+       indistinguishable from a random one. */
+    let comingBack = [];
+    if (quizRun.plan.endless && quizRun.drill) {
+      comingBack = drill.recordResult(
+        quizRun.drill, quizRun.index, (quizRun.slots || [])[quizRun.index], res.correct,
+      );
+    }
+    marking.innerHTML = '';
+    marking.appendChild(h('div', {
+      class: 'feedback ' + (res.correct ? 'right' : res.decided === false ? 'warn' : 'wrong'),
+    }, [
+      h('p', { class: 'verdict', text: res.correct ? 'Correct'
+        : res.decided === false ? 'Could not check that one' : 'Not quite' }),
+      !res.correct && q.answerHtml
+        ? h('p', { class: 'answerline', html: 'The answer is <b>' + q.answerHtml + '</b>' })
+        : null,
+      /* The specific thing that went wrong, which is the whole reason for
+         marking now rather than at the end. */
+      res.detail ? h('p', { text: res.detail }) : null,
+    ]));
+    if (comingBack.length) {
+      marking.appendChild(h('p', { class: 'small muted comingback', text: comingBack.length > 1
+        ? 'Two more like this are coming up in the next few questions.'
+        : 'Another one like this will turn up in a few questions.' }));
+    }
+    if (!res.correct && q.steps && q.steps.length) {
+      const det = h('details', { class: 'steps', open: true });
+      det.appendChild(h('summary', { text: 'How to get there' }));
+      const ol = h('ol');
+      for (const st of q.steps) {
+        ol.appendChild(h('li', {}, [
+          h('span', { class: 'sttitle', text: st.title }),
+          h('span', { class: 'sthtml', html: st.html }),
+        ]));
+      }
+      det.appendChild(ol);
+      marking.appendChild(det);
+    }
+    checkBtn.textContent = lastOne() && !quizRun.plan.endless ? 'Finish' : 'Next';
+    saveQuiz();
+  };
+
+  const checkBtn = h('button', {
+    class: 'btn', type: 'button',
+    onclick: () => (immediate ? markNow() : advance(1)),
+  }, immediate ? 'Check'
+    : (quizRun.index === quizRun.problems.length - 1 && !endless ? 'Finish' : 'Next'));
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (immediate) markNow(); else advance(1);
+  });
+
+  const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
+    .includes(q.kind);
   card.appendChild(h('div', { class: 'answerform' }, [
     input,
-    ['expression', 'antiderivative', 'factored', 'expanded'].includes(q.kind)
-      ? mathKeys(input) : null,
-    ['expression', 'antiderivative', 'factored', 'expanded'].includes(q.kind)
-      ? attachEcho(input, q) : null,
+    expressionish ? mathKeys(input) : null,
+    expressionish ? attachEcho(input, q) : null,
     h('div', { class: 'cta' }, [
       quizRun.index > 0
         ? h('button', { class: 'btn ghost', type: 'button', onclick: () => advance(-1) }, 'Back')
         : null,
-      h('button', { class: 'btn', type: 'button', onclick: () => advance(1) },
-        quizRun.index === quizRun.problems.length - 1 ? 'Finish' : 'Next'),
+      checkBtn,
+      immediate && !q.noGraph
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => examGraph(q, input.value, graphSlot),
+        }, 'See it graphed')
+        : null,
+      immediate && expressionish
+        ? h('button', {
+          class: 'btn ghost', type: 'button',
+          onclick: () => {
+            const where = onTrack(q, input.value);
+            marking.innerHTML = '';
+            marking.appendChild(h('div', { class: 'feedback track ' + where.state }, [
+              h('strong', { text: trackLabel(where.state) }),
+              h('p', { text: where.message }),
+            ]));
+          },
+        }, 'Am I on track?')
+        : null,
     ]),
-    h('p', { class: 'small muted', text: quizRun.plan.hints
-      ? 'Hints are on for this one.'
-      : 'No hints and no answers until the end. That is what makes it a quiz.' }),
+    h('p', { class: 'small muted', text: immediate
+      ? 'Marked as you go, so you find out what went wrong while you still remember what you were thinking.'
+      : quizRun.plan.hints
+        ? 'Hints are on for this one.'
+        : 'No hints and no answers until the end. That is what makes it a quiz.' }),
+    /* Said out loud, because the missing button would otherwise look like a
+       bug rather than the point. */
+    q.noGraph && q.noGraphWhy
+      ? h('p', { class: 'small muted nograph', text: q.noGraphWhy })
+      : null,
+    marking,
+    graphSlot,
   ]));
   root.appendChild(card);
+
+  /* Coming back to a question already marked shows the marking again. */
+  if (marked && quizRun.verdicts && quizRun.verdicts[quizRun.index]) {
+    const res = quizRun.verdicts[quizRun.index];
+    marking.appendChild(h('div', { class: 'feedback ' + (res.correct ? 'right' : 'wrong') }, [
+      h('p', { class: 'verdict', text: res.correct ? 'Correct' : 'Not quite' }),
+      !res.correct && q.answerHtml
+        ? h('p', { class: 'answerline', html: 'The answer is <b>' + q.answerHtml + '</b>' })
+        : null,
+      res.detail ? h('p', { text: res.detail }) : null,
+    ]));
+    checkBtn.textContent = lastOne() && !endless ? 'Finish' : 'Next';
+  }
 
   if (quizRun.endsAt) startQuizClock();
 }

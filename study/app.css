@@ -1081,3 +1081,73 @@ footer {
 .hint.track.close, .feedback.track.close { border-left-color: var(--warnc); }
 .hint.track.off, .feedback.track.off { border-left-color: var(--muted); }
 .hint.track.unreadable, .feedback.track.unreadable { border-left-color: var(--warnc); }
+
+
+/* ----------------------------------------------------------- the exam */
+
+/* The one thing being revised for this week, so it sits above everything
+   else rather than four questions into a flow. */
+.examcall {
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-wash);
+  padding: 18px 20px;
+  margin: 0 0 18px;
+  max-width: 640px;
+}
+.examcall .exambtn { margin-bottom: 10px; }
+.examcall p { margin: 0; max-width: 60ch; }
+
+.exammark:empty, .examgraphslot:empty { display: none; }
+.exammark { margin-top: 14px; }
+.examgraphslot { margin-top: 14px; }
+.examgraph { height: 340px; }
+
+/* Length picker. A row on a desktop, a wrapped row on a phone, and the
+   buttons are finger sized either way. */
+.examsizes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.examsizes .btn {
+  min-width: 44px;
+  min-height: 34px;
+}
+
+/* The drill sits under the test, as the other half of the same offer. */
+.drillcall {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--edge);
+}
+.drillcall .drillbtn { margin-bottom: 8px; }
+.drillcall p { margin: 0; max-width: 60ch; }
+
+/* A question that is back because it was missed. */
+.backagain {
+  border-left: 3px solid var(--warnc);
+  padding-left: 10px;
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+.comingback { margin-top: 10px; }
+
+/* Why there is no graph button on this one. */
+.nograph {
+  border-left: 3px solid var(--muted);
+  padding-left: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 620px) {
+  .examcall { padding: 15px 14px; }
+  .examgraph { height: 260px; }
+  /* A full width target for a thumb, since this is the button the whole
+     page exists for. */
+  .examcall .exambtn, .drillcall .drillbtn { width: 100%; }
+  .examsizes { margin-top: 10px; }
+  .examsizes .btn { min-height: 40px; }
+}

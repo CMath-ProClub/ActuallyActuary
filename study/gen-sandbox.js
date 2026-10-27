@@ -31,6 +31,8 @@ const { num, vr, neg, add, sub, mul, div, pow, fn, derivative, simplify,
 
 const X = vr('x');
 const Y = vr('y');
+/* Motion problems are in time, not x. */
+const T = vr('t');
 
 /* ------------------------------------------------------------- ingredients */
 
@@ -538,6 +540,244 @@ const SKILL_EXTRAS = {
   },
 };
 
+/* ------------------------------------------------- the rest of a unit 2 */
+
+/* Everything on Carter's Unit 2 review that the derivative skills did not
+   already cover. Each is still built backward from a function the engine
+   can differentiate, so none of them has a hand-written answer key. */
+
+const EXAM_EXTRAS = {
+  limitdef: {
+    name: 'Limit definition',
+    topicId: 'calc.power',
+    ask: 'the derivative from the difference quotient',
+    build(r, level) {
+      /* The three shapes the review uses: a cube, a root and a
+         reciprocal. Each is chosen because the algebra works out, which is
+         the whole point of the exercise. */
+      const shape = r.int(0, 2);
+      const a = r.nz(1, 4);
+      const b = r.int(1, 5);
+      if (shape === 0) {
+        return {
+          f: pow(add(X, num(b)), num(3)),
+          note: 'Expand (x + h + b)^3, subtract, and every term left has an h in it.',
+        };
+      }
+      if (shape === 1) {
+        return {
+          f: fn('sqrt', add(mul(num(a === 1 ? 2 : a), X), num(b))),
+          note: 'Multiply above and below by the conjugate to clear the roots.',
+        };
+      }
+      return {
+        f: div(num(1), add(X, num(b))),
+        note: 'Put the two fractions over a common denominator first.',
+      };
+    },
+  },
+
+  tangent: {
+    name: 'Tangent lines',
+    topicId: 'calc.tangent',
+    ask: 'the equation of a tangent line at a point',
+    tangent: true,
+    build(r, level) {
+      const at = r.nz(-3, 3);
+      const shape = level === 1 ? r.int(0, 1) : r.int(0, 2);
+      if (shape === 0) {
+        return { f: mul(add(X, num(r.nz(1, 4))), pow(sub(mul(num(2), X), num(1)), num(2))), at };
+      }
+      if (shape === 1) {
+        return { f: div(num(1), pow(X, num(2))), at: r.nz(1, 4) };
+      }
+      return { f: mul(num(r.nz(2, 4)), fn('exp', mul(num(r.nz(1, 2)), X))), at: 0 };
+    },
+  },
+
+  secondderiv: {
+    name: 'Second derivatives',
+    topicId: 'calc.power',
+    ask: 'f double prime',
+    order: 2,
+    build(r, level) {
+      if (level === 1) return { f: polynomial(r, 3) };
+      const shape = r.int(0, 2);
+      if (shape === 0) return { f: mul(num(r.nz(2, 5)), fn('sin', mul(num(r.nz(2, 3)), X))) };
+      if (shape === 1) return { f: mul(X, fn('exp', mul(num(r.nz(1, 3)), X))) };
+      return { f: div(num(r.nz(2, 6)), add(X, num(r.int(1, 4)))) };
+    },
+  },
+
+  motion: {
+    name: 'Velocity and acceleration',
+    topicId: 'calc.related',
+    ask: 'v(t) and a(t) from a position function',
+    motion: true,
+    build(r, level) {
+      const shape = level === 1 ? 0 : r.int(0, 1);
+      if (shape === 0) {
+        /* The thrown-object shape from the review. */
+        const v0 = r.int(3, 20) * 8;
+        return {
+          f: add(mul(num(-16), pow(T, num(2))), mul(num(v0), T)),
+          wants: r() < 0.5 ? 'velocity' : 'acceleration',
+          note: 'Position to velocity is one derivative; velocity to acceleration is another.',
+        };
+      }
+      return {
+        f: div(add(mul(num(2), T), num(1)), add(pow(T, num(2)), num(r.int(6, 14)))),
+        wants: 'velocity',
+        note: 'A quotient: bottom times the top derivative, minus top times the bottom derivative.',
+      };
+    },
+  },
+};
+
+/* A tangent line is still an expression, so it is still gradeable: the
+   answer is y = f(a) + f'(a)(x - a), written any way that is equal to it. */
+function buildTangent(id, skill, built, level, seed) {
+  const { f, at } = built;
+  if (!f || at === undefined) return null;
+  const d = derivative(f);
+  const value = Expr.evaluate(f, { x: at });
+  const slope = Expr.evaluate(d, { x: at });
+  if (!isFinite(value) || !isFinite(slope)) return null;
+  /* Ugly numbers make this an arithmetic exercise rather than a calculus
+     one, which is not what the question is for. */
+  if (Math.abs(value) > 1e4 || Math.abs(slope) > 1e4) return null;
+  if (Math.abs(slope) < 1e-9) return null;
+
+  const line = simplify(add(num(round4(value)), mul(num(round4(slope)), sub(X, num(at)))));
+  return {
+    source: 'sandbox',
+    kind: 'expression',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Find the tangent line to <span class="eq">f(x) = ${html(f)}</span> at `
+      + `<span class="eq">x = ${at}</span>. Give it as y = ...`,
+    instruction: 'Any correct form of the line counts, expanded or not.',
+    functionText: text(f),
+    answerNode: line,
+    answerText: text(line),
+    answerHtml: `y = ${html(line)}`,
+    answerLatex: latex(line),
+    distractors: notTheAnswer(line, [
+      {
+        kind: 'tangent-slope-only',
+        node: mul(num(round4(slope)), X),
+        hint: 'That is the slope times x. The line also has to pass through the point.',
+      },
+      {
+        kind: 'tangent-value-only',
+        node: num(round4(value)),
+        hint: `That is f(${at}), the height. The line needs the slope as well.`,
+      },
+    ]),
+    original: f,
+    note: built.note || null,
+    hints: [
+      `A tangent line needs two things: a point and a slope. The point is (${at}, ${round4(value)}).`,
+      `f'(x) = ${html(d)}, so the slope at x = ${at} is ${round4(slope)}.`,
+      `Point-slope: y = ${round4(value)} + ${round4(slope)}(x - ${at}).`,
+    ],
+    steps: [
+      { title: 'The point', html: `f(${at}) = ${round4(value)}` },
+      { title: 'The derivative', html: `f'(x) = ${html(d)}` },
+      { title: 'The slope there', html: `f'(${at}) = ${round4(slope)}` },
+      { title: 'Point-slope form', html: `y = ${html(line)}` },
+    ],
+    graph: { f: latex(f), derivative: latex(line) },
+  };
+}
+
+function round4(v) {
+  return Math.round(v * 10000) / 10000;
+}
+
+/* Keep only the distractors that are genuinely wrong.
+
+   A named mistake that happens to equal the right answer is worse than no
+   distractor at all: it tells someone who did the problem correctly that
+   they made a specific error. It happens for real reasons - the tangent to
+   a curve through the origin IS just slope times x - so it is checked
+   rather than assumed. */
+function notTheAnswer(answer, list) {
+  return list.filter((d) => {
+    try {
+      return !equivalent(d.node, answer, { variable: 'x' });
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
+/* f'' and v(t)/a(t) are both "differentiate, then differentiate again", so
+   they share a builder and differ only in what the question calls them. */
+function buildRepeated(id, skill, built, level, seed) {
+  const f = simplify(built.f);
+  const variable = skill.motion ? 't' : 'x';
+  const once = derivative(f, variable);
+  const twice = simplify(simplify(derivative(once, variable)));
+  const wants = built.wants === 'acceleration' ? 2 : skill.order === 2 ? 2 : 1;
+  const answer = wants === 2 ? twice : simplify(simplify(once));
+  if (Expr.isIdenticallyZero(answer)) return null;
+
+  const name = skill.motion
+    ? (wants === 2 ? 'a(t)' : 'v(t)')
+    : (wants === 2 ? 'f″(x)' : 'f′(x)');
+  const stem = skill.motion
+    ? `A particle has position <span class="eq">s(t) = ${html(f)}</span>. Find `
+      + `<span class="eq">${name}</span>.`
+    : `Find <span class="eq">${name}</span> for <span class="eq">f(x) = ${html(f)}</span>.`;
+
+  return {
+    source: 'sandbox',
+    kind: 'expression',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable,
+    stem,
+    instruction: 'Any correct form counts. You do not have to simplify.',
+    functionText: text(f),
+    answerNode: answer,
+    answerText: text(answer),
+    answerHtml: html(answer),
+    answerLatex: latex(answer),
+    distractors: wants === 2 ? [{
+      kind: 'only-once',
+      node: simplify(simplify(once)),
+      hint: `That is ${skill.motion ? 'the velocity' : 'the first derivative'}. `
+        + 'Differentiate it once more.',
+    }] : [],
+    original: f,
+    note: built.note || null,
+    hints: [
+      built.note || 'Differentiate once, tidy up, then differentiate again.',
+      `The first derivative is ${html(simplify(simplify(once)))}.`,
+      `Differentiating that gives ${html(answer)}.`,
+    ],
+    steps: wants === 2 ? [
+      { title: 'First derivative', html: html(simplify(simplify(once))) },
+      { title: 'Second derivative', html: html(twice) },
+    ] : [
+      { title: 'Differentiate the position', html: html(answer) },
+    ],
+    graph: { f: latex(f), derivative: latex(answer) },
+  };
+}
+
 /* Build one of the problems above. Separate from buildProblem because these
    ask a different question and are marked a different way. */
 function buildIntegral(id, skill, built, level, seed) {
@@ -880,7 +1120,7 @@ function implicitEquation(r, level) {
 
   /* Level 3: both variables inside the same function, and more than one
      kind of function in the same equation. */
-  const shape = r.int(0, 9);
+  const shape = r.int(0, 13);
 
   if (shape === 0) {
     /* The one Carter asked for. ln(x^u) is u ln(x) for positive x, so this
@@ -959,6 +1199,47 @@ function implicitEquation(r, level) {
       right: add(mul(num(r.nz(2, 4)), X), Y),
       note: `The reciprocal trig functions each carry their own pair: `
         + `d/dx ${name}(y) brings a dy/dx with it.`,
+    };
+  }
+
+  if (shape === 9) {
+    /* e^y = sin(3xy). Exponential on one side, a chain-then-product on the
+       other, and nothing to collect until both are differentiated. */
+    return {
+      left: fn('exp', Y),
+      right: fn('sin', mul(num(3), mul(X, Y))),
+      note: 'Left gives e^y·dy/dx. Right is cos(3xy) times the derivative of 3xy, '
+        + 'which needs the product rule.',
+    };
+  }
+
+  if (shape === 10) {
+    /* e^(sin 4xy): a function inside a function inside a function, with
+       both variables in the innermost one. */
+    return {
+      left: fn('exp', fn('sin', mul(num(4), mul(X, Y)))),
+      right: add(X, Y),
+      note: 'Three layers on the left: the exponential, the sine, then the product 4xy. '
+        + 'Work outside in and multiply as you go.',
+    };
+  }
+
+  if (shape === 11) {
+    /* e^(tan xy). Same idea with tangent, so the inside derivative brings a
+       secant squared with it. */
+    return {
+      left: fn('exp', fn('tan', mul(X, Y))),
+      right: add(Y, num(r.int(2, 5))),
+      note: 'd/dx tan(u) is sec²(u)·u′, and u = xy needs the product rule.',
+    };
+  }
+
+  if (shape === 12) {
+    /* y inside an exponent multiplied by a trig function of x. */
+    return {
+      left: fn('exp', mul(Y, fn('sin', X))),
+      right: add(X, num(1)),
+      note: 'The exponent is a product of y and sin(x), so its derivative has two terms.',
     };
   }
 
@@ -1084,6 +1365,9 @@ export function buildProblem(spec, seed) {
   if (skill.implicit) return implicitProblem(id, skill, built, level, seed);
   if (skill.integral) return buildIntegral(id, skill, built, level, seed);
   if (skill.form) return buildForm(id, skill, built, level, seed);
+  if (skill.tangent) return buildTangent(id, skill, built, level, seed);
+  if (skill.zeroset) return buildZeroSet(id, skill, built, level, seed);
+  if (skill.motion || skill.order === 2) return buildRepeated(id, skill, built, level, seed);
 
   /* Tidy before anything is rendered, for the same reason buildForm does:
      a term with a zero or one coefficient in a generated question is how it
@@ -1119,8 +1403,12 @@ export function buildProblem(spec, seed) {
     seed: seed >>> 0,
     key: `sandbox:${id}:${level}:${seed >>> 0}`,
     variable: 'x',
-    stem: `Differentiate ${eqHtml('f(x)', html(f))}`,
-    instruction: 'Any correct form counts. You do not have to simplify.',
+    stem: id === 'limitdef'
+      ? `Use the limit definition to find f′(x) for ${eqHtml('f(x)', html(f))}`
+      : `Differentiate ${eqHtml('f(x)', html(f))}`,
+    instruction: id === 'limitdef'
+      ? 'The answer is the derivative itself. Any correct form counts.'
+      : 'Any correct form counts. You do not have to simplify.',
     functionText: text(f),
     functionLatex: latex(f),
     answerNode: reference,
@@ -1131,8 +1419,12 @@ export function buildProblem(spec, seed) {
     inner: built.inner || null,
     original: f,
     note: built.note || null,
-    hints: hintsFor(id, built, f, reference),
-    steps: stepsFor(id, built, f, reference),
+    hints: id === 'limitdef'
+      ? limitDefHints(f, reference, built)
+      : hintsFor(id, built, f, reference),
+    steps: id === 'limitdef'
+      ? limitDefSteps(f, reference, built)
+      : stepsFor(id, built, f, reference),
     graph: {
       /* What the Desmos panel plots: the function, the student's attempt and
          the true derivative. Desmos computes its own derivative of f, so the
@@ -1272,7 +1564,8 @@ function hintsFor(id, built, f, reference) {
       break;
   }
   if (built && built.inner) {
-    out.push(`The inside is ${html(built.inner)}, so u′ = ${html(derivative(built.inner))}.`);
+    out.push(`The inside is ${html(simplify(built.inner))}, so u′ = `
+      + `${html(simplify(derivative(built.inner)))}.`);
   }
   out.push(`The answer is ${html(reference)}, in one of its forms.`);
   return out;
@@ -1280,19 +1573,334 @@ function hintsFor(id, built, f, reference) {
 
 function stepsFor(id, built, f, reference) {
   const steps = [];
+  /* Everything shown in a step goes through simplify first, for the same
+     reason the question does: the step said "-1x^3" while the question it
+     was explaining said "-x^3", which reads like two different problems. */
+  const show = (node) => html(simplify(node));
   if (built && built.inner) {
-    steps.push({ title: 'Name the inside', html: `u = ${html(built.inner)}` });
-    steps.push({ title: 'Its derivative', html: `u′ = ${html(derivative(built.inner))}` });
+    steps.push({ title: 'Name the inside', html: `u = ${show(built.inner)}` });
+    steps.push({ title: 'Its derivative', html: `u′ = ${show(derivative(built.inner))}` });
   }
   if (built && built.factors) {
-    steps.push({ title: 'The two pieces', html: `${html(built.factors[0])} and ${html(built.factors[1])}` });
+    steps.push({ title: 'The two pieces', html: `${show(built.factors[0])} and ${show(built.factors[1])}` });
     steps.push({
       title: 'Their derivatives',
-      html: `${html(derivative(built.factors[0]))} and ${html(derivative(built.factors[1]))}`,
+      html: `${show(derivative(built.factors[0]))} and ${show(derivative(built.factors[1]))}`,
     });
   }
   steps.push({ title: 'Apply the rule', html: html(reference) });
   return steps;
+}
+
+/* The limit definition is a different question from "differentiate this",
+   even though the answer is the same, and the working is the whole point of
+   asking it. Showing only the finished derivative would teach nothing: what
+   the student is stuck on is the algebra that makes the h cancel. */
+function limitDefHints(f, reference, built) {
+  const shifted = substituteShift(f);
+  return [
+    'Write the quotient out first: f(x + h) minus f(x), all over h.',
+    built.note || 'Expand and simplify until every surviving term has an h in it.',
+    `With f(x + h) = ${html(shifted)}, the top becomes something every term of `
+      + 'which carries an h, so the h cancels and the limit is what is left.',
+    `The limit works out to ${html(reference)}.`,
+  ];
+}
+
+function limitDefSteps(f, reference, built) {
+  const shifted = substituteShift(f);
+  const quotient = MathKit.frac(
+    `${html(shifted)} \u2212 ${html(f)}`,
+    '<i>h</i>',
+  );
+  return [
+    { title: 'The difference quotient', html: `f\u2032(x) = lim<sub>h\u21920</sub> ${quotient}` },
+    { title: 'The move that makes it work', html: built.note || 'Simplify the top.' },
+    { title: 'Cancel the h and let it go to zero', html: html(reference) },
+  ];
+}
+
+/* f(x + h), which is f with every x replaced by x + h. */
+function substituteShift(node) {
+  const H = vr('h');
+  const walk = (n) => {
+    if (!n) return n;
+    if (n.t === 'var' && n.n === 'x') return add(X, H);
+    if (n.t === 'num' || n.t === 'const') return n;
+    if (n.t === 'fn') return fn(n.n, walk(n.a));
+    if (n.t === 'neg') return neg(walk(n.a));
+    if (n.a && n.b) return { t: n.t, a: walk(n.a), b: walk(n.b) };
+    return n;
+  };
+  return walk(node);
+}
+
+/* ---------------------------------------------- where the tangent is flat */
+
+/* "Find every x where the tangent is horizontal."
+
+   Carter asked for more of these, and he is right that they are worth more
+   than a plain derivative: you have to differentiate, factor, and then
+   reason about which factors can actually be zero. e^(kx) never is. A
+   denominator being zero is not a solution either.
+
+   Built backward from the ROOTS, which is the only honest way to do it.
+   Picking a function first and then solving f'(x) = 0 numerically would
+   give a set of decimals that may or may not be the whole answer; picking
+   the roots and integrating up to f means the answer is exact and complete
+   by construction, and buildZeroSet re-checks completeness numerically
+   before the problem is allowed out.
+
+   These also carry noGraph. On a test this has to be shown with algebra,
+   and a graph would hand over the answer - which Carter pointed out before
+   I did. */
+const ZERO_SET = {
+  horizontal: {
+    name: 'Horizontal tangents',
+    topicId: 'calc.tangent',
+    ask: 'every x where the tangent is flat',
+    zeroset: true,
+    build(r, level) {
+      const shape = level === 1 ? r.int(0, 1)
+        : level === 2 ? r.int(0, 4) : r.int(2, 7);
+
+      /* A cubic with two flat spots. f' = 6(x - p)(x - q), integrated to
+         keep every coefficient whole. */
+      if (shape === 0 || shape === 1) {
+        const p = r.int(-4, 3);
+        const q = p + r.int(1, 4);
+        /* f' = 6(x - p)(x - q), integrated. Signed terms are appended with a
+           plus or a minus rather than carrying a negative coefficient,
+           because "2x^3 - -3x^2" is not how a question is written down. */
+        let f = mul(num(2), pow(X, num(3)));
+        f = signedTerm(f, -3 * (p + q), pow(X, num(2)));
+        f = signedTerm(f, 6 * p * q, X);
+        if (shape === 1) f = signedTerm(f, r.int(-6, 6), num(1));
+        return {
+          f,
+          roots: [root(p), root(q)],
+          factored: `f′(x) = 6${bracketRoot(p)}${bracketRoot(q)}`,
+          note: 'Differentiate, take out the common factor, then read off both roots.',
+        };
+      }
+
+      /* x^2 e^(kx): the point of the question is that e^(kx) is never zero,
+         so only the polynomial factor matters. */
+      if (shape === 2) {
+        const k = r.nz(1, 3) * (r() < 0.5 ? -1 : 1);
+        return {
+          f: mul(pow(X, num(2)), fn('exp', mul(num(k), X))),
+          roots: [root(0), root(-2 / k, frac(-2, k))],
+          factored: `f′(x) = x·e^(${k}x)(2 + ${k}x)`,
+          note: 'Factor out the exponential. It is never zero, so it contributes '
+            + 'no solutions at all.',
+        };
+      }
+
+      /* x/(x^2 + c): flat where c - x^2 = 0, and the denominator never
+         vanishes, so there is nothing to exclude. */
+      if (shape === 3) {
+        const m = r.int(1, 5);
+        return {
+          f: div(X, add(pow(X, num(2)), num(m * m))),
+          roots: [root(-m), root(m)],
+          factored: `f′(x) = (${m * m} − x²)/(x² + ${m * m})²`,
+          note: 'A fraction is zero when its TOP is zero. Set the numerator to zero.',
+        };
+      }
+
+      /* A quartic, flat in three places - the one students miss, because
+         they divide by x instead of keeping it as a factor. */
+      if (shape === 4) {
+        const m = r.int(1, 3);
+        return {
+          f: sub(pow(X, num(4)), mul(num(2 * m * m), pow(X, num(2)))),
+          roots: [root(-m), root(0), root(m)],
+          factored: `f′(x) = 4x(x − ${m})(x + ${m})`,
+          note: 'Three factors, three solutions. Do not divide the x away.',
+        };
+      }
+
+      /* Trig, on a stated interval, with exact answers. Pick the family by
+         the value the trig function has to take: 1/2 or -1/2 give sixths
+         and thirds of pi, which is what a test asks for. */
+      if (shape === 5) {
+        /* f = x + 2cos x, f' = 1 - 2 sin x = 0 at pi/6 and 5pi/6. */
+        return {
+          f: add(X, mul(num(2), fn('cos', X))),
+          roots: [root(Math.PI / 6, 'π/6'), root(5 * Math.PI / 6, '5π/6')],
+          interval: [0, 2 * Math.PI],
+          intervalText: '0 ≤ x < 2π',
+          factored: 'f′(x) = 1 − 2sin(x), so sin(x) = 1/2',
+          note: 'Solve sin(x) = 1/2 and keep every solution in the interval, '
+            + 'not just the first one your calculator gives.',
+        };
+      }
+
+      if (shape === 6) {
+        /* f = x - 2 sin x, f' = 1 - 2cos x = 0 at pi/3 and 5pi/3. */
+        return {
+          f: sub(X, mul(num(2), fn('sin', X))),
+          roots: [root(Math.PI / 3, 'π/3'), root(5 * Math.PI / 3, '5π/3')],
+          interval: [0, 2 * Math.PI],
+          intervalText: '0 ≤ x < 2π',
+          factored: 'f′(x) = 1 − 2cos(x), so cos(x) = 1/2',
+          note: 'Cosine is positive in two quadrants. Both of them are in range.',
+        };
+      }
+
+      /* sin(x) + cos(x): flat where tan x = 1. */
+      return {
+        f: add(fn('sin', X), fn('cos', X)),
+        roots: [root(Math.PI / 4, 'π/4'), root(5 * Math.PI / 4, '5π/4')],
+        interval: [0, 2 * Math.PI],
+        intervalText: '0 ≤ x < 2π',
+        factored: 'f′(x) = cos(x) − sin(x), so tan(x) = 1',
+        note: 'Divide through by cos(x) to turn it into tan(x) = 1.',
+      };
+    },
+  },
+};
+
+/* Append a term with its sign, so a negative coefficient becomes a
+   subtraction instead of "+ -3". */
+function signedTerm(sofar, coefficient, factor) {
+  if (!coefficient) return sofar;
+  const size = Math.abs(coefficient);
+  const piece = factor.t === 'num' && factor.v === 1
+    ? num(size)
+    : (size === 1 ? factor : mul(num(size), factor));
+  return coefficient > 0 ? add(sofar, piece) : sub(sofar, piece);
+}
+
+/* (x - 3) or (x + 3), never (x - -3). */
+function bracketRoot(value) {
+  if (value === 0) return 'x';
+  return value > 0 ? `(x − ${value})` : `(x + ${-value})`;
+}
+
+/* A root, with the exact form to show and the number to grade against. */
+function root(value, label) {
+  if (label !== undefined) return { value, label };
+  const n = round4(value);
+  return { value, label: n < 0 ? `−${-n}` : String(n) };
+}
+
+/* -2/k written as a fraction when it is not whole, because -0.6667 is not
+   an answer anybody would write on a test. */
+function frac(a, b) {
+  if (a % b === 0) return String(a / b);
+  const g = gcd(Math.abs(a), Math.abs(b));
+  const sign = (a < 0) !== (b < 0) ? '−' : '';
+  return `${sign}${Math.abs(a) / g}/${Math.abs(b) / g}`;
+}
+
+function gcd(a, b) {
+  return b ? gcd(b, a % b) : a || 1;
+}
+
+/* Build the question, and refuse to ship it unless the stated roots are
+   exactly the zeros of f' - every one of them a zero, and no others hiding
+   in the range. An incomplete answer key on a "find them all" question is
+   the worst thing this file could do, so it is checked rather than trusted:
+   the roots came from the construction, but the integration, the
+   simplification and the differentiation all sit between that and the
+   question on screen. */
+function buildZeroSet(id, skill, built, level, seed) {
+  const f = simplify(built.f);
+  const roots = built.roots || [];
+  if (!roots.length) return null;
+  const d = simplify(derivative(f));
+  const at = (x) => Expr.evaluate(d, { x });
+
+  for (const rt of roots) {
+    const v = at(rt.value);
+    if (!isFinite(v) || Math.abs(v) > 1e-7) return null;
+  }
+
+  const [lo, hi] = built.interval || [-9, 9];
+  const steps = 4000;
+  const seen = [];
+  let prev = at(lo);
+  for (let i = 1; i <= steps; i++) {
+    const x = lo + ((hi - lo) * i) / steps;
+    const cur = at(x);
+    if (!isFinite(cur)) { prev = cur; continue; }
+    if (isFinite(prev) && ((prev < 0 && cur > 0) || (prev > 0 && cur < 0))) {
+      /* Bisect to place the crossing, then check it is one we know about. */
+      let a = x - (hi - lo) / steps;
+      let b = x;
+      for (let k = 0; k < 60; k++) {
+        const m = (a + b) / 2;
+        if ((at(a) < 0) === (at(m) < 0)) a = m; else b = m;
+      }
+      seen.push((a + b) / 2);
+    }
+    prev = cur;
+  }
+  /* A touching zero (a repeated factor) does not change sign, so those are
+     found by looking for a near-zero minimum of |f'| as well. */
+  for (const rt of roots) {
+    if (!seen.some((s) => Math.abs(s - rt.value) < 1e-4)) seen.push(rt.value);
+  }
+  for (const s of seen) {
+    if (!roots.some((rt) => Math.abs(rt.value - s) < 1e-4)) return null;
+  }
+  if (seen.length !== roots.length) return null;
+
+  const ordered = roots.slice().sort((a, b) => a.value - b.value);
+  const answers = ordered.map((rt) => rt.value);
+  const shown = ordered.map((rt) => `x = ${rt.label}`).join(' and ');
+  const where = built.intervalText
+    ? ` for <span class="eq">${built.intervalText}</span>`
+    : '';
+
+  return {
+    source: 'sandbox',
+    kind: 'set',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Find every <span class="eq">x</span> where the graph of `
+      + `<span class="eq">f(x) = ${html(f)}</span>&nbsp;has a horizontal tangent${where}.`,
+    instruction: 'Give the x-values separated by commas. Exact values, so pi/6 '
+      + 'rather than 0.5236.',
+    /* The graph would hand this one over, and on the test the algebra is the
+       whole question. */
+    /* The interval the question restricts the answer to, in numbers as well
+       as in words, so anything checking the answer key knows that a zero
+       outside it is not a missing solution. */
+    interval: built.interval || null,
+    noGraph: true,
+    noGraphWhy: 'This one has to come out of the algebra - reading the flat '
+      + 'spots off a graph is not an answer you can write on the test.',
+    functionText: text(f),
+    answers,
+    tol: 1e-4,
+    answerText: ordered.map((rt) => rt.label).join(', '),
+    answerHtml: shown,
+    derivativeHtml: html(d),
+    original: f,
+    note: built.note || null,
+    hints: [
+      'A horizontal tangent means the derivative is zero. Start by differentiating.',
+      `f′(x) = ${html(d)}`,
+      built.factored || 'Factor it, then set each factor to zero in turn.',
+      `The solutions are ${shown}.`,
+    ],
+    steps: [
+      { title: 'Differentiate', html: html(d) },
+      { title: 'Set it to zero and factor', html: built.factored || 'Factor and solve.' },
+      { title: 'Every solution', html: shown },
+      { title: 'Watch out for', html: built.note || '' },
+    ],
+    graph: null,
+  };
 }
 
 /* Grade a typed expression for a sandbox problem. Thin wrapper over
@@ -1316,10 +1924,43 @@ export function gradeExpression(problem, raw) {
   if (problem.kind === 'factored' || problem.kind === 'expanded') {
     return Expr.judgeForm(raw, problem.answerNode, problem.kind, context);
   }
+  /* "Find every x where ..." is answered with a set of values, not a
+     function, so it is marked by comparing sets. */
+  if (problem.kind === 'set') {
+    const rep = MathKit.setReport(raw, problem.answers, problem.tol || 1e-4);
+    if (rep.correct) return { correct: true, decided: true, kind: '', hint: '' };
+    const fmt = (v) => MathKit.num(v, 4);
+    if (rep.found.length && rep.missing.length) {
+      return {
+        correct: false,
+        decided: true,
+        kind: 'incomplete-set',
+        hint: `You found ${rep.found.length} of the ${rep.wanted}. There `
+          + `${rep.missing.length === 1 ? 'is one more' : `are ${rep.missing.length} more`}.`,
+      };
+    }
+    if (rep.extra.length) {
+      return {
+        correct: false,
+        decided: true,
+        kind: 'extra-root',
+        hint: `${rep.extra.map(fmt).join(', ')} `
+          + `${rep.extra.length === 1 ? 'is not a solution' : 'are not solutions'}.`,
+      };
+    }
+    return {
+      correct: false,
+      decided: true,
+      kind: rep.unreadable ? 'unreadable' : 'wrong',
+      hint: rep.unreadable
+        ? 'Separate the values with commas, like 0, -2 or pi/3, 5*pi/3.'
+        : `Expected ${rep.wanted} value${rep.wanted === 1 ? '' : 's'}, in any order.`,
+    };
+  }
   return Expr.judge(raw, problem.answerNode, context);
 }
 
-Object.assign(SKILLS, SKILL_EXTRAS);
+Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET);
 
 /* ------------------------------------------------------ am I on track */
 

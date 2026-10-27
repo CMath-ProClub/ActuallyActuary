@@ -545,6 +545,9 @@ function simplify(node) {
       if (isNum(a) && isNum(b)) return num(a.v * b.v);
       /* Numbers to the front, so 3x reads as 3x and not x·3. */
       if (isNum(b) && !isNum(a)) [a, b] = [b, a];
+      /* -1 is a sign, not a coefficient: "-1x^2 - 6x" is not how anybody
+         writes it down. */
+      if (isNum(a) && a.v === -1) return simplify(neg(b));
       /* Fold a number into a nested numeric coefficient: 2·(3x) -> 6x. */
       if (isNum(a) && b.t === 'mul' && isNum(b.a)) {
         return simplify(mul(num(a.v * b.a.v), b.b));
@@ -585,6 +588,13 @@ function simplify(node) {
       if (b.t === 'div' && isOne(b.a)) return simplify(mul(a, b.b));
       /* p/p is 1, whatever p is. */
       if (sameTree(a, b)) return num(1);
+      /* A minus sign in a fraction belongs in front of the fraction, not
+         inside it. mul already does this; without it in div, an implicit
+         answer comes out as -(-(3cos(3xy)y)/(...)) - correct, and not
+         something anybody would copy down. */
+      if (a.t === 'neg') return simplify(neg(div(a.a, b)));
+      if (b.t === 'neg') return simplify(neg(div(a, b.a)));
+      if (isNum(a) && a.v < 0 && !isNum(b)) return simplify(neg(div(num(-a.v), b)));
       return div(a, b);
     }
     case 'pow': {
