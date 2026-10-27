@@ -465,6 +465,60 @@ export async function explain(url, model, { stem, answer, wrongAnswer, topic }) 
   return escapeHtml(clean(data?.message?.content || '')).replace(/\n/g, '<br>');
 }
 
+/* Read a line-by-line answer and say what went wrong in the WORKING.
+
+   This is the one place a local model earns its keep. The engine already
+   knows whether each line is right - it compares expressions numerically
+   and is not guessing - but it cannot say "you expanded (x+h)^3 and dropped
+   the 3xh term", which is the sentence that actually helps.
+
+   So the marking is handed to the model as FACT and it is told not to
+   dispute it. It gets the lines, the verdicts, and the right answers, and
+   its only job is to explain the algebra. Nothing it says is recorded,
+   nothing it says can change a mark, and what it writes is escaped and
+   labelled on the way out - the procedural grader is proven correct and a
+   7B model is not. */
+export async function reviewWork(url, model, { stem, lines, verdicts, topic }) {
+  if (!model) throw new OllamaError('No model selected.', { kind: 'config' });
+  const written = (lines || []).map((line, i) => {
+    const v = (verdicts || [])[i] || {};
+    const mark = v.correct ? 'CORRECT' : 'WRONG';
+    return `Line ${i + 1} - ${line.label}\n`
+      + `  wanted: ${stripTags(line.wanted)}\n`
+      + `  student wrote: ${String(line.got || '').trim() || '(nothing)'}\n`
+      + `  the grader says: ${mark}${v.hint ? ` - ${stripTags(v.hint)}` : ''}`;
+  }).join('\n');
+
+  const res = await call(url, '/api/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      options: { temperature: 0.2, num_predict: 500 },
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a patient calculus tutor looking at a student’s working, '
+            + 'line by line. The marking you are given was done by a symbolic engine and is '
+            + 'CORRECT - never dispute it, never re-mark a line, never say a wrong line is '
+            + 'right. Your job is only to explain WHY the first wrong line went wrong: name '
+            + 'the algebra step that was missed or mangled, and say what to do instead. If '
+            + 'every line is right, say in one sentence what the student did well. At most '
+            + '130 words, plain text with Unicode math, no markdown headings, no lists.',
+        },
+        {
+          role: 'user',
+          content: `Topic: ${topic || 'the limit definition of the derivative'}\n`
+            + `Question: ${stripTags(stem)}\n\n${written}`,
+        },
+      ],
+    }),
+  }, 90000);
+  const data = await res.json();
+  return escapeHtml(clean(data?.message?.content || '')).replace(/\n/g, '<br>');
+}
+
 function stripTags(s) {
   return String(s == null ? '' : s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }

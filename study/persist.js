@@ -92,6 +92,30 @@ export function clearStrokes(key) {
   }
 }
 
+/* A single number, for the small preferences that belong to one thing
+   rather than to the profile: how tall somebody dragged the scratch paper
+   on this question, for instance. Too small to deserve a schema, and
+   wrong to lose on a refresh. */
+export function saveNumber(key, value) {
+  try {
+    localStorage.setItem(`${LS_PREFIX}n:${key}`, String(Number(value) || 0));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+export function loadNumber(key, fallback = 0) {
+  try {
+    const raw = localStorage.getItem(`${LS_PREFIX}n:${key}`);
+    if (raw == null) return fallback;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
 /* How much of the budget the boards are using, so Settings can say. */
 export function strokeBytes() {
   let total = 0;

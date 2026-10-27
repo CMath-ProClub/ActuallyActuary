@@ -28,11 +28,32 @@ const TOOLS = {
   fine: { width: 1.6, alpha: 1, composite: 'source-over' },
 };
 
+/* Paper is white, in both themes.
+
+   A dark whiteboard is a contradiction, and more to the point handwriting
+   in white on navy is harder to read back than navy on white - which is
+   what the board is FOR. So the surface stays paper-coloured whatever the
+   rest of the page is doing, and the navy that used to be the background is
+   now the default ink. */
+export const PAPER = '#ffffff';
+export const PAPER_LINE = '#e6ebf4';
+export const PAPER_LINE_STRONG = '#d4dcea';
+
 export const BOARD_COLORS = [
-  { id: 'ink', label: 'Ink', light: '#141821', dark: '#f3f1ec' },
+  { id: 'ink', label: 'Navy', light: '#17243d', dark: '#f3f1ec' },
   { id: 'blue', label: 'Blue', light: '#2a78d6', dark: '#3987e5' },
   { id: 'teal', label: 'Teal', light: '#14655a', dark: '#5fc2ae' },
+  { id: 'red', label: 'Red', light: '#c23434', dark: '#e66767' },
+  { id: 'grey', label: 'Pencil', light: '#6b7484', dark: '#949cab' },
   { id: 'orange', label: 'Orange', light: '#eb6834', dark: '#d95926' },
+];
+
+/* How far the pen sizes are apart. Stored on the stroke, so a thick line
+   stays thick on the other person's screen. */
+export const PEN_SIZES = [
+  { id: 'fine', label: 'Fine', scale: 0.6 },
+  { id: 'normal', label: 'Normal', scale: 1 },
+  { id: 'thick', label: 'Thick', scale: 1.9 },
 ];
 
 function uid() {
@@ -73,10 +94,29 @@ export function createBoard(canvas, options = {}) {
     author: options.author || 'me',
     dark: !!options.dark,
     readOnly: !!options.readOnly,
+    /* Pen thickness, carried on every stroke it draws. */
+    scale: 1,
+    /* A white surface with a faint grid, which is what a whiteboard is.
+       The graph annotation layer passes paper: false and keeps the
+       transparent overlay it needs. */
+    paper: options.paper !== false,
+    grid: options.grid !== false,
   };
   const ctx = canvas.getContext('2d');
   let drawing = null;
   let size = { w: 1, h: 1 };
+
+  /* Where the window sits over an endless sheet. x and y are in the same
+     0..1-of-the-width units as the strokes, so panning down by 1 moves by
+     one canvas width. Zoom multiplies both. */
+  const view = { x: 0, y: 0, zoom: 1 };
+  const ZOOM_MIN = 0.4;
+  const ZOOM_MAX = 6;
+
+  /* Undone strokes, newest last. The log itself stays append-only - undo
+     flips `dead` rather than removing anything - so redo is just flipping
+     it back, and a stroke that was undone on one device still merges. */
+  const undone = [];
 
   const notify = (stroke, kind) => {
     if (typeof options.onChange === 'function') options.onChange(stroke, kind);
@@ -97,16 +137,58 @@ export function createBoard(canvas, options = {}) {
      would squash drawings on a differently shaped screen. */
   const toNorm = (ev) => {
     const rect = canvas.getBoundingClientRect();
+    const span = size.w * view.zoom;
     return {
-      x: (ev.clientX - rect.left) / size.w,
-      y: (ev.clientY - rect.top) / size.w,
+      x: (ev.clientX - rect.left) / span + view.x,
+      y: (ev.clientY - rect.top) / span + view.y,
     };
   };
-  const toPixels = (p) => ({ x: p.x * size.w, y: p.y * size.w });
+  const toPixels = (p) => ({
+    x: (p.x - view.x) * size.w * view.zoom,
+    y: (p.y - view.y) * size.w * view.zoom,
+  });
 
   function colorFor(stroke) {
     const entry = BOARD_COLORS.find((c) => c.id === stroke.color) || BOARD_COLORS[0];
+    /* On white paper the light-mode ink is always the right one, whatever
+       the page around it is doing. */
+    if (state.paper) return entry.light;
     return state.dark ? entry.dark : entry.light;
+  }
+
+  /* Faint ruling, so the sheet moving under you is visible when you pan and
+     a line of working can be written straight. Drawn in world units, so it
+     scales with the zoom rather than sliding past the ink. */
+  function drawGrid() {
+    const span = size.w * view.zoom;
+    const step = 0.05 * span;
+    if (step < 6) return;
+    ctx.save();
+    ctx.lineWidth = 1;
+    /* Indexed in WORLD units, not screen ones, so the darker fifth line is
+       the same line after you pan rather than one that slides. */
+    const firstX = Math.floor(view.x / 0.05);
+    const firstY = Math.floor(view.y / 0.05);
+    const lastX = Math.ceil((view.x + size.w / span) / 0.05);
+    const lastY = Math.ceil((view.y + size.h / span) / 0.05);
+    for (const major of [false, true]) {
+      ctx.strokeStyle = major ? PAPER_LINE_STRONG : PAPER_LINE;
+      ctx.beginPath();
+      for (let k = firstX; k <= lastX; k++) {
+        if ((k % 5 === 0) !== major) continue;
+        const x = (k * 0.05 - view.x) * span;
+        ctx.moveTo(Math.round(x) + 0.5, 0);
+        ctx.lineTo(Math.round(x) + 0.5, size.h);
+      }
+      for (let k = firstY; k <= lastY; k++) {
+        if ((k % 5 === 0) !== major) continue;
+        const y = (k * 0.05 - view.y) * span;
+        ctx.moveTo(0, Math.round(y) + 0.5);
+        ctx.lineTo(size.w, Math.round(y) + 0.5);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawStroke(stroke) {
@@ -117,7 +199,9 @@ export function createBoard(canvas, options = {}) {
     ctx.save();
     ctx.globalAlpha = spec.alpha;
     ctx.strokeStyle = colorFor(stroke);
-    ctx.lineWidth = spec.width * (stroke.scale || 1);
+    /* Ink has a real width on the page, so zooming in makes it thicker on
+       screen - the same as moving closer to paper. */
+    ctx.lineWidth = spec.width * (stroke.scale || 1) * view.zoom;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -143,6 +227,11 @@ export function createBoard(canvas, options = {}) {
 
   function redraw() {
     ctx.clearRect(0, 0, size.w, size.h);
+    if (state.paper) {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(0, 0, size.w, size.h);
+      if (state.grid) drawGrid();
+    }
     for (const stroke of state.strokes) drawStroke(stroke);
   }
 
@@ -150,17 +239,26 @@ export function createBoard(canvas, options = {}) {
     if (state.readOnly) return;
     if (ev.button !== undefined && ev.button !== 0) return;
     canvas.setPointerCapture(ev.pointerId);
+    /* The hand tool drags the sheet instead of marking it. */
+    if (state.tool === 'pan') {
+      drawing = { panning: true, from: { x: ev.clientX, y: ev.clientY } };
+      return;
+    }
     const point = toNorm(ev);
     if (state.tool === 'eraser') {
       eraseAt(point);
       drawing = { erasing: true };
       return;
     }
+    /* Drawing something new is the end of the redo trail, the same as in
+       every editor. */
+    undone.length = 0;
     drawing = {
       id: uid(),
       tool: state.tool,
       color: state.color,
       author: state.author,
+      scale: state.scale,
       points: [point],
       at: Date.now(),
     };
@@ -170,13 +268,23 @@ export function createBoard(canvas, options = {}) {
 
   function extend(ev) {
     if (!drawing) return;
+    if (drawing.panning) {
+      const span = size.w * view.zoom;
+      view.x -= (ev.clientX - drawing.from.x) / span;
+      view.y -= (ev.clientY - drawing.from.y) / span;
+      drawing.from = { x: ev.clientX, y: ev.clientY };
+      redraw();
+      notifyView();
+      return;
+    }
     const point = toNorm(ev);
     if (drawing.erasing) { eraseAt(point); return; }
     const pts = drawing.points;
     const last = pts[pts.length - 1];
     /* Drop points that add nothing. Fewer points means a smaller payload to
-       send to the other device and a faster redraw. */
-    if (Math.hypot(point.x - last.x, point.y - last.y) < 0.002) return;
+       send to the other device and a faster redraw. The threshold is in
+       SCREEN terms, or zooming in would quietly coarsen the handwriting. */
+    if (Math.hypot(point.x - last.x, point.y - last.y) < 0.002 / view.zoom) return;
     pts.push(point);
     redraw();
   }
@@ -185,12 +293,13 @@ export function createBoard(canvas, options = {}) {
     if (!drawing) return;
     const finished = drawing;
     drawing = null;
-    if (finished.erasing) return;
+    if (finished.erasing || finished.panning) return;
     notify(finished, 'stroke');
   }
 
   function eraseAt(point) {
-    const radius = 0.018;
+    /* A constant size under the fingertip, whatever the zoom. */
+    const radius = 0.018 / view.zoom;
     let killed = false;
     for (const stroke of state.strokes) {
       if (stroke.dead) continue;
@@ -203,11 +312,54 @@ export function createBoard(canvas, options = {}) {
     if (killed) redraw();
   }
 
+  function notifyView() {
+    if (typeof options.onView === 'function') options.onView(viewState());
+  }
+
+  function viewState() {
+    return { x: view.x, y: view.y, zoom: view.zoom };
+  }
+
+  /* Zoom about a point on the screen, so whatever is under the cursor or
+     between two fingers stays under it. */
+  function zoomAt(factor, screenX, screenY) {
+    const before = view.zoom;
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, before * factor));
+    if (next === before) return;
+    const px = screenX == null ? size.w / 2 : screenX;
+    const py = screenY == null ? size.h / 2 : screenY;
+    /* The world point under (px, py) must not move. */
+    const worldX = px / (size.w * before) + view.x;
+    const worldY = py / (size.w * before) + view.y;
+    view.zoom = next;
+    view.x = worldX - px / (size.w * next);
+    view.y = worldY - py / (size.w * next);
+    redraw();
+    notifyView();
+  }
+
+  /* The wheel scrolls the sheet, which is what a wheel does. Holding ctrl
+     (or cmd) zooms, which is what every drawing program does. */
+  function onWheel(ev) {
+    ev.preventDefault();
+    if (ev.ctrlKey || ev.metaKey) {
+      const rect = canvas.getBoundingClientRect();
+      zoomAt(ev.deltaY < 0 ? 1.12 : 1 / 1.12, ev.clientX - rect.left, ev.clientY - rect.top);
+      return;
+    }
+    const span = size.w * view.zoom;
+    view.x += ev.deltaX / span;
+    view.y += ev.deltaY / span;
+    redraw();
+    notifyView();
+  }
+
   canvas.addEventListener('pointerdown', begin);
   canvas.addEventListener('pointermove', extend);
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', end);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
   /* The page must not scroll while someone is drawing on a phone. */
   canvas.style.touchAction = 'none';
 
@@ -226,12 +378,59 @@ export function createBoard(canvas, options = {}) {
     tool: () => state.tool,
     color: () => state.color,
 
+    setSize(scale) { state.scale = Number(scale) || 1; },
+    size: () => state.scale,
+    setPaper(flag) { state.paper = !!flag; redraw(); },
+    setGrid(flag) { state.grid = !!flag; redraw(); },
+
+    /* The view. zoomBy takes a factor; panBy takes screen pixels, which is
+       what a button press or a drag has to hand. */
+    zoomBy(factor, x, y) { zoomAt(factor, x, y); },
+    zoom: () => view.zoom,
+    panBy(dx, dy) {
+      const span = size.w * view.zoom;
+      view.x += dx / span;
+      view.y += dy / span;
+      redraw();
+      notifyView();
+    },
+    /* A screenful further down the sheet: the "more room" button. */
+    moreRoom() {
+      const span = size.w * view.zoom;
+      view.y += (size.h * 0.85) / span;
+      redraw();
+      notifyView();
+    },
+    view: viewState,
+    setView(next) {
+      if (!next) return;
+      if (Number.isFinite(next.x)) view.x = next.x;
+      if (Number.isFinite(next.y)) view.y = next.y;
+      if (Number.isFinite(next.zoom)) {
+        view.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next.zoom));
+      }
+      redraw();
+      notifyView();
+    },
+    resetView() {
+      view.x = 0;
+      view.y = 0;
+      view.zoom = 1;
+      redraw();
+      notifyView();
+    },
+    /* Is there anything above or to the left of where we are looking? The
+       toolbar uses this to decide whether "back to the top" is worth
+       offering. */
+    movedAway: () => Math.abs(view.x) > 0.01 || Math.abs(view.y) > 0.01 || view.zoom !== 1,
+
     /* Undo removes YOUR last live stroke, not the other person's. */
     undo(author = state.author) {
       for (let i = state.strokes.length - 1; i >= 0; i--) {
         const stroke = state.strokes[i];
         if (!stroke.dead && stroke.author === author) {
           stroke.dead = true;
+          undone.push(stroke.id);
           redraw();
           notify(stroke, 'erase');
           return stroke;
@@ -240,11 +439,32 @@ export function createBoard(canvas, options = {}) {
       return null;
     },
 
+    /* And redo puts it back. The stroke was never removed - undo only set a
+       flag - so this is the same flag going the other way, which keeps the
+       log append-only and the sync merge honest. */
+    redo() {
+      while (undone.length) {
+        const id = undone.pop();
+        const stroke = state.strokes.find((s) => s.id === id);
+        if (!stroke || !stroke.dead) continue;
+        stroke.dead = false;
+        redraw();
+        notify(stroke, 'stroke');
+        return stroke;
+      }
+      return null;
+    },
+
+    canUndo: (author = state.author) => state.strokes
+      .some((s) => !s.dead && s.author === author),
+    canRedo: () => undone.length > 0,
+
     clear() {
       let any = false;
       for (const stroke of state.strokes) {
         if (!stroke.dead) { stroke.dead = true; any = true; }
       }
+      undone.length = 0;
       if (any) { redraw(); notify(null, 'clear'); }
     },
 
@@ -283,6 +503,7 @@ export function createBoard(canvas, options = {}) {
       canvas.removeEventListener('pointerup', end);
       canvas.removeEventListener('pointercancel', end);
       canvas.removeEventListener('pointerleave', end);
+      canvas.removeEventListener('wheel', onWheel);
     },
   };
 }
@@ -311,4 +532,6 @@ export function mergeStrokes(mine, theirs) {
   return [...byId.values()].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
-export default { createBoard, mergeStrokes, strokeHit, BOARD_COLORS };
+export default {
+  createBoard, mergeStrokes, strokeHit, BOARD_COLORS, PEN_SIZES, PAPER,
+};

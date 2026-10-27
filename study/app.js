@@ -2322,13 +2322,20 @@ function partsVerdict(problem, res) {
 
 /* ------------------------------------------------------- scratch paper */
 
-/* Paper, on the test.
+/* Paper, on the question.
 
    There is a whiteboard in the workspace, but not where the questions are,
    and "show your working" with nowhere to work is an empty instruction.
-   This is the same board, scoped to the one question, folded away until
-   asked for and kept afterwards: come back to the question and the working
-   is still there. */
+
+   It is a real board rather than a doodle box: pen, highlighter, eraser and
+   a hand to drag the sheet; five inks and three thicknesses; undo and redo;
+   zoom; and an endless sheet downward, because running out of room halfway
+   through a limit definition is the most annoying way to lose a train of
+   thought. The sheet is white in both themes - navy on white is what the
+   working has to be readable as.
+
+   Scoped to the one question and saved on every stroke, so coming back to a
+   question brings the working back with it. */
 function scratchPanel(problem) {
   const slot = h('div', { class: 'scratchslot' });
   const key = persist.workspaceKey(
@@ -2336,6 +2343,7 @@ function scratchPanel(problem) {
   );
   let open = false;
   let api = null;
+  let full = false;
 
   const toggle = h('button', { class: 'btn ghost', type: 'button' }, 'Scratch paper');
   const label = () => {
@@ -2344,37 +2352,225 @@ function scratchPanel(problem) {
       : (kept ? 'Scratch paper (has working on it)' : 'Scratch paper');
   };
 
-  toggle.addEventListener('click', () => {
-    open = !open;
-    if (!open) { slot.innerHTML = ''; api = null; label(); return; }
+  const build = () => {
     slot.innerHTML = '';
-    const canvas = h('canvas', { class: 'boardcanvas scratchboard', 'aria-label': 'Scratch paper' });
+    const wrap = h('div', { class: 'scratchwrap' });
     const tools = h('div', { class: 'boardtools scratchtools' });
-    slot.appendChild(tools);
-    slot.appendChild(canvas);
+    const canvas = h('canvas', { class: 'boardcanvas scratchboard', 'aria-label': 'Scratch paper' });
+    const grip = h('div', {
+      class: 'scratchgrip', title: 'Drag to resize', 'aria-hidden': 'true',
+    });
+    wrap.appendChild(tools);
+    wrap.appendChild(canvas);
+    wrap.appendChild(grip);
+    slot.appendChild(wrap);
+
+    /* Assigned once the toolbar exists; the board calls them, so they have
+       to be referable before they are written. */
+    let refresh = () => {};
+    let paintView = () => {};
+
     api = board.createBoard(canvas, {
       author: store.activeProfile().name || 'me',
-      dark: darkNow(),
-      onChange: () => persist.saveStrokes(key, api.snapshot()),
+      /* White paper whatever the page is doing. */
+      paper: true,
+      grid: true,
+      onChange: () => { persist.saveStrokes(key, api.snapshot()); refresh(); },
+      onView: () => paintView(),
     });
     const saved = persist.loadStrokes(key);
     if (saved.length) api.load(saved);
-    const toolBtn = (id, text) => h('button', {
-      class: `chip${api.tool() === id ? ' on' : ''}`, type: 'button',
-      dataset: { tool: id },
+
+    /* ---- tools */
+    const group = (...kids) => h('div', { class: 'toolgroup' }, kids.filter(Boolean));
+    const pressed = (on) => `chip${on ? ' on' : ''}`;
+
+    const toolButtons = [];
+    const toolBtn = (id, text, title) => {
+      const btn = h('button', {
+        class: pressed(api.tool() === id), type: 'button', title,
+        dataset: { tool: id },
+        onclick: () => {
+          api.setTool(id);
+          for (const other of toolButtons) {
+            other.className = pressed(other.dataset.tool === id);
+          }
+        },
+      }, text);
+      toolButtons.push(btn);
+      return btn;
+    };
+    tools.appendChild(group(
+      toolBtn('pen', 'Pen'),
+      toolBtn('marker', 'Highlighter'),
+      toolBtn('eraser', 'Eraser'),
+      toolBtn('pan', 'Hand', 'Drag the sheet around'),
+    ));
+
+    /* ---- ink */
+    const swatches = [];
+    tools.appendChild(group(...board.BOARD_COLORS.map((colour) => {
+      const btn = h('button', {
+        class: `swatch${api.color() === colour.id ? ' on' : ''}`,
+        type: 'button', title: colour.label, 'aria-label': colour.label,
+        dataset: { colour: colour.id },
+        style: `background:${colour.light}`,
+        onclick: () => {
+          api.setColor(colour.id);
+          /* Choosing an ink means you meant to draw with it. */
+          api.setTool(api.tool() === 'eraser' || api.tool() === 'pan' ? 'pen' : api.tool());
+          for (const other of toolButtons) {
+            other.className = pressed(other.dataset.tool === api.tool());
+          }
+          for (const other of swatches) {
+            other.className = `swatch${other.dataset.colour === colour.id ? ' on' : ''}`;
+          }
+        },
+      });
+      swatches.push(btn);
+      return btn;
+    })));
+
+    /* ---- thickness */
+    const sizeButtons = [];
+    tools.appendChild(group(...board.PEN_SIZES.map((size) => {
+      const btn = h('button', {
+        class: pressed(api.size() === size.scale), type: 'button',
+        dataset: { size: String(size.scale) },
+        onclick: () => {
+          api.setSize(size.scale);
+          for (const other of sizeButtons) {
+            other.className = pressed(Number(other.dataset.size) === size.scale);
+          }
+        },
+      }, size.label);
+      sizeButtons.push(btn);
+      return btn;
+    })));
+
+    /* ---- undo, redo, clear */
+    const undoBtn = h('button', {
+      class: 'chip', type: 'button', onclick: () => { api.undo(); afterEdit(); },
+    }, 'Undo');
+    const redoBtn = h('button', {
+      class: 'chip', type: 'button', onclick: () => { api.redo(); afterEdit(); },
+    }, 'Redo');
+    tools.appendChild(group(undoBtn, redoBtn, h('button', {
+      class: 'chip', type: 'button',
       onclick: () => {
-        api.setTool(id);
-        for (const other of tools.querySelectorAll('.chip[data-tool]')) {
-          other.classList.toggle('on', other.dataset.tool === id);
+        if (!api.canUndo() || confirm('Wipe the paper for this question?')) {
+          api.clear();
+          afterEdit();
         }
       },
-    }, text);
-    tools.appendChild(toolBtn('pen', 'Pen'));
-    tools.appendChild(toolBtn('eraser', 'Eraser'));
-    tools.appendChild(h('button', {
+    }, 'Clear')));
+
+    /* ---- the view */
+    const zoomLabel = h('span', { class: 'zoomlabel', text: '100%' });
+    const homeBtn = h('button', {
+      class: 'chip', type: 'button', onclick: () => { api.resetView(); },
+    }, 'Back to top');
+    tools.appendChild(group(
+      h('button', { class: 'chip', type: 'button', title: 'Zoom out', onclick: () => api.zoomBy(1 / 1.25) }, '−'),
+      zoomLabel,
+      h('button', { class: 'chip', type: 'button', title: 'Zoom in', onclick: () => api.zoomBy(1.25) }, '+'),
+      h('button', { class: 'chip', type: 'button', title: 'A screen further down the sheet', onclick: () => api.moreRoom() }, 'More room'),
+      homeBtn,
+    ));
+
+    /* ---- the panel itself */
+    const fullBtn = h('button', {
       class: 'chip', type: 'button',
-      onclick: () => { api.clear(); persist.saveStrokes(key, api.snapshot()); },
-    }, 'Clear'));
+      onclick: () => {
+        full = !full;
+        wrap.classList.toggle('full', full);
+        fullBtn.textContent = full ? 'Shrink' : 'Expand';
+        document.body.classList.toggle('noscroll', full);
+        /* The canvas changed size, so the backing store has to as well. */
+        setTimeout(() => api.resize(), 30);
+      },
+    }, 'Expand');
+    tools.appendChild(group(
+      h('button', {
+        class: 'chip', type: 'button', onclick: () => resizeBy(140),
+      }, 'Taller'),
+      h('button', {
+        class: 'chip', type: 'button', onclick: () => resizeBy(-140),
+      }, 'Shorter'),
+      fullBtn,
+    ));
+
+    paintView = () => {
+      zoomLabel.textContent = `${Math.round(api.zoom() * 100)}%`;
+      homeBtn.style.display = api.movedAway() ? '' : 'none';
+    };
+    /* Undo and redo are only offered when there is something to undo or
+       redo, which means they have to be refreshed after every stroke as
+       well as after every button press. */
+    refresh = () => {
+      undoBtn.disabled = !api.canUndo();
+      redoBtn.disabled = !api.canRedo();
+    };
+    const afterEdit = () => {
+      persist.saveStrokes(key, api.snapshot());
+      refresh();
+    };
+    const resizeBy = (delta) => {
+      if (full) return;
+      const now = canvas.getBoundingClientRect().height;
+      const next = Math.max(180, Math.min(900, now + delta));
+      canvas.style.height = `${next}px`;
+      persist.saveNumber(`${key}:height`, next);
+      setTimeout(() => api.resize(), 30);
+    };
+
+    const height = persist.loadNumber(`${key}:height`, 0);
+    if (height) canvas.style.height = `${height}px`;
+
+    /* The grip is the other way to resize: drag the bottom edge. */
+    let dragging = null;
+    grip.addEventListener('pointerdown', (e) => {
+      if (full) return;
+      grip.setPointerCapture(e.pointerId);
+      dragging = { y: e.clientY, from: canvas.getBoundingClientRect().height };
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const next = Math.max(180, Math.min(900, dragging.from + (e.clientY - dragging.y)));
+      canvas.style.height = `${next}px`;
+      api.resize();
+    });
+    const stopDrag = () => {
+      if (!dragging) return;
+      dragging = null;
+      persist.saveNumber(`${key}:height`, canvas.getBoundingClientRect().height);
+    };
+    grip.addEventListener('pointerup', stopDrag);
+    grip.addEventListener('pointercancel', stopDrag);
+
+    /* Undo and redo from the keyboard, since that is what the hands expect. */
+    wrap.addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); api.undo(); afterEdit(); }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); api.redo(); afterEdit(); }
+    });
+    wrap.tabIndex = -1;
+
+    paintView();
+    refresh();
+  };
+
+  toggle.addEventListener('click', () => {
+    open = !open;
+    if (!open) {
+      if (full) { full = false; document.body.classList.remove('noscroll'); }
+      slot.innerHTML = '';
+      api = null;
+      label();
+      return;
+    }
+    build();
     label();
   });
 
@@ -2411,6 +2607,60 @@ function mathKeys(target) {
     }, key.label));
   }
   return row;
+}
+
+/* Hand the working to the model on this machine.
+
+   Only for a question asked line by line, only when a model is configured,
+   and only ever as commentary: the engine has already marked it, the mark
+   is not up for discussion, and nothing the model says is recorded against
+   any topic. A 7B model is good at "you dropped the 3xh term when you
+   expanded"; it is not good at deciding whether an answer is right, and it
+   is not asked to. */
+function workReview(problem, written, res) {
+  if (!problem || problem.kind !== 'parts' || !problem.parts) return null;
+  const profile = store.activeProfile();
+  const model = profile.settings.ollamaModel;
+  if (!model) return null;
+
+  const slot = h('div', { class: 'workreview' });
+  const btn = h('button', { class: 'btn small ghost', type: 'button' },
+    res && res.correct ? 'What did I do well?' : 'Why was my working wrong?');
+  const out = h('div', { class: 'reviewout' });
+  slot.appendChild(btn);
+  slot.appendChild(out);
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    out.innerHTML = '';
+    out.appendChild(h('p', { class: 'muted small',
+      text: `Reading your working with ${model}, on this machine. A few seconds.` }));
+    const values = Array.isArray(written) ? written : [written];
+    try {
+      const text = await ollama.reviewWork(profile.settings.ollamaUrl, model, {
+        stem: problem.stem,
+        topic: problem.topicName,
+        lines: problem.parts.map((part, i) => ({
+          label: part.label,
+          wanted: part.answerNode ? Expr.text(part.answerNode) : '',
+          got: values[i],
+        })),
+        verdicts: (res && res.parts) || [],
+      });
+      out.innerHTML = '';
+      out.appendChild(h('div', { class: 'aibox' }, [
+        h('p', { html: text || 'It had nothing to add.' }),
+        h('p', { class: 'aitag', text: `Read by ${model}, running on this machine. `
+          + 'The marking above is the engine’s, not its.' }),
+      ]));
+    } catch (err) {
+      out.innerHTML = '';
+      out.appendChild(h('p', { class: 'small warn',
+        text: `Could not reach the model: ${err.message}. The marking above stands.` }));
+      btn.disabled = false;
+    }
+  });
+  return slot;
 }
 
 /* The line a graph or a progress check should look at: the last one with
@@ -2998,6 +3248,7 @@ function mountBoard(body) {
   penGroup.appendChild(toolButton('pen', 'Pen'));
   penGroup.appendChild(toolButton('marker', 'Highlighter'));
   penGroup.appendChild(toolButton('eraser', 'Eraser'));
+  penGroup.appendChild(toolButton('pan', 'Hand'));
   tools.appendChild(penGroup);
 
   for (const colour of board.BOARD_COLORS) {
@@ -3012,7 +3263,9 @@ function mountBoard(body) {
         }
       },
     });
-    swatch.style.background = darkNow() ? colour.dark : colour.light;
+    /* The board paints itself white in both themes, so the swatch shows
+       the ink that will actually come out. */
+    swatch.style.background = colour.light;
     inkGroup.appendChild(swatch);
   }
   tools.appendChild(inkGroup);
@@ -3020,6 +3273,23 @@ function mountBoard(body) {
   actGroup.appendChild(h('button', {
     class: 'linkish small', type: 'button', onclick: () => api.undo(),
   }, 'Undo'));
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.redo(),
+  }, 'Redo'));
+  /* The same endless sheet the scratch paper has: a long derivation runs
+     off the bottom of any fixed board. */
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.zoomBy(1 / 1.25),
+  }, 'Zoom out'));
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.zoomBy(1.25),
+  }, 'Zoom in'));
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.moreRoom(),
+  }, 'More room'));
+  actGroup.appendChild(h('button', {
+    class: 'linkish small', type: 'button', onclick: () => api.resetView(),
+  }, 'Back to top'));
   actGroup.appendChild(h('button', {
     class: 'linkish small danger', type: 'button',
     onclick: () => { api.clear(); persist.clearStrokes(key); },
@@ -3684,6 +3954,8 @@ function renderQuiz(root) {
     ]));
     const lines = partsVerdict(q, res);
     if (lines) marking.appendChild(lines);
+    const review = workReview(q, readAnswer(), res);
+    if (review) marking.appendChild(review);
     if (comingBack.length) {
       marking.appendChild(h('p', { class: 'small muted comingback', text: comingBack.length > 1
         ? 'Two more like this are coming up in the next few questions.'

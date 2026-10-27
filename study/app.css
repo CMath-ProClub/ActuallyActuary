@@ -1224,22 +1224,108 @@ footer {
 
 .scratchslot:empty { display: none; }
 .scratchslot { margin-top: 14px; }
+
+.scratchwrap { position: relative; }
+
+/* The sheet is white in both themes. Navy on white is what the working has
+   to be readable as, and a dark whiteboard is a contradiction. */
 .scratchboard {
   display: block;
   width: 100%;
-  height: 320px;
+  height: 340px;
   border: 1px solid var(--edge);
-  background: var(--paper);
+  background: #ffffff;
   touch-action: none;
+  cursor: crosshair;
 }
+
+/* Expanded: the whole window, because a long derivation needs the room. */
+.scratchwrap.full {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--desk);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+}
+.scratchwrap.full .scratchboard { flex: 1 1 auto; height: auto; }
+.scratchwrap.full .scratchgrip { display: none; }
+body.noscroll { overflow: hidden; }
+
 .scratchtools {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 14px;
   margin-bottom: 8px;
+  align-items: center;
+}
+.scratchtools .toolgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.scratchtools .chip[disabled] { opacity: 0.4; cursor: default; }
+.zoomlabel {
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 3.4em;
+  text-align: center;
+}
+
+/* Ink. A square of the colour itself, which needs no label. */
+.swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--edge);
+  padding: 0;
+  cursor: pointer;
+}
+.swatch.on {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Drag the bottom edge to resize. */
+.scratchgrip {
+  height: 12px;
+  margin-top: -1px;
+  border: 1px solid var(--edge);
+  border-top: 0;
+  background: repeating-linear-gradient(
+    90deg, var(--edge) 0 10px, transparent 10px 20px
+  );
+  background-position: center;
+  background-size: 20px 1px;
+  background-repeat: repeat-x;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
 @media (max-width: 620px) {
-  .scratchboard { height: 260px; }
+  .scratchboard { height: 280px; }
   .partrow { padding-left: 10px; }
+  .scratchtools { gap: 5px 10px; }
+  .swatch { width: 30px; height: 30px; }
 }
+
+
+/* ------------------------------------- what the local model made of it */
+
+/* Commentary, never a mark. It sits apart from the engine's verdict and
+   says whose words these are, because a 7B model on somebody's desktop and
+   a proven symbolic grader are not the same kind of thing. */
+.workreview { margin-top: 12px; }
+.reviewout:empty { display: none; }
+.reviewout { margin-top: 8px; }
+.aibox {
+  border: 1px dashed var(--edge);
+  border-left: 3px solid var(--muted);
+  padding: 10px 12px;
+  background: var(--sunk);
+}
+.aibox p { margin: 0 0 6px; }
+.aibox p:last-child { margin-bottom: 0; }
+.aibox .aitag { margin: 8px 0 0; }
