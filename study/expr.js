@@ -569,9 +569,32 @@ function simplify(node) {
       if (b.t === 'div' && sameTree(b.b, a)) return simplify(b.a);
       /* n*(p/q) is (n*p)/q, which keeps the coefficient where it reads. */
       if (isNum(a) && b.t === 'div') return simplify(div(mul(a, b.a), b.b));
+      /* ANYTHING times 1/q is a fraction, not a product with a fraction in
+         it. The chain rule through a logarithm produces exactly this, and
+         "2*1/sin(u)*cos(u)" is not something a person would write down. */
+      if (b.t === 'div' && isOne(b.a)) return simplify(div(a, b.b));
+      if (a.t === 'div' && isOne(a.a)) return simplify(div(b, a.b));
+      /* And p*(q/r) is (p*q)/r for the same reason. */
+      if (b.t === 'div') return simplify(div(mul(a, b.a), b.b));
+      if (a.t === 'div') return simplify(div(mul(a.a, b), a.b));
       /* A number buried in a product comes to the front: x*2*y is 2xy. */
       if (!isNum(a) && b.t === 'mul' && isNum(b.a)) {
         return simplify(mul(b.a, mul(a, b.b)));
+      }
+      /* Every number in the product multiplied into one coefficient.
+         The chain rule stacks these up - differentiating 9(8x^2+4x-10)^4
+         leaves "9*4*(...)^3*(16x+4)" - and nobody writes 9*4. */
+      const factors = [];
+      flattenProduct(a, factors);
+      flattenProduct(b, factors);
+      const numbers = factors.filter(isNum);
+      if (numbers.length > 1) {
+        const coefficient = numbers.reduce((acc, n) => acc * n.v, 1);
+        const rest = factors.filter((n) => !isNum(n));
+        if (!rest.length) return num(coefficient);
+        if (coefficient === 0) return num(0);
+        const body = rest.reduce((acc, n) => mul(acc, n));
+        return coefficient === 1 ? body : mul(num(coefficient), body);
       }
       return mul(a, b);
     }
@@ -633,6 +656,17 @@ function derivative(node, v = 'x') {
 
 /* Precedence, so printing only parenthesizes where it has to. */
 const PREC = { add: 1, sub: 1, mul: 2, div: 2, neg: 3, pow: 4, fn: 5, num: 6, var: 6, const: 6 };
+
+/* A product written as a flat list of its factors, so the numbers in it can
+   be counted and multiplied together. */
+function flattenProduct(node, out) {
+  if (node.t === 'mul') {
+    flattenProduct(node.a, out);
+    flattenProduct(node.b, out);
+    return;
+  }
+  out.push(node);
+}
 
 /* "3x + -5" is what a naive printer produces and no one writes. A term that
    is negative is SUBTRACTED, in every one of the three output formats. */

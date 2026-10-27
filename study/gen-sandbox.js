@@ -25,6 +25,7 @@
 
 import MathKit from './math.js';
 import Expr from './expr.js';
+import * as compose from './compose.js';
 
 const { num, vr, neg, add, sub, mul, div, pow, fn, derivative, simplify,
   text, html, latex, equivalent } = Expr;
@@ -35,6 +36,35 @@ const Y = vr('y');
 const T = vr('t');
 
 /* ------------------------------------------------------------- ingredients */
+
+/* How often a question is GROWN from the grammar in compose.js rather than
+   filled in from a template. The templates are not wrong - a plain
+   e^(3x+1) is a fair question - they were just the only thing on offer,
+   which is how "the same question with the numbers changed" happens. */
+const COMPOSE_CHANCE = { 1: 0, 2: 0.55, 3: 0.85 };
+
+/* Grow one, retrying: the grammar refuses a lot of what it rolls, on
+   purpose, and a refusal should not cost the whole question. */
+function grown(r, spec, tries = 8) {
+  for (let i = 0; i < tries; i++) {
+    const built = compose.composeFunction(r, spec);
+    if (built) return built;
+  }
+  return null;
+}
+
+function grownPair(r, spec, tries = 8) {
+  for (let i = 0; i < tries; i++) {
+    const built = compose.composePair(r, spec);
+    if (built) return built;
+  }
+  return null;
+}
+
+/* Should this question be grown? */
+function composing(r, level) {
+  return r() < (COMPOSE_CHANCE[level] || 0);
+}
 
 /* A linear inside function, the workhorse of every chain rule problem. */
 function linear(r, { allowConstant = true } = {}) {
@@ -192,7 +222,13 @@ const SKILLS = {
     name: 'Trig derivatives',
     topicId: 'calc.trigderiv',
     ask: 'sin, cos, tan, sec, csc, cot, powers and nests',
-    build(r, level) { return trigShape(r, level); },
+    build(r, level) {
+      if (composing(r, level)) {
+        const built = grown(r, { outer: 'trig', level, companionChance: 0.25 });
+        if (built) return built;
+      }
+      return trigShape(r, level);
+    },
   },
 
   chain: {
@@ -203,6 +239,17 @@ const SKILLS = {
       if (level === 1) {
         const inside = linear(r);
         return { f: pow(inside, num(r.int(2, 5))), inner: inside };
+      }
+      /* The chain rule is the one skill whose whole point is composition,
+         so it reaches furthest into the grammar: two layers at the top
+         level, which is where e^(sin 5x) and arctan(8x² - 3x + 20) live. */
+      if (composing(r, level)) {
+        const built = grown(r, {
+          outer: r.pick(['plaintrig', 'exp', 'log', 'sqrt', 'power', 'invtrig']),
+          level,
+          depth: level >= 3 ? 2 : undefined,
+        });
+        if (built) return built;
       }
       const inside = level === 3
         ? add(mul(num(r.nz(-4, 4)), pow(X, num(r.int(2, 3)))), num(r.int(-7, 7)))
@@ -224,6 +271,10 @@ const SKILLS = {
     topicId: 'calc.product',
     ask: 'two factors multiplied',
     build(r, level) {
+      if (composing(r, level)) {
+        const built = grownPair(r, { level });
+        if (built) return built;
+      }
       const left = level === 1 ? polynomial(r, 1) : polynomial(r, 2);
       const right = level === 1
         ? polynomial(r, 1)
@@ -237,6 +288,10 @@ const SKILLS = {
     topicId: 'calc.quotient',
     ask: 'one function over another',
     build(r, level) {
+      if (composing(r, level)) {
+        const built = grownPair(r, { level, quotient: true });
+        if (built) return built;
+      }
       const top = level === 1 ? linear(r) : polynomial(r, 2);
       const bottom = level === 1
         ? linear(r, { allowConstant: true })
@@ -255,6 +310,15 @@ const SKILLS = {
     topicId: 'calc.trigderiv',
     ask: 'e to a power, and a to the x',
     build(r, level) {
+      if (composing(r, level)) {
+        const built = grown(r, {
+          outer: 'exp',
+          level,
+          depth: level >= 3 ? 2 : undefined,
+          companionChance: level >= 3 ? 0.2 : 0,
+        });
+        if (built) return built;
+      }
       if (level >= 2 && r() < 0.35) {
         /* A base that is not e, which is where ln(a) has to appear. */
         const base = r.pick([2, 3, 5, 10]);
@@ -271,6 +335,10 @@ const SKILLS = {
     topicId: 'calc.trigderiv',
     ask: 'natural logs, chained',
     build(r, level) {
+      if (composing(r, level)) {
+        const built = grown(r, { outer: 'log', level, depth: level >= 3 ? 2 : 1 });
+        if (built) return built;
+      }
       const inside = level === 1
         ? linear(r)
         : r() < 0.5
@@ -333,10 +401,21 @@ const SKILLS = {
     topicId: 'calc.trigderiv',
     ask: 'arcsin, arccos and arctan',
     build(r, level) {
+      if (composing(r, level)) {
+        const built = grown(r, { outer: 'invtrig', level, depth: level >= 3 ? 2 : 1 });
+        if (built) return built;
+      }
       const name = r.pick(['asin', 'acos', 'atan']);
+      /* arcsin and arccos are only defined between -1 and 1, so x² or e^(kx)
+         inside one of them is a question with almost no domain: arcsin(x²)
+         exists only on [-1, 1] and arcsin(e^x) only where e^x <= 1. Those
+         insides belong to arctan, which accepts anything. */
+      const wide = name === 'atan';
       const arg = level === 1 ? X
         : level === 2 ? mul(num(r.nz(2, 5)), X)
-          : r() < 0.5 ? pow(X, num(2)) : fn('exp', mul(num(r.nz(1, 3)), X));
+          : wide
+            ? (r() < 0.5 ? pow(X, num(2)) : fn('exp', mul(num(r.nz(1, 3)), X)))
+            : div(X, num(r.int(2, 5)));
       const a = r.nz(1, 6);
       return {
         f: a === 1 ? fn(name, arg) : mul(num(a), fn(name, arg)),
