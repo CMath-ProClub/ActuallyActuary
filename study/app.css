@@ -982,6 +982,17 @@ footer {
   }
   #nav::-webkit-scrollbar { display: none; }
   #nav a { margin-right: 14px; padding: 7px 1px; white-space: nowrap; }
+  /* The nav scrolls sideways here, and a tab cut off mid-word with no sign
+     that it continues reads as broken rather than as scrollable. The fade
+     at the edge is the sign. */
+  #nav {
+    -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent 100%);
+    mask-image: linear-gradient(90deg, #000 86%, transparent 100%);
+  }
+  .mathkeys {
+    -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+    mask-image: linear-gradient(90deg, #000 92%, transparent 100%);
+  }
   .brand { font-size: .9rem; }
 
   main { padding: 16px 12px 60px; }
@@ -1554,4 +1565,27 @@ body.noscroll { overflow: hidden; }
 
 @media (max-width: 620px) {
   .examgraph { height: 280px; }
+}
+
+
+/* --------------------------------------------------------- tools, quietly */
+
+/* The row under the answer: a graph, some paper, a progress check. They are
+   things you reach for, not the thing you are doing, so they read as
+   controls rather than as three more decisions competing with Check. */
+.toolrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.toolrow:empty { display: none; }
+.toolrow .chip { font-size: 0.78rem; }
+
+/* An escape hatch should look like one. */
+.sessionbar .linkish.small {
+  font-family: var(--face-ui);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }

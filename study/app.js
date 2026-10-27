@@ -2428,7 +2428,7 @@ function scratchPanel(problem) {
   let api = null;
   let full = false;
 
-  const toggle = h('button', { class: 'btn ghost', type: 'button' }, 'Scratch paper');
+  const toggle = h('button', { class: 'chip', type: 'button' }, 'Scratch paper');
   const label = () => {
     const kept = open ? 0 : persist.loadStrokes(key).length;
     toggle.textContent = open ? 'Put the paper away'
@@ -4217,7 +4217,7 @@ function renderQuiz(root) {
     h('div', { class: 'tbarright' }, [
       quizRun.endsAt ? h('span', { class: 'clock', id: 'qclock', text: '--:--' }) : null,
       h('button', {
-        class: 'btn small ghost', type: 'button',
+        class: 'linkish small', type: 'button',
         onclick: () => { if (confirm('End the quiz and mark what you have?')) finishQuiz(); },
       }, 'Finish now'),
     ]),
@@ -4398,22 +4398,27 @@ function renderQuiz(root) {
     field,
     multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null),
     multi ? null : (expressionish ? attachEcho(input, q) : null),
+    /* One primary action. Answering is the thing; everything else is a
+       tool you reach for, and four buttons of equal weight is four
+       decisions where there is only one. */
     h('div', { class: 'cta' }, [
       quizRun.index > 0
         ? h('button', { class: 'btn ghost', type: 'button', onclick: () => advance(-1) }, 'Back')
         : null,
       checkBtn,
+    ]),
+    h('div', { class: 'toolrow' }, [
       immediate && !q.noGraph
         ? h('button', {
-          class: 'btn ghost', type: 'button',
+          class: 'chip', type: 'button',
           onclick: () => { graphOpen = true; examGraph(q, lastLine(readAnswer()), graphSlot); },
-        }, 'See it graphed')
+        }, 'Graph it')
         : null,
       /* Paper is not a reward for finishing - it is how you get there. */
       scratch.toggle,
       immediate && expressionish
         ? h('button', {
-          class: 'btn ghost', type: 'button',
+          class: 'chip', type: 'button',
           onclick: () => {
             const where = onTrack(q, lastLine(readAnswer()));
             marking.innerHTML = '';
