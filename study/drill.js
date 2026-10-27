@@ -118,7 +118,17 @@ const SUPPORT_WEIGHT = 3;
 export function createDrill(seed, opts = {}) {
   /* A lock-in drill names the shapes it is pointed at; an ordinary one has
      none and behaves exactly as it did. */
-  const focus = (opts.focus || []).filter((f) => f && f.family);
+  /* A focus entry is a named SHAPE (the four from the quiz) or a plain
+     concept (anything a worksheet turned up). Both are tracked the same
+     way, under one key, so the rest of this file does not care which. */
+  const focus = (opts.focus || [])
+    .filter((f) => f && (f.family || f.skill))
+    .map((f) => ({
+      skill: f.skill || 'implicit',
+      family: f.family || null,
+      key: f.family || f.skill,
+      label: f.label || '',
+    }));
   return {
     seed: (seed >>> 0) || 1,
     focus,
@@ -147,7 +157,7 @@ export function createDrill(seed, opts = {}) {
    both implicit differentiation, and treating them as one skill would mean
    missing the logarithm one brings back the exponential one. */
 const keyOf = (skill, level, family) => `${family || skill}:${level}`;
-const trackOf = (slot) => (slot && slot.family) || (slot && slot.skill) || '';
+const trackOf = (slot) => (slot && (slot.key || slot.family || slot.skill)) || '';
 
 /* The skills a drill draws from, weighted the way the review sheet is. */
 function mix(weighted = false) {
@@ -172,7 +182,7 @@ function pickFocus(state, r) {
   const focus = state.focus || [];
   if (!focus.length) return null;
   const weights = focus.map((f) => {
-    const t = (state.tally || {})[f.family] || { right: 0, wrong: 0, run: 0 };
+    const t = (state.tally || {})[f.key || f.family] || { right: 0, wrong: 0, run: 0 };
     const tried = t.right + t.wrong;
     /* Capped, or a shape missed ten times crowds the other three out
        entirely - which is how you walk into the test having practised one
@@ -199,7 +209,7 @@ export function focusShare(state) {
   const tally = state.tally || {};
   let sum = 0;
   for (const f of state.focus) {
-    const run = (tally[f.family] || {}).run || 0;
+    const run = (tally[f.key || f.family] || {}).run || 0;
     sum += Math.min(1, run / FOCUS_RUN);
   }
   const solid = sum / state.focus.length;
@@ -210,9 +220,12 @@ export function focusShare(state) {
 export function focusProgress(state) {
   const tally = (state && state.tally) || {};
   return ((state && state.focus) || []).map((f) => {
-    const t = tally[f.family] || { right: 0, wrong: 0, run: 0 };
+    const t = tally[f.key || f.family] || { right: 0, wrong: 0, run: 0 };
     return {
+      key: f.key || f.family,
       family: f.family,
+      skill: f.skill,
+      label: f.label || '',
       right: t.right || 0,
       wrong: t.wrong || 0,
       run: t.run || 0,
@@ -236,17 +249,25 @@ export function nextSlot(state, index) {
      focus one, because opening a cram session with a quotient rule question
      is not what anybody pressed the button for. */
   const wantFocus = locked && (index === 0 || r() < focusShare(state));
-  const served = serveDue(state, index, locked ? (item) => !!item.family === wantFocus : null);
+  /* Whether an owed question is one of the focus ones. Asking "does it have
+     a family" was wrong the moment a focus could be a plain concept from a
+     worksheet: those have no family, so every repeat looked like a
+     sprinkled one and the sprinkle disappeared entirely. */
+  const isFocus = (item) => (state.focus || [])
+    .some((f) => f.key === (item.key || item.family || item.skill));
+  const served = serveDue(state, index, locked ? (item) => isFocus(item) === wantFocus : null);
   if (served) return served;
 
   if (wantFocus) {
     const chosen = pickFocus(state, r);
     if (chosen) {
-      const level = offeredLevel({ levels: [2, 3] }, ladderFor(state, chosen.family));
-      remember(state, chosen.family);
+      const key = chosen.key || chosen.family || chosen.skill;
+      const level = offeredLevel({ levels: [2, 3] }, ladderFor(state, key));
+      remember(state, key);
       return {
         skill: chosen.skill || 'implicit',
-        family: chosen.family,
+        family: chosen.family || null,
+        key,
         level,
         why: 'focus',
         repeat: false,
@@ -338,16 +359,19 @@ export function recordResult(state, index, slot, correct) {
 
   /* A focus shape going right eases the session off it; going wrong puts
      it back, faster than it came down. */
-  if (slot.family && state.focus && state.focus.length) {
+  const focusKey = slot.key
+    || (slot.family ? slot.family : null)
+    || ((state.focus || []).some((f) => f.key === slot.skill) ? slot.skill : null);
+  if (focusKey && state.focus && state.focus.length) {
     if (!state.tally) state.tally = {};
-    const t = state.tally[slot.family] || { right: 0, wrong: 0, run: 0 };
+    const t = state.tally[focusKey] || { right: 0, wrong: 0, run: 0 };
     if (correct) { t.right++; t.run = (t.run || 0) + 1; } else { t.wrong++; t.run = 0; }
-    state.tally[slot.family] = t;
-    state.share = focusShare({ ...state, tally: { ...state.tally, [slot.family]: t } });
+    state.tally[focusKey] = t;
+    state.share = focusShare({ ...state, tally: { ...state.tally, [focusKey]: t } });
   }
 
   if (correct) return [];
-  const key = keyOf(slot.skill, slot.level, slot.family);
+  const key = keyOf(slot.skill, slot.level, slot.key || slot.family);
   const strikes = (state.strikes[key] || 0) + 1;
   state.strikes[key] = strikes;
 
@@ -365,6 +389,7 @@ export function recordResult(state, index, slot, correct) {
       at,
       skill: slot.skill,
       family: slot.family || null,
+      key: slot.key || slot.family || slot.skill,
       level,
       why: 'missed',
       easier: level < slot.level,

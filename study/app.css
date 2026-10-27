@@ -1589,3 +1589,42 @@ body.noscroll { overflow: hidden; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+
+/* ------------------------------------------------------- from a worksheet */
+
+.worksheet { margin-top: 18px; }
+.worksheet > summary {
+  cursor: pointer;
+  font-family: var(--face-ui);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sheetinput {
+  width: 100%;
+  margin-top: 10px;
+  font-family: var(--face-ui);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  padding: 11px 13px;
+  border: 1px solid var(--edge);
+  background: var(--sunk);
+  color: var(--ink);
+  resize: vertical;
+}
+.sheetinput:focus { background: var(--paper); }
+/* The file input itself is never shown; its label is the button. */
+.sheetphoto { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.sheetout:empty { display: none; }
+.sheetout { margin-top: 14px; }
+.sheetcount {
+  font-family: var(--face-ui);
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.sheetmissed { margin-top: 10px; }
+.sheetmissed > summary { cursor: pointer; color: var(--warnc); font-size: 0.86rem; }
+.sheetmissed ul { margin: 8px 0 0; padding-left: 18px; }
+.sheetmissed li { color: var(--muted); }

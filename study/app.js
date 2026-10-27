@@ -26,6 +26,7 @@ import { EXAM_LENGTHS, examSlots, examConcepts } from './exam.js';
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
+import * as classify from './classify.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -3818,6 +3819,143 @@ function renderLockIn(root) {
         + 'had enough. Everything is marked as you go, with the working for '
         + 'anything you miss.' }),
   ]));
+
+  root.appendChild(worksheetPanel());
+}
+
+/* Build a session out of a worksheet.
+
+   The shape Carter described: hand it the sheet, let it work out what the
+   questions are about, then switch off the concepts you already have and
+   drill the rest. The photograph needs a model that can read handwriting;
+   working out the CONCEPTS does not, because a derivative question is an
+   expression and classify.js can read one.
+
+   So this takes typed or pasted problems today, and the same panel takes
+   the model's output the moment there is a model - the text box is the
+   seam, and it is the same seam either way. */
+function worksheetPanel() {
+  const box = h('details', { class: 'card worksheet' });
+  box.appendChild(h('summary', { text: 'Or build a session from a worksheet' }));
+  box.appendChild(h('p', { class: 'small muted', text: 'Paste the questions, one '
+    + 'per line. It works out what each one is about, you switch off what you '
+    + 'already have, and the rest becomes the session.' }));
+
+  const area = h('textarea', {
+    class: 'sheetinput', rows: '7', spellcheck: 'false',
+    placeholder: '1. Find dy/dx if x^2 + y^2 = 25\n'
+      + '2. Differentiate f(x) = x^2 sin(3x)\n'
+      + '3. y = x^x, use logarithmic differentiation',
+  });
+  const out = h('div', { class: 'sheetout' });
+  box.appendChild(area);
+
+  const profile = store.activeProfile();
+  const model = profile.settings.ollamaModel;
+
+  const readBtn = h('button', {
+    class: 'btn', type: 'button', onclick: () => paint(area.value),
+  }, 'Read it');
+
+  /* The photograph path, which only exists when a model that can see is
+     configured. No model, no button - an input that cannot work is worse
+     than one that is not there. */
+  const photoInput = h('input', {
+    type: 'file', accept: 'image/*', class: 'sheetphoto', id: 'sheetphoto',
+  });
+  photoInput.addEventListener('change', async () => {
+    const file = photoInput.files && photoInput.files[0];
+    if (!file) return;
+    out.innerHTML = '';
+    out.appendChild(h('p', { class: 'small muted',
+      text: `Reading the photo with ${model}, on this machine...` }));
+    try {
+      const dataUrl = await photo.shrink(file);
+      const text = await ollama.readImage(profile.settings.ollamaUrl, model, dataUrl);
+      area.value = text;
+      paint(text);
+    } catch (err) {
+      out.innerHTML = '';
+      out.appendChild(h('p', { class: 'small warn',
+        text: `Could not read that photo: ${err.message}. Typing them in still works.` }));
+    }
+  });
+
+  box.appendChild(h('div', { class: 'cta' }, [
+    readBtn,
+    model ? h('label', { class: 'btn ghost', for: 'sheetphoto' }, 'From a photo') : null,
+    model ? photoInput : null,
+  ]));
+  if (!model) {
+    box.appendChild(h('p', { class: 'small muted', text: 'A photo of the sheet '
+      + 'can be read too, once a model is set in Settings and running on your '
+      + 'machine. The concepts are worked out here either way.' }));
+  }
+  box.appendChild(out);
+
+  function paint(text) {
+    out.innerHTML = '';
+    const sheet = classify.classifySheet(text);
+    if (!sheet.rows.length) {
+      out.appendChild(h('p', { class: 'small muted', text: 'Nothing to read yet.' }));
+      return;
+    }
+
+    const chosen = new Set(sheet.concepts.map((c) => c.skill));
+    const list = h('div', { class: 'conceptgrid' });
+    for (const concept of sheet.concepts) {
+      const skill = SANDBOX_SKILLS[concept.skill] || {};
+      const id = `sheet-${concept.skill}`;
+      const check = h('input', { type: 'checkbox', id, checked: true });
+      check.addEventListener('change', () => {
+        if (check.checked) chosen.add(concept.skill); else chosen.delete(concept.skill);
+      });
+      list.appendChild(h('label', { class: 'conceptrow', for: id }, [
+        check,
+        h('span', { class: 'conceptname', text: skill.name || concept.skill }),
+        h('span', { class: 'conceptshare', text: `${concept.count} question${concept.count === 1 ? '' : 's'} on the sheet` }),
+      ]));
+    }
+
+    out.appendChild(h('p', { class: 'sheetcount', text: `${sheet.read} of `
+      + `${sheet.rows.length} lines read.` }));
+    out.appendChild(list);
+
+    /* What it could not read is SAID, never swallowed: a concept list that
+       quietly drops the hardest question on the sheet sends somebody to
+       revise the wrong things with no warning. */
+    if (sheet.unread) {
+      const missed = h('details', { class: 'sheetmissed' });
+      missed.appendChild(h('summary', { text: `${sheet.unread} line`
+        + `${sheet.unread === 1 ? '' : 's'} I could not read` }));
+      const ul = h('ul');
+      for (const row of sheet.rows.filter((r) => !r.math)) {
+        ul.appendChild(h('li', { class: 'small', text: row.line }));
+      }
+      missed.appendChild(ul);
+      missed.appendChild(h('p', { class: 'small muted', text: 'Retype these in a '
+        + 'plainer form if they matter - or ignore them, as long as you know '
+        + 'they are not in the count.' }));
+      out.appendChild(missed);
+    }
+
+    out.appendChild(h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn', type: 'button',
+        onclick: () => {
+          const focus = [...chosen].filter((skill) => SANDBOX_SKILLS[skill])
+            .map((skill) => ({ skill }));
+          if (!focus.length) {
+            alert('Leave at least one concept switched on.');
+            return;
+          }
+          startDrill({ focus, label: 'From your worksheet', lockin: true });
+        },
+      }, 'Drill what is left on'),
+    ]));
+  }
+
+  return box;
 }
 
 function startLockIn() {
