@@ -49,6 +49,27 @@ const FNS = {
   asin: { f: Math.asin, d: (u) => div(num(1), fn('sqrt', sub(num(1), pow(u, num(2))))) },
   acos: { f: Math.acos, d: (u) => neg(div(num(1), fn('sqrt', sub(num(1), pow(u, num(2)))))) },
   atan: { f: Math.atan, d: (u) => div(num(1), add(num(1), pow(u, num(2)))) },
+  /* The other three inverses. They were missing entirely, which is why no
+     question ever contained one - and they are on the formula sheet, so
+     they are on the test.
+
+       acot(x) = pi/2 - atan(x), taking the (0, pi) branch, which is the
+       one that makes the derivative -1/(1+x^2) everywhere with no jump.
+       asec(x) = acos(1/x) and acsc(x) = asin(1/x), both of which need
+       |x| >= 1 - outside that they are undefined, and the sampler drops
+       those points rather than pretending. */
+  acot: {
+    f: (v) => Math.PI / 2 - Math.atan(v),
+    d: (u) => neg(div(num(1), add(num(1), pow(u, num(2))))),
+  },
+  asec: {
+    f: (v) => Math.acos(1 / v),
+    d: (u) => div(num(1), mul(fn('abs', u), fn('sqrt', sub(pow(u, num(2)), num(1))))),
+  },
+  acsc: {
+    f: (v) => Math.asin(1 / v),
+    d: (u) => neg(div(num(1), mul(fn('abs', u), fn('sqrt', sub(pow(u, num(2)), num(1)))))),
+  },
   sinh: { f: Math.sinh, d: (u) => fn('cosh', u) },
   cosh: { f: Math.cosh, d: (u) => fn('sinh', u) },
   tanh: { f: Math.tanh, d: (u) => sub(num(1), pow(fn('tanh', u), num(2))) },
@@ -65,8 +86,18 @@ const FNS = {
 /* Names a student might reasonably type for the same function. */
 const FN_ALIAS = {
   arcsin: 'asin', arccos: 'acos', arctan: 'atan',
+  arcsec: 'asec', arccsc: 'acsc', arccot: 'acot',
+  /* The other spellings people actually type. */
+  arccosec: 'acsc', acosec: 'acsc', arccotan: 'acot', acotan: 'acot',
+  cosec: 'csc', cotan: 'cot',
   loge: 'ln', log10: 'log', lg: 'log',
-  tg: 'tan', ctg: 'cot', arctg: 'atan',
+  tg: 'tan', ctg: 'cot', arctg: 'atan', arcctg: 'acot',
+};
+
+/* What the page calls each of them. Nobody writes asec. */
+const FN_SHOWN = {
+  asin: 'arcsin', acos: 'arccos', atan: 'arctan',
+  asec: 'arcsec', acsc: 'arccsc', acot: 'arccot',
 };
 
 const CONSTS = { pi: Math.PI, e: Math.E, tau: Math.PI * 2 };
@@ -177,7 +208,10 @@ function latexToText(src) {
   s = expandBraceCommands(s);
   /* Function names. \ln and \sin are the same functions the tokenizer
      already knows, just spelled with a backslash. */
-  s = s.replace(/\\(arcsin|arccos|arctan|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log|exp|abs)\b/g, '$1');
+  s = s.replace(
+    /\\(arcsin|arccos|arctan|arcsec|arccsc|arccot|sinh|cosh|tanh|sin|cos|tan|sec|csc|cot|ln|log|exp|abs)\b/g,
+    '$1',
+  );
   /* ^{...} becomes ^(...), innermost first so x^{2y^{3}} survives. */
   for (let pass = 0; pass < 12; pass++) {
     const next = s.replace(/\^\s*\{([^{}]*)\}/g, '^($1)');
@@ -758,7 +792,7 @@ function html(node, parent = 0) {
          other than after the thing being raised. */
       if (plain && node.a.t === 'fn' && isNum(e) && e.v > 0
         && !['sqrt', 'exp', 'abs'].includes(node.a.n)) {
-        const name = { asin: 'arcsin', acos: 'arccos', atan: 'arctan' }[node.a.n] || node.a.n;
+        const name = FN_SHOWN[node.a.n] || node.a.n;
         return `${name}${MathKit.sup(text(e))}(${html(node.a.a, 0)})`;
       }
       /* A base that already carries a superscript or a radical has to be
@@ -774,9 +808,7 @@ function html(node, parent = 0) {
       if (node.n === 'sqrt') return MathKit.sqrt(html(node.a, 0));
       /* Nobody writes asin. The parser accepts both spellings; the page
          shows the one a textbook uses. */
-      if (node.n === 'asin') return `arcsin(${html(node.a, 0)})`;
-      if (node.n === 'acos') return `arccos(${html(node.a, 0)})`;
-      if (node.n === 'atan') return `arctan(${html(node.a, 0)})`;
+      if (FN_SHOWN[node.n]) return `${FN_SHOWN[node.n]}(${html(node.a, 0)})`;
       /* e to a power. The exponent is rendered rather than printed as
          source, because sup() can only use Unicode superscripts for digits
          and falls back to literal text for anything else - which is how

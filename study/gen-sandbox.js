@@ -88,7 +88,12 @@ function polynomial(r, level) {
   return out || mul(num(3), pow(X, num(2)));
 }
 
-const TRIG = ['sin', 'cos', 'tan'];
+/* sin, cos and tan were the only three most generators ever reached, so
+   secant, cosecant and cotangent turned up in about four questions in a
+   hundred and nobody believed they were in there at all. They are on the
+   formula sheet and they are on the test, so they are drawn from the same
+   hat as the other three. */
+const TRIG = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
 const TRIG_WIDE = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
 
 /* ------------------------------------------------------ the rest of trig */
@@ -102,12 +107,14 @@ const TRIG_WIDE = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
    polynomial, products of two trig functions, and one trig function inside
    another. */
 const TRIG_ALL = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
-const TRIG_INVERSE = ['asin', 'acos', 'atan'];
+const TRIG_INVERSE = ['asin', 'acos', 'atan', 'acot', 'asec', 'acsc'];
 
 function trigShape(r, level) {
   /* Level 1 is a single function with a bare x: the rule on its own. */
   if (level === 1) {
-    const name = r.pick(['sin', 'cos', 'tan']);
+    /* Even the easiest level sees all six, because "I have never met
+       cosecant" is how somebody meets it first in an exam. */
+    const name = r.pick(TRIG_ALL);
     const a = r.nz(2, 8);
     return { f: mul(num(a), fn(name, X)), inner: X };
   }
@@ -405,17 +412,24 @@ const SKILLS = {
         const built = grown(r, { outer: 'invtrig', level, depth: level >= 3 ? 2 : 1 });
         if (built) return built;
       }
-      const name = r.pick(['asin', 'acos', 'atan']);
-      /* arcsin and arccos are only defined between -1 and 1, so x² or e^(kx)
-         inside one of them is a question with almost no domain: arcsin(x²)
-         exists only on [-1, 1] and arcsin(e^x) only where e^x <= 1. Those
-         insides belong to arctan, which accepts anything. */
-      const wide = name === 'atan';
-      const arg = level === 1 ? X
-        : level === 2 ? mul(num(r.nz(2, 5)), X)
-          : wide
-            ? (r() < 0.5 ? pow(X, num(2)) : fn('exp', mul(num(r.nz(1, 3)), X)))
-            : div(X, num(r.int(2, 5)));
+      const name = r.pick(TRIG_INVERSE);
+      /* Each of the six accepts something different, and handing one an
+         inside it cannot take makes a question with almost no domain:
+         arcsin(x²) exists only on [-1, 1], and arcsec(x/5) only where
+         |x| >= 5.
+
+           arctan, arccot   anything
+           arcsin, arccos   |u| <= 1, so x over something
+           arcsec, arccsc   |u| >= 1, so a multiple of x */
+      const wide = name === 'atan' || name === 'acot';
+      const big = name === 'asec' || name === 'acsc';
+      const arg = big
+        ? mul(num(r.int(2, 6)), X)
+        : level === 1 ? (wide ? X : div(X, num(r.int(2, 4))))
+          : level === 2 ? (wide ? mul(num(r.nz(2, 5)), X) : div(X, num(r.int(2, 5))))
+            : wide
+              ? (r() < 0.5 ? pow(X, num(2)) : fn('exp', mul(num(r.nz(1, 3)), X)))
+              : div(X, num(r.int(2, 5)));
       const a = r.nz(1, 6);
       return {
         f: a === 1 ? fn(name, arg) : mul(num(a), fn(name, arg)),

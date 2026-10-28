@@ -44,7 +44,13 @@ const X = vr('x');
 
 export const TRIG = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot'];
 export const PLAIN_TRIG = ['sin', 'cos', 'tan'];
-export const INVERSE_TRIG = ['asin', 'acos', 'atan'];
+/* All six. arcsec and arccsc need |u| >= 1 and arcsin and arccos need
+   |u| <= 1, which is why the wrap below asks before it builds: the three
+   that were missing from the engine were also missing from here, and a
+   function nothing ever generates may as well not exist. */
+export const INVERSE_TRIG = ['asin', 'acos', 'atan', 'acot', 'asec', 'acsc'];
+const NEEDS_SMALL = ['asin', 'acos'];
+const NEEDS_BIG = ['asec', 'acsc'];
 
 /* How big an expression is allowed to get, in nodes and in characters. The
    character limits are what a person actually experiences. */
@@ -89,6 +95,20 @@ export function isBounded(node) {
 /* Does this expression stay within [-1, 1]? What arcsin and arccos need.
    Checked by sampling, because x/4 is inside it on the range that matters
    and no structural rule says so. */
+/* Does this expression get to |u| >= 1 often enough to be worth asking
+   about? arcsec(x/8) exists only where |x| >= 8, which is off the edge of
+   every graph this tool draws. */
+export function reachesOutsideUnit(node) {
+  const f = Expr.compile(node);
+  let outside = 0;
+  for (let i = 0; i <= 80; i++) {
+    const x = -6 + (i * 12) / 80;
+    const v = f({ x });
+    if (isFinite(v) && Math.abs(v) >= 1.05) outside++;
+  }
+  return outside >= 25;
+}
+
 export function staysInUnitRange(node) {
   const f = Expr.compile(node);
   let seen = 0;
@@ -185,9 +205,9 @@ export function wrap(r, family, inner) {
          somebody to apply the chain rule to a question that does not need
          it. */
       if (undoes(name, inner)) return null;
-      if (name === 'atan') return fn('atan', inner);
-      /* arcsin and arccos only accept something that stays inside [-1, 1]. */
-      if (!staysInUnitRange(inner)) return null;
+      /* arctan and arccot take anything. The other four do not. */
+      if (NEEDS_SMALL.includes(name) && !staysInUnitRange(inner)) return null;
+      if (NEEDS_BIG.includes(name) && !reachesOutsideUnit(inner)) return null;
       return fn(name, inner);
     }
     case 'power': {
@@ -381,6 +401,7 @@ export function composePair(r, spec = {}) {
 
 export default {
   composeFunction, composePair, wrap, innerFor, linearInner, quadraticInner,
-  positiveInner, isBounded, staysInUnitRange, definedSomewhere, degree, usable,
+  positiveInner, isBounded, staysInUnitRange, reachesOutsideUnit,
+  definedSomewhere, degree, usable,
   TRIG, PLAIN_TRIG, INVERSE_TRIG,
 };
