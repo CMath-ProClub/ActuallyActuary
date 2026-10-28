@@ -33,6 +33,11 @@
 <link rel="modulepreload" href="scheduler.js">
 <link rel="modulepreload" href="charts.js">
 <link rel="modulepreload" href="ollama.js">
+<link rel="modulepreload" href="compose.js">
+<link rel="modulepreload" href="classify.js">
+<link rel="modulepreload" href="drill.js">
+<link rel="modulepreload" href="exam.js">
+<link rel="modulepreload" href="help.js">
 <link rel="modulepreload" href="app.js">
 </head>
 <body>
@@ -55,6 +60,8 @@
   </noscript>
   <section class="card" id="booting">
     <p class="muted">Loading...</p>
+    <p class="small muted">If this does not go away in a few seconds, something
+    did not load, and this card will say what.</p>
   </section>
 </main>
 
@@ -63,14 +70,88 @@
   sync, and the optional model runs on your own machine.</p>
 </footer>
 
+<script>
+/* A CLASSIC script, deliberately, and it runs before the module below.
+
+   The module script only executes if the whole module graph loaded and
+   parsed. When it does not - one file failed to fetch, or a browser choked
+   on syntax the others accept - the module body never runs, nothing throws
+   anywhere a try/catch can see it, and the page sits on "Loading..."
+   forever with no explanation. That happened, and from the outside it is
+   indistinguishable from a hang.
+
+   So errors are captured here, where they can be seen whatever fails, and
+   a watchdog turns a silent wait into a message that says what went
+   wrong. */
+window.__boot = { started: false, errors: [] };
+window.addEventListener('error', function (e) {
+  var where = e && e.target && e.target.src ? ' loading ' + e.target.src : '';
+  var what = (e && e.message) || (e && e.error && e.error.message) || 'failed';
+  window.__boot.errors.push(what + where);
+}, true);
+window.addEventListener('unhandledrejection', function (e) {
+  window.__boot.errors.push('unfinished work: ' + ((e && e.reason && e.reason.message) || e.reason));
+});
+
+/* Which file did not arrive? The build knows what it shipped, so when
+   the app fails to start the page can check each one and name the
+   culprit rather than saying "something went wrong". */
+window.__boot.files = ["math.js", "expr.js", "topics.js", "gen-sandbox.js", "ask.js", "flow.js", "mistakes.js", "persist.js", "room.js", "board.js", "graph.js", "photo.js", "gen-algebra.js", "gen-calculus.js", "gen-actuarial.js", "gen-cs.js", "generators.js", "store.js", "scheduler.js", "charts.js", "ollama.js", "compose.js", "classify.js", "drill.js", "exam.js", "help.js", "app.js"];
+function __bootCheck(done) {
+  var files = window.__boot.files || [];
+  var bad = [];
+  var left = files.length;
+  if (!left || typeof fetch !== 'function') { done(bad); return; }
+  files.forEach(function (name) {
+    var finish = function () { left -= 1; if (left === 0) done(bad); };
+    fetch(name, { cache: 'reload' }).then(function (r) {
+      if (!r.ok) bad.push(name + ' (' + r.status + ')');
+      finish();
+    }).catch(function () { bad.push(name + ' (no answer)'); finish(); });
+  });
+}
+
+setTimeout(function () {
+  var el = document.getElementById('booting');
+  if (!el || window.__boot.started) return;
+  el.innerHTML = '<h1>It did not start</h1>'
+    + '<p>The page loaded but the app did not. <b>Nothing you have saved is '
+    + 'affected</b> - it is all still in this browser.</p>'
+    + '<p class="muted">Checking which file is missing...</p>'
+    + '<pre class="code"></pre>'
+    + '<p class="small muted">Browser: ' + navigator.userAgent + '</p>'
+    + '<p><a class="btn" href="./?retry=' + Date.now() + '">Try again</a></p>';
+  var pre = el.querySelector('pre');
+  __bootCheck(function (bad) {
+    var note = el.querySelector('p.muted');
+    if (bad.length) {
+      if (note) note.textContent = 'These files did not load:';
+      pre.textContent = bad.join(', ');
+    } else {
+      if (note) {
+        note.textContent = 'Every file loaded, so the app itself stopped on '
+          + 'the way up. This is what the browser reported:';
+      }
+      var errors = window.__boot.errors.filter(function (e, i, all) {
+        return all.indexOf(e) === i;
+      });
+      pre.textContent = errors.length ? errors.join(' / ')
+        : 'nothing, which usually means the browser is too old for part of it';
+    }
+  });
+}, 6000);
+</script>
+
 <script type="module">
 import { boot } from './app.js';
 const el = document.getElementById('booting');
 try {
   boot();
+  window.__boot.started = true;
   if (el) el.remove();
 } catch (err) {
   console.error(err);
+  window.__boot.started = true;
   if (el) {
     el.innerHTML = '<h1>The app did not start</h1>'
       + '<p>Something went wrong loading it. The browser console has the detail, '
