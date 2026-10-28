@@ -67,9 +67,13 @@ function composing(r, level) {
 }
 
 /* A linear inside function, the workhorse of every chain rule problem. */
-function linear(r, { allowConstant = true } = {}) {
+function linear(r, { allowConstant = true, mustMove = false } = {}) {
   const a = r.nz(-6, 6);
-  const b = allowConstant ? r.int(-8, 8) : 0;
+  /* `mustMove` means this is going INSIDE something, where a bare ax is
+     not a composition at all: (-5x)^3 is -125x^3 with a hat on, and
+     asking for the chain rule on it teaches the rule where it is not
+     needed. A non-zero constant makes it a real inside. */
+  const b = mustMove ? r.nz(-8, 8) : (allowConstant ? r.int(-8, 8) : 0);
   return b === 0 ? mul(num(a), X) : add(mul(num(a), X), num(b));
 }
 
@@ -244,7 +248,7 @@ const SKILLS = {
     ask: 'composite functions',
     build(r, level) {
       if (level === 1) {
-        const inside = linear(r);
+        const inside = linear(r, { mustMove: true });
         return { f: pow(inside, num(r.int(2, 5))), inner: inside };
       }
       /* The chain rule is the one skill whose whole point is composition,
@@ -262,7 +266,12 @@ const SKILLS = {
         ? add(mul(num(r.nz(-4, 4)), pow(X, num(r.int(2, 3)))), num(r.int(-7, 7)))
         : linear(r);
       const shape = r.int(0, 2);
-      if (shape === 0) return { f: pow(inside, num(r.int(2, 6))), inner: inside };
+      if (shape === 0) {
+        /* Same rule at every level: a power of one term is not a chain. */
+        const base = inside.t === 'mul' || inside.t === 'var'
+          ? linear(r, { mustMove: true }) : inside;
+        return { f: pow(base, num(r.int(2, 6))), inner: base };
+      }
       if (shape === 1) return { f: fn(r.pick(TRIG), inside), inner: inside };
       /* A square root needs an inside that is positive somewhere sensible.
          sqrt(-5x - 7) exists only for x <= -1.4, which is a strange thing to
