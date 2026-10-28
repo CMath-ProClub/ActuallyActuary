@@ -169,11 +169,16 @@ function walk(node, depth, out, max) {
 
   const rule = ruleAt(node);
   if (rule) {
+    const got = simplify(derivative(node));
     out.push({
       depth,
       rule,
       of: html(node),
-      result: html(simplify(derivative(node))),
+      result: html(got),
+      /* Kept as a tree, not just as HTML, so a line somebody has typed can
+         be compared against it. */
+      node: got,
+      source: node,
     });
   }
 
@@ -211,4 +216,57 @@ export function workFor(node, variable = 'x') {
   };
 }
 
-export default { steps, workFor, ruleAt };
+/* Where in the working is this?
+
+   "Am I on track" used to mean only "how close is this to the final
+   answer", which has nothing to say to somebody halfway through. The
+   derivation gives every intermediate line a value, so a line that is NOT
+   the answer can still be a correct line - and saying "that is the right
+   line, one more rule to go" is worth more than "not yet".
+
+   Compared numerically, like everything else here, so any equivalent form
+   of the same line counts. */
+export function whereAreYou(target, typed, variable = 'x') {
+  if (!target || !typed) return null;
+  let answer;
+  try {
+    answer = simplify(derivative(simplify(target), variable));
+  } catch (err) {
+    return null;
+  }
+
+  const same = (a, b) => {
+    try {
+      return Expr.equivalent(a, b, { count: 40 }).equal;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  if (same(typed, answer)) return { at: 'answer', total: 0 };
+
+  const lines = steps(simplify(target));
+  /* The outermost line IS the answer, so the interesting ones are the
+     inner detours - the inside of a chain rule, one factor of a product. */
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line.node) continue;
+    if (same(typed, line.node)) {
+      return {
+        at: 'step',
+        index: i,
+        total: lines.length,
+        rule: line.rule,
+        of: line.of,
+        remaining: i,
+      };
+    }
+  }
+
+  /* The function itself, written out again, is a common thing to do while
+     thinking - and is not progress. */
+  if (same(typed, simplify(target))) return { at: 'start', total: lines.length };
+  return null;
+}
+
+export default { steps, workFor, ruleAt, whereAreYou };

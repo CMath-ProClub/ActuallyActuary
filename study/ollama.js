@@ -83,6 +83,11 @@ export async function listModels(url) {
     size: m.size,
     family: m.details?.family || '',
     params: m.details?.parameter_size || '',
+    /* Kept, because choosing a model for somebody means knowing what it
+       can do: whether it can see, and how big it is. Dropping these was
+       why the picker could only ever be a list of names. */
+    capabilities: m.capabilities || [],
+    details: m.details || {},
   }));
   models.sort((a, b) => a.name.localeCompare(b.name));
   return models;
@@ -525,6 +530,100 @@ function stripTags(s) {
 
 /* Rough guidance shown in Settings, so a 16GB card is not pointed at a 70B
    model that will swap and time out. */
+/* Which of the installed models to use for what, without being asked.
+
+   The settings page has had a model picker since the beginning and it was
+   the wrong shape: it asks somebody to know which of their models is good
+   at explaining calculus, which is a question about the models rather than
+   about the maths. The machine can answer it.
+
+   The rules are about what a model IS, from what Ollama reports:
+
+     - a model that says it can see is the one for photographs of a
+       worksheet, whatever else is installed
+     - a coder model explains code, and will explain the chain rule like
+       code. Preferred last.
+     - otherwise bigger is better, up to what will fit, because the thing
+       being asked for is an explanation and small models write worse ones.
+
+   Everything here is a guess that the person can override; it exists so
+   that the common case needs no decision at all. */
+
+const CODER = /(coder|code|deepseek-coder|starcoder|codestral|codellama)/i;
+const VISION_NAME = /(vision|llava|moondream|bakllava|minicpm-v|qwen2?.?5?-?vl|glm-ocr|ocr)/i;
+
+function paramCount(model) {
+  const said = model && model.details && model.details.parameter_size;
+  if (!said) return 0;
+  const n = parseFloat(String(said));
+  if (!Number.isFinite(n)) return 0;
+  return /m\b/i.test(said) ? n / 1000 : n;
+}
+
+export function canSee(model) {
+  const caps = (model && model.capabilities) || [];
+  if (caps.includes('vision')) return true;
+  const families = (model && model.details && model.details.families) || [];
+  if (families.includes('clip') || families.includes('mllama')) return true;
+  return VISION_NAME.test((model && model.name) || '');
+}
+
+/* The best model for explaining working, and the best for reading a
+   photograph. Either may be null, and the caller must cope: a machine with
+   only a coder model installed can still explain, just less well, and one
+   with no vision model cannot read a photo at all. */
+export function chooseModels(models) {
+  const list = (models || []).filter((m) => m && m.name);
+  if (!list.length) return { explain: null, see: null, why: 'no models installed' };
+
+  const scored = list.map((m) => ({
+    model: m,
+    params: paramCount(m),
+    coder: CODER.test(m.name),
+    ocr: /ocr/i.test(m.name || ''),
+    sees: canSee(m),
+  }));
+
+  /* For explaining: not a coder, not an OCR model, and big enough to
+     write a sentence worth reading.
+
+     "Prefer anything that is not a coder" on its own picked a 891M OCR
+     model over a 30B one, which is how you get a worse explanation from a
+     better machine. An OCR model is for reading images and nothing else,
+     and under about 3B the writing is not worth the wait. */
+  const usable = scored.filter((m) => !m.ocr && m.params >= 3);
+  const explainers = usable.filter((m) => !m.coder);
+  const pool = explainers.length ? explainers
+    : (usable.length ? usable : scored.filter((m) => !m.ocr));
+  const explain = pool.slice().sort((a, b) => b.params - a.params)[0];
+
+  /* For seeing: anything that can, biggest first. */
+  const seers = scored.filter((m) => m.sees).sort((a, b) => b.params - a.params);
+
+  return {
+    explain: explain ? explain.model.name : null,
+    see: seers.length ? seers[0].model.name : null,
+    why: explainers.length
+      ? 'the largest installed model that is not a coder'
+      : usable.length
+        ? 'only coder models are installed, so one of those is doing it'
+        : 'nothing installed is really suited to explaining',
+  };
+}
+
+/* Ask the machine what it has, and decide. One call, and it fails quietly:
+   no Ollama running is the normal case, not an error. */
+export async function detect(url) {
+  try {
+    const res = await ping(url);
+    if (!res || !res.ok) return { running: false };
+    const picked = chooseModels(res.models);
+    return { running: true, models: res.models || [], ...picked };
+  } catch (err) {
+    return { running: false, error: err && err.message };
+  }
+}
+
 export const MODEL_ADVICE = [
   { match: /llama3\.2|qwen2\.5:3b|phi3|gemma2:2b/i, note: 'Fast. Fine for vocabulary and recall, weaker on multi-step math.' },
   { match: /:7b|:8b|llama3\.1|qwen2\.5:7b|mistral/i, note: 'A good default on a 16GB card: quick and reasonably reliable.' },

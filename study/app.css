@@ -1718,3 +1718,38 @@ body.noscroll { overflow: hidden; }
   .qspace { border-bottom: 1px solid #bbb; }
   a[href]::after { content: ""; }
 }
+
+
+/* ------------------------------------------------------------- today */
+
+.today { margin-bottom: 18px; border-left: 4px solid var(--accent); }
+.todayhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.todayhead h2 { margin: 0; }
+.daysleft {
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warnc);
+}
+.todaylist { list-style: none; margin: 0 0 12px; padding: 0; counter-reset: todo; }
+.todaylist li {
+  counter-increment: todo;
+  border-left: 2px solid var(--edge);
+  padding: 2px 0 2px 12px;
+  margin-bottom: 12px;
+}
+.todaylist li.t-exam { border-left-color: var(--warnc); }
+.todaylist li.t-weak { border-left-color: var(--bad); }
+.todaylist li.t-keep { border-left-color: var(--good); }
+.todaywhat { font-weight: 650; font-size: 1.02rem; }
+.todaylist p { margin: 3px 0 0; }
+.todaydate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.datein { padding: 5px 8px; font-family: var(--face-ui); font-size: 0.84rem; }

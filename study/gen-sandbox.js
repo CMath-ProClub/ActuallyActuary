@@ -26,6 +26,7 @@
 import MathKit from './math.js';
 import Expr from './expr.js';
 import * as compose from './compose.js';
+import * as solve from './solve.js';
 
 const { num, vr, neg, add, sub, mul, div, pow, fn, derivative, simplify,
   text, html, latex, equivalent } = Expr;
@@ -2500,6 +2501,43 @@ Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET);
    specific to say it falls back to the next hint rather than inventing
    encouragement, because "keep going" from a computer is worth nothing. */
 
+/* Is what they have written a line of the working rather than the answer?
+
+   Only for the ordinary differentiate-this questions: an implicit answer
+   or a set of x values has no single derivation to be partway through. */
+function whereOnThePath(problem, text) {
+  if (!problem || problem.kind !== 'expression' || problem.implicit) return null;
+  if (!problem.original) return null;
+  const typed = Expr.tryParse(text, { vars: [problem.variable || 'x'] });
+  if (!typed) return null;
+
+  let where = null;
+  try {
+    where = solve.whereAreYou(problem.original, typed, problem.variable || 'x');
+  } catch (err) {
+    return null;
+  }
+  if (!where) return null;
+
+  if (where.at === 'start') {
+    return {
+      state: 'off',
+      message: 'That is the function again, not its derivative. Start with the '
+        + 'rule that applies to the outside.',
+    };
+  }
+  if (where.at === 'step') {
+    const rule = String(where.rule || '').replace(/:.*$/, '').toLowerCase();
+    return {
+      state: 'partway',
+      message: `That is a correct line - the ${rule} part of it. It is not the `
+        + 'whole derivative yet: that piece still has to go back into the rule '
+        + 'it came out of.',
+    };
+  }
+  return null;
+}
+
 /* The top and bottom of an answer shaped like a fraction, if it is one.
    Implicit answers almost always are: -F_x/F_y. */
 function fractionParts(node) {
@@ -2530,6 +2568,14 @@ export function onTrack(problem, raw, { hintsShown = 0 } = {}) {
      expression and must not be read as a stray variable. */
   const cleaned = problem && problem.kind === 'antiderivative'
     ? Expr.stripPlusC(text) : text;
+
+  /* Before asking how close this is to the ANSWER, ask whether it is a
+     line on the way there. Half of a chain rule is not a wrong answer, it
+     is an unfinished one, and telling somebody "not yet" when they have
+     just written a correct intermediate line is both wrong and
+     discouraging. The derivation knows every line; this asks it. */
+  const step = whereOnThePath(problem, cleaned);
+  if (step) return step;
 
   const allowed = problem && problem.implicit ? { vars: ['x', 'y'] } : { vars: ['x'] };
   const node = Expr.tryParse(cleaned, allowed);

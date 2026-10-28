@@ -28,6 +28,7 @@ import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
 import * as classify from './classify.js';
 import * as solve from './solve.js';
+import * as plan from './plan.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -87,6 +88,91 @@ function currentRoute() {
 
 function go(path) {
   location.hash = `#/${path}`;
+}
+
+/* What to do today.
+
+   The tool has recorded every attempt with the skill and the specific
+   mistake since the beginning, and has never once used it to say "so do
+   this". Opening the site and being asked what you feel like practising is
+   how revision time goes on whatever you thought of last, which is rarely
+   the thing you are worst at. */
+function todayCard() {
+  const profile = store.activeProfile();
+  const made = plan.planFor(profile, {
+    topicName: (id) => (TOPIC_BY_ID[id] && TOPIC_BY_ID[id].name) || id,
+    examDate: profile.settings.examDate || '',
+  });
+
+  const card = h('section', { class: 'card today' });
+  const head = h('div', { class: 'todayhead' }, [
+    h('h2', { text: 'Today' }),
+    made.days !== null && made.days >= 0
+      ? h('span', { class: 'daysleft', text: made.days === 0 ? 'test today'
+        : made.days === 1 ? 'test tomorrow' : `${made.days} days to the test` })
+      : null,
+  ]);
+  card.appendChild(head);
+
+  const list = h('ol', { class: 'todaylist' });
+  for (const item of made.items) {
+    list.appendChild(h('li', { class: `t-${item.kind}` }, [
+      h('a', { class: 'todaywhat', href: item.where }, item.what),
+      h('p', { class: 'small muted', text: item.why }),
+    ]));
+  }
+  card.appendChild(list);
+
+  /* The date, asked for once and only once it would change anything. */
+  const date = h('input', {
+    type: 'date', class: 'textinput datein',
+    value: profile.settings.examDate || '',
+  });
+  date.addEventListener('change', () => {
+    store.setSetting('examDate', date.value);
+    router();
+  });
+  card.appendChild(h('p', { class: 'small muted todaydate' }, [
+    h('span', { text: profile.settings.examDate ? 'Test date: ' : 'When is the test? ' }),
+    date,
+  ]));
+
+  card.appendChild(h('p', { class: 'small muted', text: made.measured
+    ? `From your last ${made.measured} answers.`
+    : 'Nothing recorded yet.' }));
+  return card;
+}
+
+/* Find the model without being asked.
+
+   The settings page has always had a model picker, and it was the wrong
+   question to ask: it wants somebody to know which of their installed
+   models is best at explaining calculus. The machine can answer that -
+   Ollama reports what each model is and what it can do - so it answers it
+   itself, once, quietly, on the first load where nothing is configured.
+
+   It never overrides a choice already made, and it fails silently: no
+   Ollama running is the ordinary case, not an error. */
+function findTheModel() {
+  const profile = store.activeProfile();
+  const url = profile.settings.ollamaUrl || 'http://localhost:11434';
+  if (profile.settings.ollamaModel && profile.settings.ollamaVisionModel) return;
+
+  ollama.detect(url).then((found) => {
+    if (!found || !found.running) return;
+    const now = store.activeProfile().settings;
+    if (!now.ollamaModel && found.explain) {
+      store.setSetting('ollamaModel', found.explain);
+      store.setSetting('ollamaPickedWhy', found.why || '');
+    }
+    if (!now.ollamaVisionModel && found.see) {
+      store.setSetting('ollamaVisionModel', found.see);
+    }
+    if (!now.ollamaUrl) store.setSetting('ollamaUrl', url);
+    /* Only repaint if the page is showing something that depends on it. */
+    const route = currentRoute().name;
+    if (route === 'settings' || route === 'lockin') router();
+  }).catch(() => {});
 }
 
 /* Keys, for the hands that are already on the keyboard.
@@ -1831,6 +1917,7 @@ export function boot() {
   store.load();
   mountProfileSwitcher();
   installKeys();
+  findTheModel();
   window.addEventListener('hashchange', router);
   router();
 
@@ -1879,6 +1966,8 @@ function renderStart(root) {
 
   /* The exam is the thing being studied for this week, so it goes above
      the flow rather than four questions into it. */
+  root.appendChild(todayCard());
+
   root.appendChild(h('section', { class: 'examcall' }, [
     h('button', {
       class: 'btn big exambtn', type: 'button', onclick: () => startExam(30),
@@ -2851,7 +2940,9 @@ function helpPanel(problem, slot) {
 function workReview(problem, written, res) {
   if (!problem || problem.kind !== 'parts' || !problem.parts) return null;
   const profile = store.activeProfile();
-  const model = profile.settings.ollamaModel;
+  /* Reading a photograph needs a model that can see; explaining needs one
+     that can write. They are rarely the same model. */
+  const model = profile.settings.ollamaVisionModel || profile.settings.ollamaModel;
   if (!model) return null;
 
   const slot = h('div', { class: 'workreview' });
@@ -4140,7 +4231,8 @@ function worksheetPanel() {
       text: `Reading the photo with ${model}, on this machine...` }));
     try {
       const dataUrl = await photo.shrink(file);
-      const text = await ollama.readImage(profile.settings.ollamaUrl, model, dataUrl);
+      const seeing = profile.settings.ollamaVisionModel || model;
+      const text = await ollama.readImage(profile.settings.ollamaUrl, seeing, dataUrl);
       area.value = text;
       paint(text);
     } catch (err) {
