@@ -111,6 +111,20 @@ function __bootCheck(done) {
   });
 }
 
+/* Offline support, registered after everything else has loaded so it can
+   never be in the way of starting. ?nosw=1 turns it off and removes it,
+   which is the escape hatch if a worker ever misbehaves. */
+window.addEventListener('load', function () {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.search.indexOf('nosw=1') !== -1) {
+    navigator.serviceWorker.getRegistrations().then(function (list) {
+      list.forEach(function (r) { r.unregister(); });
+    });
+    return;
+  }
+  navigator.serviceWorker.register('./sw.js').catch(function () {});
+});
+
 setTimeout(function () {
   var el = document.getElementById('booting');
   if (!el || window.__boot.started) return;

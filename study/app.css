@@ -1628,3 +1628,93 @@ body.noscroll { overflow: hidden; }
 .sheetmissed > summary { cursor: pointer; color: var(--warnc); font-size: 0.86rem; }
 .sheetmissed ul { margin: 8px 0 0; padding-left: 18px; }
 .sheetmissed li { color: var(--muted); }
+
+
+/* ----------------------------------------------------- the actual working */
+
+/* Derived from the function rather than written for a shape, so it indents
+   the way a person does when they stop to differentiate an inside. */
+.working { list-style: none; margin: 10px 0 0; padding: 0; }
+.working li {
+  padding: 7px 0 7px 12px;
+  border-left: 2px solid var(--edge);
+  margin-bottom: 2px;
+}
+.working li.w1 { margin-left: 16px; border-left-color: var(--hair); }
+.working li.w2 { margin-left: 32px; border-left-color: var(--hair); }
+.working li.w3 { margin-left: 48px; border-left-color: var(--hair); }
+.wrule {
+  display: block;
+  font-family: var(--face-ui);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.wline { display: block; }
+.warrow { color: var(--muted); }
+.alsosteps { margin-top: 4px; }
+
+/* ------------------------------------------------------------- the keys */
+
+.keyhelp {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 95;
+  max-width: 320px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  background: var(--paper);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.keyhelp h2 { margin: 0 0 8px; font-size: 1rem; }
+.keyhelp p { margin: 0 0 5px; font-size: 0.9rem; }
+.keyhelp kbd {
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  border: 1px solid var(--edge);
+  padding: 1px 6px;
+  margin-right: 4px;
+  background: var(--sunk);
+}
+
+@media (max-width: 620px) {
+  .keyhelp { display: none; }
+  .working li.w1 { margin-left: 8px; }
+  .working li.w2 { margin-left: 16px; }
+  .working li.w3 { margin-left: 24px; }
+}
+
+
+/* ------------------------------------------------------------ on paper */
+
+/* A worksheet generated to the concepts still switched on, with the key on
+   its own page. Half of revision happens away from a screen. */
+.sheet { margin-top: 22px; }
+.sheethead { border-bottom: 2px solid var(--edge); padding-bottom: 8px; margin-bottom: 14px; }
+.sheethead h2 { margin: 0; }
+.sheethead p { margin: 2px 0 0; color: var(--muted); }
+.sheetlist { padding-left: 26px; }
+.sheetlist li { margin-bottom: 4px; break-inside: avoid; }
+.qtext { font-size: 1.04rem; }
+/* Room to actually work it out. */
+.qspace { height: 86px; border-bottom: 1px solid var(--hair); margin: 6px 0 14px; }
+.keylist { padding-left: 26px; }
+.keylist li { margin-bottom: 6px; break-inside: avoid; }
+.answerkey { margin-top: 28px; }
+
+@media print {
+  /* Paper is white and ink is black, whatever the screen was doing. */
+  :root, :root[data-theme="dark"] {
+    --desk: #fff; --paper: #fff; --sunk: #fff; --ink: #000;
+    --muted: #444; --edge: #999; --hair: #ccc; --accent: #000;
+  }
+  body { background: #fff; color: #000; font-size: 11.5pt; }
+  .topbar, footer, .noprint, #nav, #profswitch, .keyhelp { display: none !important; }
+  main { padding: 0; }
+  .sheet { margin: 0; }
+  .answerkey { break-before: page; page-break-before: always; }
+  .qspace { border-bottom: 1px solid #bbb; }
+  a[href]::after { content: ""; }
+}

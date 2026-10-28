@@ -27,6 +27,7 @@ import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
 import * as classify from './classify.js';
+import * as solve from './solve.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -64,6 +65,8 @@ const ROUTES = {
   '': renderStart,
   start: renderStart,
   lockin: renderLockIn,
+  q: renderShared,
+  print: renderPrintable,
   workspace: renderWorkspace,
   quiz: renderQuiz,
   dashboard: renderDashboard,
@@ -84,6 +87,63 @@ function currentRoute() {
 
 function go(path) {
   location.hash = `#/${path}`;
+}
+
+/* Keys, for the hands that are already on the keyboard.
+
+   Typing an answer and reaching for the mouse to press Check is the
+   slowest part of a practice session, and the thing every other study
+   site makes you do. Enter checks and then moves on; the rest are for
+   when the answer box does not have focus, so they never eat a keystroke
+   meant for the maths. */
+const SHORTCUTS = [
+  ['Enter', 'check the answer, then move on'],
+  ['n', 'next question'],
+  ['g', 'show the graph'],
+  ['s', 'scratch paper'],
+  ['t', 'am I on track'],
+  ['?', 'this list'],
+];
+
+function pressTool(label) {
+  const want = label.toLowerCase();
+  const buttons = [...document.querySelectorAll('#view .toolrow .chip, #view .cta .btn')];
+  const hit = buttons.find((b) => b.textContent.trim().toLowerCase().startsWith(want));
+  if (hit) hit.click();
+  return !!hit;
+}
+
+function installKeys() {
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))
+      || e.target.isContentEditable;
+    /* Enter inside the answer box is already handled by the box itself. */
+    if (inField) return;
+    const key = e.key;
+    if (key === 'n' && pressTool('next')) { e.preventDefault(); return; }
+    if (key === 'g' && pressTool('graph')) { e.preventDefault(); return; }
+    if (key === 's' && pressTool('scratch')) { e.preventDefault(); return; }
+    if (key === 't' && pressTool('am i')) { e.preventDefault(); return; }
+    if (key === '?') {
+      e.preventDefault();
+      showShortcuts();
+    }
+  });
+}
+
+function showShortcuts() {
+  const old = document.getElementById('keyhelp');
+  if (old) { old.remove(); return; }
+  const box = h('div', { class: 'keyhelp', id: 'keyhelp' }, [
+    h('h2', { text: 'Keys' }),
+    ...SHORTCUTS.map(([key, what]) => h('p', {}, [
+      h('kbd', { text: key }),
+      h('span', { text: ` ${what}` }),
+    ])),
+    h('p', { class: 'small muted', text: 'Press ? again to close.' }),
+  ]);
+  document.body.appendChild(box);
 }
 
 function router() {
@@ -1770,6 +1830,7 @@ function scheduleAutoSync() {
 export function boot() {
   store.load();
   mountProfileSwitcher();
+  installKeys();
   window.addEventListener('hashchange', router);
   router();
 
@@ -1834,6 +1895,11 @@ function renderStart(root) {
       h('span', { class: 'small muted', text: 'questions' }),
     ]),
     examConceptSwitches(),
+    h('p', { class: 'small' }, [
+      h('a', { href: '#/print/20' }, 'Or print a worksheet'),
+      h('span', { class: 'muted', text: ' - the same concepts, on paper, with '
+        + 'an answer key.' }),
+    ]),
     /* The other half of it: a test is fixed, a drill reacts. */
     h('div', { class: 'drillcall' }, [
       h('button', {
@@ -2691,6 +2757,49 @@ function mathKeys(target) {
     }, key.label));
   }
   return row;
+}
+
+/* The working: the rules, in order, derived from the function itself.
+
+   A question's own `steps` describe the shape its builder had in mind,
+   which goes vague the moment a function is grown rather than filled in.
+   solve.js walks the expression instead, so the working is real for a
+   function nobody anticipated. The builder's steps are still shown
+   underneath when it has something extra to say - the limit definition's
+   four lines, or why only those x values. */
+function workedPanel(problem) {
+  const det = h('details', { class: 'steps', open: true });
+  det.appendChild(h('summary', { text: 'How to get there' }));
+
+  const derived = problem.original ? solve.workFor(problem.original, problem.variable || 'x') : null;
+  if (derived) {
+    const ol = h('ol', { class: 'working' });
+    for (const line of derived.lines) {
+      ol.appendChild(h('li', { class: `w${Math.min(line.depth, 3)}` }, [
+        h('span', { class: 'wrule', text: line.rule }),
+        h('span', { class: 'wline' }, [
+          h('span', { class: 'eq', html: line.of }),
+          h('span', { class: 'warrow', text: ' \u2192 ' }),
+          h('span', { class: 'eq', html: line.result }),
+        ]),
+      ]));
+    }
+    det.appendChild(ol);
+  }
+
+  if (problem.steps && problem.steps.length) {
+    const ol = h('ol', { class: derived ? 'alsosteps' : '' });
+    for (const st of problem.steps) {
+      ol.appendChild(h('li', {}, [
+        h('span', { class: 'sttitle', text: st.title }),
+        h('span', { class: 'sthtml', html: st.html }),
+      ]));
+    }
+    if (derived) det.appendChild(h('p', { class: 'small muted', text: 'And for this one in particular:' }));
+    det.appendChild(ol);
+  }
+
+  return det.querySelector('ol') ? det : null;
 }
 
 /* Somewhere to go when the working is not enough.
@@ -3744,6 +3853,166 @@ let quizRun = null;
 let graphOpen = false;
 /* ====================================================== the calculus exam */
 
+/* A worksheet, on paper.
+
+   Half of revision happens away from a screen, and every other study site
+   either has no paper at all or sells a fixed PDF. This generates one -
+   to the concepts still switched on, at the length asked for, with the
+   answer key on its own page so it can be folded under or thrown away.
+
+   A fresh one every time, because the problems are generated: there is no
+   finite stock of worksheets to work through and then be stuck. */
+function renderPrintable(root, args) {
+  const count = Math.max(5, Math.min(60, Number((args || [])[0]) || 20));
+  const skip = examSkips();
+  const slots = examSlots(count, { skip });
+  const problems = [];
+  const seen = new Set();
+  for (const slot of slots) {
+    let made = null;
+    for (let tries = 0; tries < 30 && !made; tries++) {
+      made = buildProblem({ skills: [slot.skill], level: slot.level }, freshSeed());
+      if (made && seen.has(made.stem)) made = null;
+    }
+    if (made) { problems.push(made); seen.add(made.stem); }
+  }
+
+  root.appendChild(h('header', { class: 'pagehead noprint' }, [
+    h('h1', { text: 'A worksheet' }),
+    h('p', { class: 'lead', text: `${problems.length} questions, generated now, `
+      + 'to whatever concepts are still switched on. The answer key is on its '
+      + 'own page.' }),
+    h('div', { class: 'cta' }, [
+      h('button', { class: 'btn', type: 'button', onclick: () => window.print() },
+        'Print it'),
+      ...[10, 20, 30].map((n) => h('a', {
+        class: 'btn ghost small', href: `#/print/${n}`,
+        onclick: () => setTimeout(router, 0),
+      }, `${n} questions`)),
+      h('a', { class: 'btn ghost small', href: '#/start' }, 'Back'),
+    ]),
+  ]));
+
+  const sheet = h('section', { class: 'sheet' });
+  sheet.appendChild(h('div', { class: 'sheethead' }, [
+    h('h2', { text: 'Calculus practice' }),
+    h('p', { class: 'small', text: `${store.activeProfile().name} \u00b7 `
+      + `${new Date().toLocaleDateString()} \u00b7 ${problems.length} questions` }),
+  ]));
+  const ol = h('ol', { class: 'sheetlist' });
+  for (const p of problems) {
+    ol.appendChild(h('li', {}, [
+      h('div', { class: 'qtext', html: p.stem }),
+      h('div', { class: 'qspace', 'aria-hidden': 'true' }),
+    ]));
+  }
+  sheet.appendChild(ol);
+  root.appendChild(sheet);
+
+  const key = h('section', { class: 'sheet answerkey' });
+  key.appendChild(h('div', { class: 'sheethead' }, [
+    h('h2', { text: 'Answer key' }),
+    h('p', { class: 'small', text: 'Fold this under before you start.' }),
+  ]));
+  const kl = h('ol', { class: 'keylist' });
+  for (const p of problems) {
+    kl.appendChild(h('li', {}, [
+      h('span', { class: 'eq', html: p.answerHtml || '\u2014' }),
+    ]));
+  }
+  key.appendChild(kl);
+  root.appendChild(key);
+}
+
+/* One problem, by link.
+
+   Every problem here is (skill, level, seed) and the same seed always
+   rebuilds the identical question - that is how a mock test is stored as a
+   list of seeds rather than a list of questions. Which means a question
+   has a URL, and a URL can be sent to somebody.
+
+   #/q/implicit/3/12345 is that exact question, on any device, for anybody.
+   No account, no copy and paste of half-rendered maths. */
+function problemLink(problem) {
+  if (!problem || !problem.skill || problem.seed === undefined) return null;
+  const bits = ['q', problem.skill, problem.difficulty || 2, problem.seed >>> 0];
+  if (problem.family) bits.push(problem.family);
+  return `${location.origin}${location.pathname}#/${bits.join('/')}`;
+}
+
+function renderShared(root, args) {
+  const [skill, levelRaw, seedRaw, family] = args || [];
+  const level = Math.max(1, Math.min(3, Number(levelRaw) || 2));
+  const seed = Number(seedRaw);
+  const problem = skill && Number.isFinite(seed)
+    ? buildProblem({ skills: [skill], level, family: family || null }, seed >>> 0)
+    : null;
+
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: 'A problem someone sent you' }),
+  ]));
+
+  if (!problem) {
+    root.appendChild(h('section', { class: 'card error' }, [
+      h('p', { text: 'That link does not describe a problem I can build. It may '
+        + 'have been typed wrong, or made by an older version.' }),
+      h('div', { class: 'cta' }, [h('a', { class: 'btn', href: '#/start' }, 'Start fresh')]),
+    ]));
+    return;
+  }
+
+  const card = h('section', { class: 'card problem' });
+  card.appendChild(h('div', { class: 'ptop' }, [
+    h('span', { class: 'ptopic', text: problem.topicName || problem.skillName || skill }),
+    h('span', { class: 'plevel', text: `level ${problem.difficulty}` }),
+  ]));
+  card.appendChild(h('div', { class: 'stem', html: problem.stem }));
+
+  const input = h('input', {
+    type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
+    placeholder: inputHint(problem), 'aria-label': 'Your answer',
+  });
+  const field = answerBox(input);
+  const marking = h('div', { class: 'exammark' });
+
+  const mark = () => {
+    const res = grade(problem, input.value);
+    marking.innerHTML = '';
+    marking.appendChild(h('div', {
+      class: 'feedback ' + (res.correct ? 'right' : res.decided === false ? 'warn' : 'wrong'),
+    }, [
+      h('p', { class: 'verdict', text: res.correct ? 'Correct'
+        : res.decided === false ? 'Could not check that one' : 'Not quite' }),
+      !res.correct && problem.answerHtml
+        ? h('p', { class: 'answerline', html: `The answer is <b>${problem.answerHtml}</b>` })
+        : null,
+      res.detail ? h('p', { text: res.detail }) : null,
+    ]));
+    if (!res.correct) {
+      const worked = workedPanel(problem);
+      if (worked) marking.appendChild(worked);
+      const watch = helpPanel(problem, null);
+      if (watch) marking.appendChild(watch);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); mark(); }
+  });
+
+  card.appendChild(h('div', { class: 'answerform' }, [
+    field,
+    mathKeys(input),
+    h('div', { class: 'cta' }, [
+      h('button', { class: 'btn', type: 'button', onclick: mark }, 'Check'),
+      h('a', { class: 'btn ghost', href: '#/lockin' }, 'Practise more like it'),
+    ]),
+    h('p', { class: 'small muted', text: 'This exact question rebuilds from the '
+      + 'link on any device - it is the seed that travels, not the text.' }),
+    marking,
+  ]));
+  root.appendChild(card);
+}
+
 /* ===================================================================== lock in */
 
 /* Four shapes, drilled until they are solid.
@@ -4496,18 +4765,9 @@ function renderQuiz(root) {
         ? `${name} moves up to level ${moved.to}. Two in a row.`
         : `${name} drops to level ${moved.to} for a bit.` }));
     }
-    if (!res.correct && q.steps && q.steps.length) {
-      const det = h('details', { class: 'steps', open: true });
-      det.appendChild(h('summary', { text: 'How to get there' }));
-      const ol = h('ol');
-      for (const st of q.steps) {
-        ol.appendChild(h('li', {}, [
-          h('span', { class: 'sttitle', text: st.title }),
-          h('span', { class: 'sthtml', html: st.html }),
-        ]));
-      }
-      det.appendChild(ol);
-      marking.appendChild(det);
+    if (!res.correct) {
+      const worked = workedPanel(q);
+      if (worked) marking.appendChild(worked);
     }
     checkBtn.textContent = lastOne() && !quizRun.plan.endless ? 'Finish' : 'Next';
     saveQuiz();
@@ -4546,6 +4806,24 @@ function renderQuiz(root) {
       checkBtn,
     ]),
     h('div', { class: 'toolrow' }, [
+      /* Every problem has a URL, because every problem is a seed. */
+      problemLink(q)
+        ? h('button', {
+          class: 'chip', type: 'button',
+          onclick: (e) => {
+            const link = problemLink(q);
+            const say = (text) => { e.target.textContent = text; };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(link)
+                .then(() => say('Link copied'))
+                .catch(() => { prompt('Copy this link', link); });
+            } else {
+              prompt('Copy this link', link);
+            }
+            setTimeout(() => say('Copy link'), 2500);
+          },
+        }, 'Copy link')
+        : null,
       immediate && !q.noGraph
         ? h('button', {
           class: 'chip', type: 'button',
