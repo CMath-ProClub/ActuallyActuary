@@ -9,7 +9,7 @@
    The cache is named after a hash of everything that shipped, so a deploy
    makes a new one and the old one is deleted whole. A mixed set cannot
    exist. */
-const CACHE = 'study-77e750048976';
+const CACHE = 'study-fd9eeb63b9fa';
 const FILES = ["./math.js", "./expr.js", "./topics.js", "./gen-sandbox.js", "./ask.js", "./flow.js", "./mistakes.js", "./persist.js", "./room.js", "./board.js", "./graph.js", "./photo.js", "./gen-algebra.js", "./gen-calculus.js", "./gen-actuarial.js", "./gen-cs.js", "./generators.js", "./store.js", "./scheduler.js", "./charts.js", "./ollama.js", "./compose.js", "./classify.js", "./drill.js", "./exam.js", "./help.js", "./app.js"];
 
 self.addEventListener('install', (event) => {

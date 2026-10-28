@@ -1820,11 +1820,31 @@ function ollamaCard(p) {
 
   const urlInput = h('input', { type: 'text', class: 'textinput', value: p.settings.ollamaUrl || 'http://localhost:11434' });
   urlInput.addEventListener('change', () => store.setSetting('ollamaUrl', urlInput.value.trim()));
-  card.appendChild(labelled('Ollama address', urlInput));
 
   const status = h('div', { class: 'ostatus' });
   const modelWrap = h('div', {});
   const testBtn = h('button', { class: 'btn small' }, 'Test the connection');
+
+  /* When the browser forbids this page from reaching any local address,
+     an address box and a Test button are an invitation to spend an hour
+     on something that cannot work. Fold them away rather than remove
+     them: they are still right on a machine serving the app locally, and
+     somebody may be pointing at a different host entirely. */
+  const addressRow = labelled('Ollama address', urlInput);
+  if (wall) {
+    card.appendChild(h('details', { class: 'help tight' }, [
+      h('summary', { text: 'Set the address by hand anyway' }),
+      h('p', { class: 'muted small',
+        text: 'Only useful if Ollama is somewhere other than this machine, '
+          + 'on an address this page is allowed to reach.' }),
+      addressRow,
+      testBtn,
+      status,
+      modelWrap,
+    ]));
+  } else {
+    card.append(addressRow, testBtn, status, modelWrap);
+  }
 
   testBtn.addEventListener('click', async () => {
     testBtn.disabled = true;
@@ -1857,8 +1877,6 @@ function ollamaCard(p) {
     modelWrap.append(labelled('Model to use', sel), advice);
     testBtn.disabled = false;
   });
-
-  card.append(testBtn, status, modelWrap);
 
   if (p.settings.ollamaModel) {
     card.appendChild(h('p', { class: 'okline', text: `Currently using ${p.settings.ollamaModel}.` }));
