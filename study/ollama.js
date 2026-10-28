@@ -36,8 +36,103 @@ export class OllamaError extends Error {
   }
 }
 
+const DEFAULT_URL = 'http://localhost:11434';
+
+/* ===================================================================
+   Where the model lives, and the one arrangement a browser permits
+   ===================================================================
+
+   This cost an evening to find, so it is written down rather than
+   rediscovered.
+
+   The deployed site is HTTPS on a public domain. The model is plain HTTP
+   on 127.0.0.1. A browser refuses that pairing, and the rule that refuses
+   it is PRIVATE NETWORK ACCESS, not CORS. Chrome sends a preflight
+   carrying
+
+       Access-Control-Request-Private-Network: true
+
+   and requires the answer to carry Access-Control-Allow-Private-Network:
+   true. Ollama does not send that header and exposes no setting for it.
+   So no value of OLLAMA_ORIGINS will ever let the live site reach the
+   model - the request is refused before CORS is even consulted.
+
+   What the page receives is a bare "Failed to fetch", indistinguishable
+   from Ollama being switched off. That is exactly why this looked like a
+   configuration problem for so long, and it is why `blockedByBrowser`
+   exists: the page should say which of the two it is.
+
+   The arrangement that does work is to make no cross-origin request at
+   all - serve the app from localhost with the model proxied under the
+   same origin. `tools/study_local.py` does that, at /ollama. So the
+   search order is: that proxy first, when the page is itself on
+   localhost, and then whatever address is configured. */
+
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|::1|0\.0\.0\.0)$/i;
+
+export function onLocalhost(loc) {
+  const where = loc || (typeof location === 'undefined' ? null : location);
+  return !!where && LOCAL_HOST.test(where.hostname || '');
+}
+
+/* The addresses to try, best first. */
+export function placesToLook(configured, loc) {
+  const where = loc || (typeof location === 'undefined' ? null : location);
+  const out = [];
+  if (where && where.origin && onLocalhost(where) && /^https?:$/.test(where.protocol || '')) {
+    /* The launcher's proxy. Same origin, so there is nothing to allow. */
+    out.push(`${where.origin.replace(/\/+$/, '')}/ollama`);
+  }
+  const asked = String(configured || '').replace(/\/+$/, '');
+  for (const url of [asked, DEFAULT_URL]) {
+    if (url && !out.includes(url)) out.push(url);
+  }
+  return out;
+}
+
+/* Non-null when the browser will refuse this no matter what is running:
+   an HTTPS page on a public domain reaching into the local machine. The
+   point is to tell the difference between "Ollama is off" (fixable by
+   starting it) and this (not fixable from the page at all). */
+export function blockedByBrowser(loc) {
+  const where = loc || (typeof location === 'undefined' ? null : location);
+  if (!where) return null;
+  if (where.protocol !== 'https:') return null;
+  if (onLocalhost(where)) return null;
+  return {
+    why: 'private-network',
+    short: 'A page served over HTTPS is not allowed to reach a server on your own machine.',
+    long: 'This is the browser’s Private Network Access rule, not a setting in Ollama '
+      + 'and not a CORS problem - Ollama would have to send an '
+      + 'Access-Control-Allow-Private-Network header, and it has no way to. '
+      + 'Nothing you can change on this page will fix it.',
+    fix: 'python tools/study_local.py',
+    fixSays: 'Run that on the machine with Ollama on it. It serves this exact app at '
+      + 'http://localhost:8800 with the model alongside it, so the page and the model '
+      + 'are both local and the rule no longer applies. Everything else - your '
+      + 'profiles, your history, your boards - is the same.',
+  };
+}
+
+/* The address that last answered. Once something works, keep using it:
+   the proxy is on whatever port the launcher was given, which is not
+   worth storing in a synced profile that a phone will also read. */
+let liveAt = '';
+
+export function liveAddress() {
+  return liveAt;
+}
+
+export function useAddress(url) {
+  liveAt = url ? String(url).replace(/\/+$/, '') : '';
+}
+
 function baseUrl(url) {
-  return String(url || 'http://localhost:11434').replace(/\/+$/, '');
+  const asked = String(url || '').replace(/\/+$/, '');
+  /* A discovered address beats the stored default, but never beats an
+     address somebody typed in deliberately. */
+  if (liveAt && (!asked || asked === DEFAULT_URL)) return liveAt;
+  return asked || liveAt || DEFAULT_URL;
 }
 
 async function call(url, path, options = {}, timeout = TIMEOUT_MS) {
@@ -62,12 +157,22 @@ async function call(url, path, options = {}, timeout = TIMEOUT_MS) {
        so the only useful thing to do is explain the usual cause. This is the
        error people actually hit, and a bare "Failed to fetch" tells them
        nothing. */
+    const wall = blockedByBrowser();
+    if (wall) {
+      /* Do not send somebody to go and set OLLAMA_ORIGINS when that is not
+         the problem and cannot become the solution. */
+      throw new OllamaError('This page cannot reach the model.', {
+        kind: 'private-network',
+        hint: `${wall.short} ${wall.long} To use it: run ${wall.fix} ${wall.fixSays}`,
+      });
+    }
     throw new OllamaError('Could not reach Ollama.', {
       kind: 'connect',
-      hint: `Check that Ollama is running (try "ollama list" in a terminal). `
-        + `If it is running and this still fails, the browser is being blocked by CORS: `
-        + `Ollama has to be told to accept requests from this page. Set the environment variable `
-        + `OLLAMA_ORIGINS=${location.origin} and restart Ollama.`,
+      hint: 'Check that Ollama is running (try "ollama list" in a terminal). '
+        + 'If it is running and this still fails, it has not been told to accept requests '
+        + `from this page: set OLLAMA_ORIGINS=${typeof location === 'undefined' ? '' : location.origin} `
+        + 'and restart it. Serving the app with "python tools/study_local.py" avoids the '
+        + 'question entirely, because then nothing is cross-origin.',
     });
   } finally {
     clearTimeout(timer);
@@ -441,7 +546,23 @@ function mathiness(line) {
   return score;
 }
 
-export async function explain(url, model, { stem, answer, wrongAnswer, topic }) {
+/* Model output on its way to the page: LaTeX undone, HTML escaped, lines
+   kept. One place, so nothing can reach the page unescaped by taking a
+   different route. */
+function dress(text) {
+  return escapeHtml(tidyMath(clean(text || ''))).replace(/\n/g, '<br>');
+}
+
+/* Ask the model, by whichever route is available.
+
+   `via` is the second route: a function that takes the messages and
+   returns the answer, used when the page cannot reach Ollama directly.
+   That happens on the deployed site ALWAYS - an HTTPS page may not touch
+   127.0.0.1 - so this is not an edge case, it is how the live site works.
+   The caller supplies it because the caller knows about the relay and this
+   module should not. */
+async function askModel(url, model, messages, { temperature = 0.3, predict = 600, timeout = TIMEOUT_MS, via } = {}) {
+  if (typeof via === 'function') return dress(await via(messages, model));
   if (!model) throw new OllamaError('No model selected.', { kind: 'config' });
   const res = await call(url, '/api/chat', {
     method: 'POST',
@@ -449,25 +570,35 @@ export async function explain(url, model, { stem, answer, wrongAnswer, topic }) 
     body: JSON.stringify({
       model,
       stream: false,
-      options: { temperature: 0.3, num_predict: 600 },
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a patient tutor. The correct answer is given to you and is CORRECT - '
-            + 'do not dispute it or re-derive a different one. Explain in at most 150 words why it '
-            + 'is right, and if a wrong answer is given, name the specific mistake that produces it. '
-            + 'Plain text with Unicode math (x², √, π, ·). Never LaTeX, never backslash commands, never dollar signs. No markdown headings.',
-        },
-        {
-          role: 'user',
-          content: `Topic: ${topic}\nQuestion: ${stripTags(stem)}\nCorrect answer: ${stripTags(answer)}`
-            + (wrongAnswer ? `\nThe student answered: ${wrongAnswer}` : ''),
-        },
-      ],
+      options: { temperature, num_predict: predict },
+      messages,
     }),
-  });
+  }, timeout);
   const data = await res.json();
-  return escapeHtml(tidyMath(clean(data?.message?.content || ''))).replace(/\n/g, '<br>');
+  return dress(data?.message?.content);
+}
+
+export function explainMessages({ stem, answer, wrongAnswer, topic }) {
+  return [
+    {
+      role: 'system',
+      content: 'You are a patient tutor. The correct answer is given to you and is CORRECT - '
+        + 'do not dispute it or re-derive a different one. Explain in at most 150 words why it '
+        + 'is right, and if a wrong answer is given, name the specific mistake that produces it. '
+        + 'Plain text with Unicode math (x², √, π, ·). Never LaTeX, never backslash commands, never dollar signs. No markdown headings.',
+    },
+    {
+      role: 'user',
+      content: `Topic: ${topic}\nQuestion: ${stripTags(stem)}\nCorrect answer: ${stripTags(answer)}`
+        + (wrongAnswer ? `\nThe student answered: ${wrongAnswer}` : ''),
+    },
+  ];
+}
+
+export async function explain(url, model, opts = {}) {
+  return askModel(url, model, explainMessages(opts), {
+    temperature: 0.3, predict: 600, via: opts.via,
+  });
 }
 
 /* Read a line-by-line answer and say what went wrong in the WORKING.
@@ -483,8 +614,7 @@ export async function explain(url, model, { stem, answer, wrongAnswer, topic }) 
    nothing it says can change a mark, and what it writes is escaped and
    labelled on the way out - the procedural grader is proven correct and a
    7B model is not. */
-export async function reviewWork(url, model, { stem, lines, verdicts, topic }) {
-  if (!model) throw new OllamaError('No model selected.', { kind: 'config' });
+export function reviewMessages({ stem, lines, verdicts, topic }) {
   const written = (lines || []).map((line, i) => {
     const v = (verdicts || [])[i] || {};
     const mark = v.correct ? 'CORRECT' : 'WRONG';
@@ -494,34 +624,29 @@ export async function reviewWork(url, model, { stem, lines, verdicts, topic }) {
       + `  the grader says: ${mark}${v.hint ? ` - ${stripTags(v.hint)}` : ''}`;
   }).join('\n');
 
-  const res = await call(url, '/api/chat', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      options: { temperature: 0.2, num_predict: 500 },
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a patient calculus tutor looking at a student’s working, '
-            + 'line by line. The marking you are given was done by a symbolic engine and is '
-            + 'CORRECT - never dispute it, never re-mark a line, never say a wrong line is '
-            + 'right. Your job is only to explain WHY the first wrong line went wrong: name '
-            + 'the algebra step that was missed or mangled, and say what to do instead. If '
-            + 'every line is right, say in one sentence what the student did well. At most '
-            + '130 words, plain text with Unicode math, no markdown headings, no lists.',
-        },
-        {
-          role: 'user',
-          content: `Topic: ${topic || 'the limit definition of the derivative'}\n`
-            + `Question: ${stripTags(stem)}\n\n${written}`,
-        },
-      ],
-    }),
-  }, 90000);
-  const data = await res.json();
-  return escapeHtml(tidyMath(clean(data?.message?.content || ''))).replace(/\n/g, '<br>');
+  return [
+    {
+      role: 'system',
+      content: 'You are a patient calculus tutor looking at a student’s working, '
+        + 'line by line. The marking you are given was done by a symbolic engine and is '
+        + 'CORRECT - never dispute it, never re-mark a line, never say a wrong line is '
+        + 'right. Your job is only to explain WHY the first wrong line went wrong: name '
+        + 'the algebra step that was missed or mangled, and say what to do instead. If '
+        + 'every line is right, say in one sentence what the student did well. At most '
+        + '130 words, plain text with Unicode math, no markdown headings, no lists.',
+    },
+    {
+      role: 'user',
+      content: `Topic: ${topic || 'the limit definition of the derivative'}\n`
+        + `Question: ${stripTags(stem)}\n\n${written}`,
+    },
+  ];
+}
+
+export async function reviewWork(url, model, opts = {}) {
+  return askModel(url, model, reviewMessages(opts), {
+    temperature: 0.2, predict: 500, timeout: 90000, via: opts.via,
+  });
 }
 
 /* Models write LaTeX whatever the prompt says.
@@ -655,17 +780,35 @@ export function chooseModels(models) {
   };
 }
 
-/* Ask the machine what it has, and decide. One call, and it fails quietly:
-   no Ollama running is the normal case, not an error. */
-export async function detect(url) {
-  try {
-    const res = await ping(url);
-    if (!res || !res.ok) return { running: false };
-    const picked = chooseModels(res.models);
-    return { running: true, models: res.models || [], ...picked };
-  } catch (err) {
-    return { running: false, error: err && err.message };
+/* Ask the machine what it has, and decide.
+
+   Tries every plausible address rather than only the configured one, so
+   that running the local launcher needs no settings change at all: its
+   same-origin proxy is simply found first. Fails quietly - no Ollama
+   running is the ordinary case, not an error - but DOES say when the
+   failure is the browser's rule rather than a missing server, because
+   those two need completely different things from the person reading. */
+export async function detect(url, loc) {
+  const wall = blockedByBrowser(loc);
+  /* When the browser forbids it, do not try anyway. The attempt cannot
+     succeed, it costs a round trip on every boot, and it logs a network
+     error that looks like a bug in the page. */
+  const places = wall ? [] : placesToLook(url, loc);
+  for (const place of places) {
+    try {
+      const res = await ping(place);
+      if (res && res.ok) {
+        useAddress(place);
+        const picked = chooseModels(res.models);
+        return {
+          running: true, at: place, tried: places, models: res.models || [], ...picked,
+        };
+      }
+    } catch (err) {
+      /* Keep trying the rest; the last word belongs to `wall`. */
+    }
   }
+  return { running: false, tried: places, blocked: wall };
 }
 
 export const MODEL_ADVICE = [

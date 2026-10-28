@@ -153,13 +153,70 @@ function todayCard() {
 
    It never overrides a choice already made, and it fails silently: no
    Ollama running is the ordinary case, not an error. */
+/* How this page can reach a model, if at all.
+
+   There are two routes and the deployed site can only ever use the second
+   one, which is the thing that took an evening to understand:
+
+     direct   fetch to Ollama on this machine. Works when the page itself
+              came from localhost. Fast, nothing leaves the machine.
+
+     relay    out to the study-api Worker, picked up by the bridge on the
+              machine that has the model, answer comes back. Works from
+              anywhere, including a phone, including this desktop on the
+              live HTTPS site - because a browser will NOT let an HTTPS
+              page touch 127.0.0.1, whatever Ollama is told.
+
+   `modelSearch` is the answer to "which, if either", worked out once on
+   load. Everything that wants the model asks here rather than guessing. */
+let modelSearch = null;
+
+/* The second route, as a function the model module can call. Returns
+   undefined when the relay is not the route, in which case the direct one
+   is used. */
+function relayVia(onWait) {
+  return (messages, model) => room.relayChat(store.syncEndpoint(), messages, { model, onWait });
+}
+
+/* Is there any way to get working explained, and by which route? */
+function explainRoute() {
+  const settings = store.activeProfile().settings;
+  const model = settings.ollamaModel;
+  if (modelSearch && modelSearch.running && model) {
+    return { how: 'direct', model, where: 'on this machine' };
+  }
+  if (modelSearch && modelSearch.relayChat) {
+    return {
+      how: 'relay',
+      model: settings.ollamaModel || '',
+      where: 'on your computer at home',
+    };
+  }
+  return null;
+}
+
 function findTheModel() {
   const profile = store.activeProfile();
   const url = profile.settings.ollamaUrl || 'http://localhost:11434';
-  if (profile.settings.ollamaModel && profile.settings.ollamaVisionModel) return;
 
+  /* Runs even when both models are already chosen, because the QUESTION
+     has changed: it is no longer only "which model" but "can this page
+     reach one at all". The answer decides whether the model buttons
+     appear or an explanation does. */
   ollama.detect(url).then((found) => {
-    if (!found || !found.running) return;
+    modelSearch = found || { running: false };
+    if (!modelSearch.running) {
+      /* Direct is impossible. That is the NORMAL case on the live site, not
+         a failure, so go and look for the other route before telling
+         anybody anything is missing. */
+      room.relayStatus(store.syncEndpoint()).then((status) => {
+        modelSearch.relayChat = room.relayCan(status, 'chat');
+        modelSearch.relaySee = room.relayCan(status, 'see');
+        const route = currentRoute().name;
+        if (route === 'settings' || route === 'practice') router();
+      }).catch(() => {});
+      return;
+    }
     const now = store.activeProfile().settings;
     if (!now.ollamaModel && found.explain) {
       store.setSetting('ollamaModel', found.explain);
@@ -169,10 +226,13 @@ function findTheModel() {
       store.setSetting('ollamaVisionModel', found.see);
     }
     if (!now.ollamaUrl) store.setSetting('ollamaUrl', url);
-    /* Only repaint if the page is showing something that depends on it. */
+    /* The address that answered is deliberately NOT saved. It may be the
+       launcher's proxy on whatever port it was given, and this profile
+       syncs to a phone that has no Ollama and no launcher. ollama.js
+       holds it for the session instead. */
     const route = currentRoute().name;
-    if (route === 'settings' || route === 'lockin') router();
-  }).catch(() => {});
+    if (route === 'settings' || route === 'lockin' || route === 'practice') router();
+  }).catch(() => { modelSearch = { running: false }; });
 }
 
 /* Keys, for the hands that are already on the keyboard.
@@ -863,24 +923,35 @@ function renderProblem(stage, problem, { remediation, mode }) {
 
     /* Ask the local model to explain, but only for a verified problem where
        the correct answer is already known - see the note in ollama.js. */
-    if (!res.correct && !problem.untrusted && p.settings.ollamaModel) {
+    const explainBy = !res.correct && !problem.untrusted ? explainRoute() : null;
+    if (explainBy) {
       const explainBtn = h('button', { class: 'btn ghost small', type: 'button' }, 'Explain this to me');
       const out = h('div', { class: 'explain', hidden: true });
       explainBtn.addEventListener('click', async () => {
         explainBtn.disabled = true;
         explainBtn.textContent = 'Thinking...';
         out.hidden = false;
-        out.innerHTML = '<p class="muted">Asking your local model...</p>';
+        out.innerHTML = '';
+        const waiting = h('p', { class: 'muted', text: explainBy.how === 'relay'
+          ? 'Asking the model on your computer at home. Twenty to forty seconds.'
+          : 'Asking your local model...' });
+        out.appendChild(waiting);
+        const since = Date.now();
+        const tick = setInterval(() => {
+          const secs = Math.round((Date.now() - since) / 1000);
+          if (secs >= 8) waiting.textContent = `Still thinking, ${secs}s. The model is writing.`;
+        }, 1000);
         try {
-          const text = await ollama.explain(p.settings.ollamaUrl, p.settings.ollamaModel, {
+          const text = await ollama.explain(p.settings.ollamaUrl, explainBy.model, {
             stem: problem.stem,
             answer: problem.answerHtml,
             wrongAnswer: skipped ? '' : response,
             topic: problem.topicName,
+            via: explainBy.how === 'relay' ? relayVia() : undefined,
           });
           out.innerHTML = '';
           out.append(
-            h('p', { class: 'aitag', text: `Explained by ${p.settings.ollamaModel}, running on this machine.` }),
+            h('p', { class: 'aitag', text: `Explained by a model ${explainBy.where}.` }),
             h('p', { html: text }),
           );
         } catch (err) {
@@ -888,6 +959,7 @@ function renderProblem(stage, problem, { remediation, mode }) {
           out.appendChild(h('p', { class: 'muted', text: err.message }));
           if (err.hint) out.appendChild(h('p', { class: 'muted small', text: err.hint }));
         } finally {
+          clearInterval(tick);
           explainBtn.textContent = 'Explain this to me';
           explainBtn.disabled = false;
         }
@@ -1729,6 +1801,23 @@ function ollamaCard(p) {
     h('p', { class: 'muted', text: 'Optional. Lets you generate questions on any topic and ask for an explanation when you miss one. It runs entirely on this machine, costs nothing and works offline.' }),
   ]);
 
+  /* The verdict first, before any input boxes, because on the deployed
+     site no value in any of them can work and it is unkind to let
+     somebody try. */
+  const wall = ollama.blockedByBrowser();
+  if (wall) {
+    card.appendChild(h('div', { class: 'wallnote' }, [
+      h('p', { class: 'warnline', text: wall.short }),
+      h('p', { class: 'small', text: wall.long }),
+      h('p', { class: 'small', html: 'To use the model, serve this app from your own machine:' }),
+      h('pre', { class: 'cmd', text: wall.fix }),
+      h('p', { class: 'small muted', text: wall.fixSays }),
+    ]));
+  } else if (modelSearch && modelSearch.running) {
+    card.appendChild(h('p', { class: 'okline',
+      text: `Found a model at ${modelSearch.at}.` }));
+  }
+
   const urlInput = h('input', { type: 'text', class: 'textinput', value: p.settings.ollamaUrl || 'http://localhost:11434' });
   urlInput.addEventListener('change', () => store.setSetting('ollamaUrl', urlInput.value.trim()));
   card.appendChild(labelled('Ollama address', urlInput));
@@ -1780,13 +1869,20 @@ function ollamaCard(p) {
     h('ol', {}, [
       h('li', { html: 'Install Ollama from <code>ollama.com</code> and pull a model: <code>ollama pull qwen2.5:7b</code>' }),
       h('li', {
-        html: 'Let this page talk to it. Ollama blocks requests from other origins by default, so set '
-          + `<code>OLLAMA_ORIGINS=${esc(location.origin)}</code> and restart it. `
-          + 'On Windows that is an environment variable in System Properties; on Mac or Linux, '
-          + `<code>launchctl setenv OLLAMA_ORIGINS "${esc(location.origin)}"</code> or an <code>Environment=</code> line in the systemd unit.`,
+        html: 'Open the app from your own machine rather than from the web: '
+          + '<code>python tools/study_local.py</code>, then '
+          + '<code>http://localhost:8800</code>. '
+          + 'This is not a preference. A page served over HTTPS is forbidden by the browser '
+          + 'from reaching anything on your own machine, and Ollama cannot send the one header '
+          + 'that would permit it, so the live site can never talk to it. '
+          + 'Served locally there is no cross-origin request at all, and nothing to configure.',
       }),
-      h('li', { text: 'Click "Test the connection" above and pick a model.' }),
+      h('li', { text: 'Click "Test the connection" above. The model is picked for you; change it if you disagree.' }),
     ]),
+    h('p', { class: 'muted small',
+      html: 'If you would rather use the live site and set it up by hand, the variable is '
+        + `<code>OLLAMA_ORIGINS=${esc(location.origin)}</code> - but be aware that on `
+        + 'Chrome this is necessary and still not sufficient, for the reason above.' }),
     h('p', { class: 'muted small', text: 'With 16GB of VRAM, a 7B or 14B model at 4-bit is the sweet spot. Larger than about 32B will spill into system memory and crawl.' }),
   ]));
 
@@ -2929,6 +3025,50 @@ function helpPanel(problem, slot) {
   return box;
 }
 
+/* Why a model feature is not here, said out loud and small.
+
+   The alternative - and what this did until now - is to render nothing,
+   which reads as the feature not existing. For the case that matters
+   most, an HTTPS page that physically cannot reach the local machine,
+   silence meant an evening spent checking a setting that was already
+   correct. One line, with the detail folded away. */
+function whyNoModel({ compact = true } = {}) {
+  const wall = ollama.blockedByBrowser();
+  const searched = modelSearch;
+  const note = h('div', { class: `modelnote${compact ? ' compact' : ''}` });
+
+  if (wall) {
+    note.appendChild(h('p', { class: 'muted small',
+      text: 'Reviewing your working needs a model, and nothing is answering right now.' }));
+    note.appendChild(h('details', { class: 'help tight' }, [
+      h('summary', { text: 'Why, and how to turn it on' }),
+      h('p', { class: 'small', html: 'Start the bridge on the computer that has Ollama:' }),
+      h('pre', { class: 'cmd', text: 'python tools/study_bridge.py' }),
+      h('p', { class: 'small muted',
+        text: 'That machine then answers for this page and for your phone, '
+          + 'wherever either of them is. It needs no open port and nothing is stored.' }),
+      h('p', { class: 'small', text: `${wall.short} ${wall.long} `
+        + 'So the bridge is not a workaround, it is the route - or serve the app '
+        + 'from the machine itself:' }),
+      h('pre', { class: 'cmd', text: wall.fix }),
+    ]));
+    return note;
+  }
+
+  if (searched && searched.running === false) {
+    note.appendChild(h('p', { class: 'muted small',
+      html: 'No model answered on this machine. Start it with <code>ollama serve</code>, '
+        + 'or leave it off - everything else works without it.' }));
+    return note;
+  }
+
+  /* Still looking, or a model exists but none is selected. */
+  note.appendChild(h('p', { class: 'muted small',
+    html: 'A local model can read your working line by line. '
+      + '<a href="#/settings">Set one up</a>.' }));
+  return note;
+}
+
 /* Hand the working to the model on this machine.
 
    Only for a question asked line by line, only when a model is configured,
@@ -2942,8 +3082,9 @@ function workReview(problem, written, res) {
   const profile = store.activeProfile();
   /* Reading a photograph needs a model that can see; explaining needs one
      that can write. They are rarely the same model. */
-  const model = profile.settings.ollamaVisionModel || profile.settings.ollamaModel;
-  if (!model) return null;
+  const route = explainRoute();
+  /* No route is not the same as no feature. Say which, and why. */
+  if (!route) return h('div', { class: 'workreview' }, [whyNoModel()]);
 
   const slot = h('div', { class: 'workreview' });
   const btn = h('button', { class: 'btn small ghost', type: 'button' },
@@ -2955,11 +3096,23 @@ function workReview(problem, written, res) {
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     out.innerHTML = '';
-    out.appendChild(h('p', { class: 'muted small',
-      text: `Reading your working with ${model}, on this machine. A few seconds.` }));
+    /* Through the relay this is a round trip to a Worker and a queue on
+       another machine, so say so and say how long: an unexplained
+       thirty-second wait reads as broken. */
+    const waiting = h('p', { class: 'muted small',
+      text: route.how === 'relay'
+        ? 'Asking the model on your computer at home. Twenty to forty seconds.'
+        : `Reading your working with ${route.model}, on this machine. A few seconds.` });
+    out.appendChild(waiting);
+    const since = Date.now();
+    const tick = setInterval(() => {
+      const secs = Math.round((Date.now() - since) / 1000);
+      if (secs >= 8) waiting.textContent = `Still thinking, ${secs}s. The model is writing.`;
+    }, 1000);
+
     const values = Array.isArray(written) ? written : [written];
     try {
-      const text = await ollama.reviewWork(profile.settings.ollamaUrl, model, {
+      const text = await ollama.reviewWork(profile.settings.ollamaUrl, route.model, {
         stem: problem.stem,
         topic: problem.topicName,
         lines: problem.parts.map((part, i) => ({
@@ -2968,17 +3121,20 @@ function workReview(problem, written, res) {
           got: values[i],
         })),
         verdicts: (res && res.parts) || [],
+        via: route.how === 'relay' ? relayVia() : undefined,
       });
+      clearInterval(tick);
       out.innerHTML = '';
       out.appendChild(h('div', { class: 'aibox' }, [
         h('p', { html: text || 'It had nothing to add.' }),
-        h('p', { class: 'aitag', text: `Read by ${model}, running on this machine. `
+        h('p', { class: 'aitag', text: `Read by a model ${route.where}. `
           + 'The marking above is the engine’s, not its.' }),
       ]));
     } catch (err) {
+      clearInterval(tick);
       out.innerHTML = '';
       out.appendChild(h('p', { class: 'small warn',
-        text: `Could not reach the model: ${err.message}. The marking above stands.` }));
+        text: `Could not reach the model: ${err.message} The marking above stands.` }));
       btn.disabled = false;
     }
   });

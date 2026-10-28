@@ -596,6 +596,32 @@ h3.unit {
 .warnings summary { cursor: pointer; font-size: .86rem; color: var(--warnc); }
 .errline { color: var(--bad-ink); }
 .okline { color: var(--good-ink); }
+.warnline { color: var(--warnc); font-weight: 600; }
+
+/* Why a model feature is not available. Quiet by default - this sits
+   under a marked answer, where the mark is the thing being read, not
+   this. */
+.modelnote { margin-top: 10px; }
+.modelnote p { margin: 0 0 4px; }
+.modelnote.compact { font-size: .88rem; }
+.modelnote .help.tight { margin-top: 6px; border-top: 0; padding-top: 0; }
+.modelnote .help.tight > summary { font-size: .84rem; }
+.modelnote .help.tight p { margin: 6px 0; }
+
+/* The one case that needed saying loudly: the browser forbids it, and no
+   amount of fiddling with the boxes below will change that. */
+.wallnote {
+  border: 1px solid var(--warnc); border-left-width: 3px;
+  border-radius: var(--radius); padding: 12px 14px; margin: 12px 0 16px;
+  background: color-mix(in srgb, var(--warnc) 7%, transparent);
+}
+.wallnote p { margin: 0 0 7px; }
+.wallnote p:last-child { margin-bottom: 0; }
+pre.cmd {
+  margin: 8px 0; padding: 9px 12px; overflow-x: auto;
+  background: var(--sunk); border: 1px solid var(--edge);
+  border-radius: var(--radius); font-size: .9rem; user-select: all;
+}
 
 .profrow {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;

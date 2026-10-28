@@ -150,9 +150,14 @@ function describePeople(people, me) {
 
 /* ------------------------------------------------------------- the relay */
 
-/* Asking someone else's machine to read a photograph. Used when there is no
-   local model: the phone has no model and never will, so the question is
-   whether the other computer is awake. */
+/* Asking a machine that HAS the model to use it.
+
+   Two situations, one mechanism. The obvious one is a phone, which has no
+   model and never will. The unobvious one is this very desktop: a page
+   served over HTTPS is not permitted to reach 127.0.0.1 at all, so even
+   with Ollama running on the same machine the live site cannot call it
+   directly. See the note at the top of study_api/src/relay.js. Going out
+   to the Worker and back is the way in for both. */
 export async function relayStatus(endpoint) {
   const base = String(endpoint || '').replace(/\/+$/, '');
   if (!base) return { bridge: false };
@@ -165,23 +170,39 @@ export async function relayStatus(endpoint) {
   }
 }
 
-export async function relayRead(endpoint, dataUrl, { onWait } = {}) {
+/* Can the machine on the other end do this kind of work? A bridge in the
+   middle of a thirty-second answer is not in the waiting list, so asking
+   only "is a bridge there" reads as "gone" at the moment it is busiest.
+   `seenAgo` covers that. */
+export function relayCan(status, kind) {
+  if (!status) return false;
+  const kinds = status.can && status.can.length ? status.can : status.lastCan;
+  const recently = status.bridge
+    || (typeof status.seenAgo === 'number' && status.seenAgo < 90000);
+  if (!recently) return false;
+  /* The original bridge sent no list and could only read images. */
+  if (!kinds || !kinds.length) return kind === 'see';
+  return kinds.includes(kind);
+}
+
+/* Post one job and wait for its answer. Long polls, so this is a handful
+   of requests rather than a spin, and the wait is BOUNDED: if the other
+   machine is asleep, say so rather than holding a spinner forever. */
+async function relayJob(endpoint, payload, { onWait, waitMs = 150000, what = 'that' } = {}) {
   const base = String(endpoint || '').replace(/\/+$/, '');
+  if (!base) throw new Error('No sync service is set, so there is nothing to ask through.');
   const asked = await fetch(`${base}/v1/relay/ask`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ image: dataUrl }),
+    body: JSON.stringify(payload),
   });
   if (!asked.ok) {
     const body = await asked.json().catch(() => ({}));
-    throw new Error(body.error || 'The relay would not take that image.');
+    throw new Error(body.error || `The relay would not take ${what}.`);
   }
   const { id } = await asked.json();
 
-  /* Long polls, so this is a handful of requests rather than a spin. The
-     wait is bounded: if the other machine is asleep, say so rather than
-     hanging on a spinner forever. */
-  const deadline = Date.now() + 1000 * 150;
+  const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
     if (typeof onWait === 'function') onWait();
     const res = await fetch(`${base}/v1/relay/result?id=${encodeURIComponent(id)}`);
@@ -195,4 +216,22 @@ export async function relayRead(endpoint, dataUrl, { onWait } = {}) {
   throw new Error('Nothing picked that up. Is the other computer awake, with the bridge running?');
 }
 
-export default { joinRoom, relayStatus, relayRead };
+export async function relayRead(endpoint, dataUrl, { onWait } = {}) {
+  return relayJob(endpoint, { kind: 'see', image: dataUrl }, {
+    onWait, what: 'that image',
+  });
+}
+
+/* Explaining working, on the machine that has the model.
+
+   Longer patience than reading an image: a 14B model writing three
+   sentences about somebody's algebra takes twenty to forty seconds on a
+   consumer card, and the honest thing is to wait rather than to give up at
+   fifteen and call it broken. */
+export async function relayChat(endpoint, messages, { onWait, model = '' } = {}) {
+  return relayJob(endpoint, { kind: 'chat', messages, model }, {
+    onWait, waitMs: 240000, what: 'that question',
+  });
+}
+
+export default { joinRoom, relayStatus, relayRead, relayChat, relayCan };
