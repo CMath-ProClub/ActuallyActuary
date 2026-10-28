@@ -456,7 +456,7 @@ export async function explain(url, model, { stem, answer, wrongAnswer, topic }) 
           content: 'You are a patient tutor. The correct answer is given to you and is CORRECT - '
             + 'do not dispute it or re-derive a different one. Explain in at most 150 words why it '
             + 'is right, and if a wrong answer is given, name the specific mistake that produces it. '
-            + 'Plain text with Unicode math. No markdown headings.',
+            + 'Plain text with Unicode math (x², √, π, ·). Never LaTeX, never backslash commands, never dollar signs. No markdown headings.',
         },
         {
           role: 'user',
@@ -467,7 +467,7 @@ export async function explain(url, model, { stem, answer, wrongAnswer, topic }) 
     }),
   });
   const data = await res.json();
-  return escapeHtml(clean(data?.message?.content || '')).replace(/\n/g, '<br>');
+  return escapeHtml(tidyMath(clean(data?.message?.content || ''))).replace(/\n/g, '<br>');
 }
 
 /* Read a line-by-line answer and say what went wrong in the WORKING.
@@ -521,7 +521,51 @@ export async function reviewWork(url, model, { stem, lines, verdicts, topic }) {
     }),
   }, 90000);
   const data = await res.json();
-  return escapeHtml(clean(data?.message?.content || '')).replace(/\n/g, '<br>');
+  return escapeHtml(tidyMath(clean(data?.message?.content || ''))).replace(/\n/g, '<br>');
+}
+
+/* Models write LaTeX whatever the prompt says.
+
+   The system prompt asks for plain text with Unicode maths, and a 14B
+   model still answers with \( \frac{1}{x+2} \) because that is what its
+   training data looks like. Escaped for the page that arrives as a line of
+   backslashes, which reads as broken software rather than as maths.
+   Asking twice does not work; cleaning it up does. */
+export function tidyMath(text) {
+  let out = String(text == null ? '' : text);
+  /* The delimiters first, so what is inside them can be dealt with. */
+  out = out.replace(/\\\[|\\\]|\\\(|\\\)/g, '');
+  out = out.replace(/\$\$?/g, '');
+  /* Superscripts and subscripts FIRST. They are the commonest thing
+     inside a fraction or a root, and their braces otherwise stop the
+     outer match dead: \sqrt{x^{2}+1} has braces inside braces. */
+  out = out.replace(/\^\{([^{}]*)\}/g, '^$1');
+  out = out.replace(/_\{([^{}]*)\}/g, '_$1');
+  /* Fractions and roots together, a few passes: each only matches when it
+     holds no braces, so resolving one lets the other match on the next go
+     round. \frac{\sqrt{x^2}}{2} needs the root done before the fraction,
+     and \sqrt{\frac{1}{x}} needs the opposite. */
+  for (let pass = 0; pass < 4; pass++) {
+    out = out.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)');
+    out = out.replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)');
+  }
+  out = out.replace(/\\(?:left|right)\b/g, '');
+  const WORDS = {
+    cdot: '·', times: '×', div: '÷', pm: '±',
+    leq: '≤', geq: '≥', neq: '≠', approx: '≈',
+    to: '→', infty: '∞', pi: 'π', theta: 'θ',
+    alpha: 'α', beta: 'β', lim: 'lim', ln: 'ln', log: 'log',
+    sin: 'sin', cos: 'cos', tan: 'tan', sec: 'sec', csc: 'csc', cot: 'cot',
+    arcsin: 'arcsin', arccos: 'arccos', arctan: 'arctan',
+    quad: ' ', qquad: '  ',
+  };
+  out = out.replace(/\\([a-zA-Z]+)/g, (whole, word) => (
+    Object.prototype.hasOwnProperty.call(WORDS, word) ? WORDS[word] : word
+  ));
+  /* Leftover braces from things like x^{2}. */
+  out = out.replace(/\^\{([^{}]*)\}/g, '^$1');
+  out = out.replace(/_\{([^{}]*)\}/g, '_$1');
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 function stripTags(s) {
