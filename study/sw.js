@@ -33,7 +33,7 @@
       anything else - and a cached /api/tags makes a model that has been
       deleted look installed, while a cached answer makes the same reply
       come back to a different question. Never touched. */
-const CACHE = 'study-1cce39cfa41f';
+const CACHE = 'study-fc173b87e1fd';
 const FILES = ["./math.js", "./expr.js", "./topics.js", "./gen-sandbox.js", "./ask.js", "./flow.js", "./mistakes.js", "./persist.js", "./room.js", "./board.js", "./graph.js", "./photo.js", "./gen-algebra.js", "./gen-calculus.js", "./gen-actuarial.js", "./gen-cs.js", "./generators.js", "./store.js", "./scheduler.js", "./charts.js", "./ollama.js", "./compose.js", "./classify.js", "./drill.js", "./exam.js", "./help.js", "./app.js"];
 /* Long enough for a working connection on a phone, short enough that a
    dead one does not look like a broken app. */

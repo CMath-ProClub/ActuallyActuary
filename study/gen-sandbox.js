@@ -940,8 +940,58 @@ const EXAM_EXTRAS = {
   },
 };
 
+/* x replaced by a number, kept EXACT.
+
+   This is the difference between 1/16 and 0.0625, and between a correct
+   answer being accepted and being rejected. See buildTangent below. */
+function substitute(node, at) {
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return n;
+    if (n.t === 'var' && n.n === 'x') return num(at);
+    const out = { ...n };
+    if (out.a) out.a = walk(out.a);
+    if (out.b) out.b = walk(out.b);
+    return out;
+  };
+  return simplify(walk(node));
+}
+
+/* sin(0) is 0, and writing it as sin(0) in an answer key is silly.
+
+   Only folded when the value is unmistakably exact - a whole number or a
+   simple fraction that reproduces to full double precision. sin(1) is
+   left as sin(1), because 0.8414709848078965 is not a nicer way to write
+   it and rounding it would be the very bug this is here to avoid. */
+function foldExact(node) {
+  const value = Expr.evaluate(node, {});
+  if (!isFinite(value)) return node;
+  if (Number.isInteger(value) && Math.abs(value) < 1e6) return num(value);
+  for (let den = 2; den <= 64; den++) {
+    const top = value * den;
+    if (Number.isInteger(top) && Math.abs(top) < 1e6) {
+      /* Exact only if it survives the round trip, which rules out a
+         decimal that merely looks like a fraction. */
+      if (top / den === value) return simplify(div(num(top), num(den)));
+    }
+  }
+  return node;
+}
+
 /* A tangent line is still an expression, so it is still gradeable: the
-   answer is y = f(a) + f'(a)(x - a), written any way that is equal to it. */
+   answer is y = f(a) + f'(a)(x - a), written any way that is equal to it.
+
+   THE POINT AND THE SLOPE ARE EXACT, and this was a real bug rather than
+   a matter of taste. They used to be evaluated numerically and rounded to
+   four decimals, so the tangent to 1/x² at x = 4 was stored as
+
+       0.0625 - 0.0312(x - 4)
+
+   and 1/32 is 0.03125, not 0.0312. Everything here grades by comparing
+   numbers, so a student who did the calculus properly and wrote
+   1/16 - (1/32)(x - 4) was told they were WRONG, while the rounded
+   version was accepted. A tool that marks the correct answer wrong is
+   worse than no tool, and this is a calculus class: exact is what the
+   exam wants anyway. */
 function buildTangent(id, skill, built, level, seed) {
   const { f, at } = built;
   if (!f || at === undefined) return null;
@@ -954,7 +1004,19 @@ function buildTangent(id, skill, built, level, seed) {
   if (Math.abs(value) > 1e4 || Math.abs(slope) > 1e4) return null;
   if (Math.abs(slope) < 1e-9) return null;
 
-  const line = simplify(add(num(round4(value)), mul(num(round4(slope)), sub(X, num(at)))));
+  const valueNode = foldExact(substitute(f, at));
+  const slopeNode = foldExact(substitute(d, at));
+  /* The exact pieces have to agree with the numbers they came from, or
+     something in the substitution is wrong and the answer key would be
+     confidently incorrect - which is the one failure this project treats
+     as unacceptable. */
+  const agrees = (node, want) => {
+    const got = Expr.evaluate(node, {});
+    return isFinite(got) && Math.abs(got - want) <= 1e-9 * Math.max(1, Math.abs(want));
+  };
+  if (!agrees(valueNode, value) || !agrees(slopeNode, slope)) return null;
+
+  const line = simplify(add(valueNode, mul(slopeNode, sub(X, num(at)))));
   return {
     source: 'sandbox',
     kind: 'expression',
@@ -977,26 +1039,26 @@ function buildTangent(id, skill, built, level, seed) {
     distractors: notTheAnswer(line, [
       {
         kind: 'tangent-slope-only',
-        node: mul(num(round4(slope)), X),
+        node: mul(slopeNode, X),
         hint: 'That is the slope times x. The line also has to pass through the point.',
       },
       {
         kind: 'tangent-value-only',
-        node: num(round4(value)),
+        node: valueNode,
         hint: `That is f(${at}), the height. The line needs the slope as well.`,
       },
     ]),
     original: f,
     note: built.note || null,
     hints: [
-      `A tangent line needs two things: a point and a slope. The point is (${at}, ${round4(value)}).`,
-      `f'(x) = ${html(d)}, so the slope at x = ${at} is ${round4(slope)}.`,
-      `Point-slope: y = ${round4(value)} + ${round4(slope)}(x - ${at}).`,
+      `A tangent line needs two things: a point and a slope. The point is (${at}, ${html(valueNode)}).`,
+      `f'(x) = ${html(d)}, so the slope at x = ${at} is ${html(slopeNode)}.`,
+      `Point-slope: y = ${html(valueNode)} + ${html(slopeNode)}(x - ${at}).`,
     ],
     steps: [
-      { title: 'The point', html: `f(${at}) = ${round4(value)}` },
+      { title: 'The point', html: `f(${at}) = ${html(valueNode)}` },
       { title: 'The derivative', html: `f'(x) = ${html(d)}` },
-      { title: 'The slope there', html: `f'(${at}) = ${round4(slope)}` },
+      { title: 'The slope there', html: `f'(${at}) = ${html(slopeNode)}` },
       { title: 'Point-slope form', html: `y = ${html(line)}` },
     ],
     graph: { f: latex(f), derivative: latex(line) },
