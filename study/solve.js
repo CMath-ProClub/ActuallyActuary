@@ -269,4 +269,143 @@ export function whereAreYou(target, typed, variable = 'x') {
   return null;
 }
 
-export default { steps, workFor, ruleAt, whereAreYou };
+/* ================================================== implicit differentiation
+
+   Everything above walks y = f(x). An implicit problem is F(x, y) = 0 and
+   has a different shape of working, which until now had no derived
+   version at all - only whatever canned steps the builder happened to
+   carry. That was the wrong way round, because implicit is the thing
+   being got wrong.
+
+   Built BACKWARD from the pieces, like every generator here. For
+   F(x, y) = left - right:
+
+       F_x = ∂F/∂x        differentiate, y held still
+       F_y = ∂F/∂y        differentiate, x held still
+       dy/dx = -F_x / F_y
+
+   which is the same answer the generator built the question from, arrived
+   at independently - so if these two ever disagree, one of them is wrong
+   and the tests will say so.
+
+   The three lines above are also exactly what somebody writes on paper,
+   in that order, which is what makes them worth recognising one at a
+   time. */
+
+function sides(curve) {
+  if (!curve || !curve.left || !curve.right) return null;
+  try {
+    const allowed = { vars: ['x', 'y'] };
+    const left = Expr.parse(String(curve.left), allowed);
+    const right = Expr.parse(String(curve.right), allowed);
+    return simplify(Expr.sub(left, right));
+  } catch (err) {
+    return null;
+  }
+}
+
+/* The three pieces of an implicit derivative, or null. */
+export function implicitParts(curve) {
+  const F = sides(curve);
+  if (!F) return null;
+  try {
+    const fx = simplify(Expr.derivative(F, 'x'));
+    const fy = simplify(Expr.derivative(F, 'y'));
+    /* A y that is not really there means this is not implicit at all, and
+       -F_x/F_y would divide by zero. */
+    if (Expr.isIdenticallyZero(fy)) return null;
+    return {
+      F,
+      fx,
+      fy,
+      negFx: simplify(Expr.neg(fx)),
+      answer: simplify(Expr.div(Expr.neg(fx), fy)),
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+/* The working for an implicit problem, in the shape it is written. */
+export function implicitWork(curve) {
+  const parts = implicitParts(curve);
+  if (!parts) return null;
+  return {
+    lines: [
+      {
+        depth: 0,
+        rule: 'differentiate both sides',
+        of: html(parts.F),
+        result: `${html(parts.fx)} + (${html(parts.fy)})·dy/dx`,
+      },
+      {
+        depth: 1,
+        rule: 'collect the dy/dx terms',
+        of: `(${html(parts.fy)})·dy/dx`,
+        result: html(parts.negFx),
+      },
+      {
+        depth: 0,
+        rule: 'divide by what multiplies dy/dx',
+        of: `dy/dx`,
+        result: html(parts.answer),
+      },
+    ],
+    answer: html(parts.answer),
+    rules: ['implicit differentiation'],
+  };
+}
+
+/* Where in THAT working is this line?
+
+   The same question as `whereAreYou`, for the other shape. Each of the
+   named pieces is something people write down on the way, and each one
+   deserves a different sentence: writing F_y means you are one division
+   from the answer, writing F_x means you have not moved it across yet. */
+export function whereAreYouImplicit(curve, typed) {
+  const parts = implicitParts(curve);
+  if (!parts || !typed) return null;
+
+  const same = (a, b) => {
+    try {
+      return Expr.equivalent(a, b, { count: 40, vars: ['x', 'y'] }).equal;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  if (same(typed, parts.answer)) return { at: 'answer', total: 3 };
+
+  /* Order matters: -F_x/F_y is checked first above, and F_y before F_x,
+     because for a symmetric curve they can coincide and the more
+     advanced reading is the kinder one. */
+  if (same(typed, parts.fy)) {
+    return {
+      at: 'step',
+      index: 1,
+      total: 3,
+      remaining: 1,
+      piece: 'dydx-coefficient',
+      rule: 'collect the dy/dx terms',
+      next: 'divide by it',
+    };
+  }
+  if (same(typed, parts.negFx) || same(typed, parts.fx)) {
+    return {
+      at: 'step',
+      index: 1,
+      total: 3,
+      remaining: 2,
+      piece: same(typed, parts.negFx) ? 'moved-across' : 'x-side',
+      rule: 'differentiate both sides',
+      next: 'divide by what multiplies dy/dx',
+    };
+  }
+  if (same(typed, parts.F)) return { at: 'start', total: 3 };
+  return null;
+}
+
+export default {
+  steps, workFor, ruleAt, whereAreYou,
+  implicitParts, implicitWork, whereAreYouImplicit,
+};

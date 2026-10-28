@@ -2505,15 +2505,38 @@ Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET);
 
    Only for the ordinary differentiate-this questions: an implicit answer
    or a set of x values has no single derivation to be partway through. */
+/* "One more rule to go" is worth more than "not yet", and "step 2 of 4" is
+   worth more than either - it is the difference between knowing you are
+   wrong and knowing how far you have got. `whereAreYou` has carried the
+   index and the total all along; this is what says them out loud. */
+function howFar(where) {
+  if (!where || where.at !== 'step') return '';
+  const left = Number(where.remaining);
+  if (!Number.isFinite(left) || left <= 0) return '';
+  const total = Number(where.total) || 0;
+  const done = total > left ? total - left : 0;
+  const position = total && done ? `Step ${done} of ${total}. ` : '';
+  return `${position}${left === 1 ? 'One more rule' : `${left} more rules`} to go.`;
+}
+
 function whereOnThePath(problem, text) {
-  if (!problem || problem.kind !== 'expression' || problem.implicit) return null;
-  if (!problem.original) return null;
-  const typed = Expr.tryParse(text, { vars: [problem.variable || 'x'] });
+  if (!problem || problem.kind !== 'expression') return null;
+  const allowed = problem.implicit ? { vars: ['x', 'y'] } : { vars: [problem.variable || 'x'] };
+  const typed = Expr.tryParse(text, allowed);
   if (!typed) return null;
 
   let where = null;
   try {
-    where = solve.whereAreYou(problem.original, typed, problem.variable || 'x');
+    /* Implicit is the shape being got wrong, and it was the one shape
+       with no step recognition at all - it returned null here and fell
+       through to "how close is this to the answer", which has nothing to
+       say to somebody who has correctly written the dy/dx coefficient and
+       not yet divided by it. */
+    where = problem.implicit
+      ? solve.whereAreYouImplicit(problem.curve, typed)
+      : (problem.original
+        ? solve.whereAreYou(problem.original, typed, problem.variable || 'x')
+        : null);
   } catch (err) {
     return null;
   }
@@ -2522,17 +2545,33 @@ function whereOnThePath(problem, text) {
   if (where.at === 'start') {
     return {
       state: 'off',
-      message: 'That is the function again, not its derivative. Start with the '
-        + 'rule that applies to the outside.',
+      message: problem.implicit
+        ? 'That is the equation again, rearranged. Differentiate both sides '
+          + 'first, remembering that every y carries a dy/dx with it.'
+        : 'That is the function again, not its derivative. Start with the '
+          + 'rule that applies to the outside.',
     };
   }
+
   if (where.at === 'step') {
+    const onwards = howFar(where);
+    if (problem.implicit) {
+      const said = {
+        'dydx-coefficient': 'That is exactly what multiplies dy/dx. Divide '
+          + 'both sides by it and you are done.',
+        'moved-across': 'That is the right-hand side once the dy/dx terms are '
+          + 'on their own. Now divide by what multiplies dy/dx.',
+        'x-side': 'That is the x side of the differentiated equation, but it '
+          + 'has not been moved across yet - it changes sign on the way.',
+      }[where.piece];
+      return { state: 'partway', message: `${said} ${onwards}`.trim() };
+    }
     const rule = String(where.rule || '').replace(/:.*$/, '').toLowerCase();
     return {
       state: 'partway',
       message: `That is a correct line - the ${rule} part of it. It is not the `
         + 'whole derivative yet: that piece still has to go back into the rule '
-        + 'it came out of.',
+        + `it came out of. ${onwards}`.trim(),
     };
   }
   return null;

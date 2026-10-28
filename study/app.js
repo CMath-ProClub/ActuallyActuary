@@ -102,6 +102,9 @@ function todayCard() {
   const made = plan.planFor(profile, {
     topicName: (id) => (TOPIC_BY_ID[id] && TOPIC_BY_ID[id].name) || id,
     examDate: profile.settings.examDate || '',
+    /* What the spaced-repetition scheduler says has come round again. It
+       has tracked this since the beginning and the plan never asked. */
+    due: sched.dueTopics(ALL_TOPIC_IDS, profile, 6),
   });
 
   const card = h('section', { class: 'card today' });
@@ -111,6 +114,11 @@ function todayCard() {
       ? h('span', { class: 'daysleft', text: made.days === 0 ? 'test today'
         : made.days === 1 ? 'test tomorrow' : `${made.days} days to the test` })
       : null,
+    /* What the whole list costs, before anything is clicked. A plan with
+       no size on it is one you put off. */
+    made.minutes
+      ? h('span', { class: 'todaycost', text: `about ${made.minutes} min` })
+      : null,
   ]);
   card.appendChild(head);
 
@@ -118,6 +126,7 @@ function todayCard() {
   for (const item of made.items) {
     list.appendChild(h('li', { class: `t-${item.kind}` }, [
       h('a', { class: 'todaywhat', href: item.where }, item.what),
+      item.how ? h('span', { class: 'todayhow', text: item.how }) : null,
       h('p', { class: 'small muted', text: item.why }),
     ]));
   }
@@ -205,6 +214,23 @@ function findTheModel() {
      appear or an explanation does. */
   ollama.detect(url).then((found) => {
     modelSearch = found || { running: false };
+    if (modelSearch.running) {
+      /* A model can be removed with `ollama rm` while its name is still
+         in the settings. Every call then returns a 404 naming a model
+         somebody may not remember choosing, on a page that only knows how
+         to say "could not reach the model" - which reads as the whole
+         feature being broken. Notice, and pick again. */
+      const chosen = store.activeProfile().settings;
+      for (const [key, replacement] of [['ollamaModel', modelSearch.explain],
+        ['ollamaVisionModel', modelSearch.see]]) {
+        const named = chosen[key];
+        if (named && !ollama.stillInstalled(modelSearch.models, named)) {
+          store.setSetting(key, replacement || '');
+          modelSearch.replaced = modelSearch.replaced || [];
+          modelSearch.replaced.push({ was: named, now: replacement || '' });
+        }
+      }
+    }
     if (!modelSearch.running) {
       /* Direct is impossible. That is the NORMAL case on the live site, not
          a failure, so go and look for the other route before telling
@@ -244,10 +270,14 @@ function findTheModel() {
    meant for the maths. */
 const SHORTCUTS = [
   ['Enter', 'check the answer, then move on'],
+  ['Alt', 'hold with any key below to use it without leaving the answer box'],
   ['n', 'next question'],
+  ['b', 'back a question'],
   ['g', 'show the graph'],
   ['s', 'scratch paper'],
   ['t', 'am I on track'],
+  ['/', 'jump to the answer box'],
+  ['Esc', 'close whatever is open'],
   ['?', 'this list'],
 ];
 
@@ -259,19 +289,89 @@ function pressTool(label) {
   return !!hit;
 }
 
+/* What each key does, in one place, so the list above and the handler
+   below cannot drift apart. */
+const KEY_ACTIONS = {
+  n: () => pressTool('next'),
+  b: () => pressTool('back'),
+  g: () => pressTool('graph'),
+  s: () => pressTool('scratch'),
+  t: () => pressTool('am i'),
+};
+
+/* The answer box, if this page has one. */
+function answerField() {
+  return document.querySelector('#view .answerinput, #view .partinput');
+}
+
+/* Put the cursor where the work is.
+
+   Called after every render: a new question should be typeable without
+   reaching for the mouse first, which is the entire point of the keyboard
+   work and was the one piece missing. Never steals focus from somebody
+   already typing somewhere else, and never on a touch screen, where
+   focusing an input throws up the keyboard over the question. */
+function focusTheWork() {
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return;
+  const active = document.activeElement;
+  if (active && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(active.tagName || '')) return;
+  const field = answerField();
+  if (field) {
+    try { field.focus({ preventScroll: true }); } catch (err) { field.focus(); }
+  }
+}
+
+function closeWhatIsOpen() {
+  const help = document.getElementById('keyhelp');
+  if (help) { help.remove(); return true; }
+  /* An open graph or an open scratch pad, in that order - the thing most
+     recently in the way is the thing Esc should take away. */
+  for (const label of ['hide the graph', 'put the paper away']) {
+    const buttons = [...document.querySelectorAll('#view .toolrow .chip, #view .graphtools button')];
+    const hit = buttons.find((b) => b.textContent.trim().toLowerCase().startsWith(label));
+    if (hit) { hit.click(); return true; }
+  }
+  return false;
+}
+
 function installKeys() {
   document.addEventListener('keydown', (e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey) return;
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''))
       || e.target.isContentEditable;
-    /* Enter inside the answer box is already handled by the box itself. */
+
+    /* Esc works everywhere, including from inside the answer box, because
+       the thing it closes is usually covering the question. */
+    if (e.key === 'Escape') {
+      if (closeWhatIsOpen()) e.preventDefault();
+      return;
+    }
+
+    const key = String(e.key || '').toLowerCase();
+
+    /* ALT is the way to use a tool without leaving the answer box.
+
+       The shortcuts were unreachable exactly when they were wanted: your
+       hands are in the answer box, and a bare "g" there is a variable
+       name, not a request for a graph. Alt is free - nothing here binds
+       it - so Alt+g reaches the graph from inside the box, and a plain g
+       still works when the box does not have focus. */
+    if (e.altKey) {
+      const action = KEY_ACTIONS[key];
+      if (action && action()) { e.preventDefault(); }
+      return;
+    }
+
     if (inField) return;
-    const key = e.key;
-    if (key === 'n' && pressTool('next')) { e.preventDefault(); return; }
-    if (key === 'g' && pressTool('graph')) { e.preventDefault(); return; }
-    if (key === 's' && pressTool('scratch')) { e.preventDefault(); return; }
-    if (key === 't' && pressTool('am i')) { e.preventDefault(); return; }
-    if (key === '?') {
+
+    if (key === '/') {
+      const field = answerField();
+      if (field) { e.preventDefault(); field.focus(); }
+      return;
+    }
+    const action = KEY_ACTIONS[key];
+    if (action && action()) { e.preventDefault(); return; }
+    if (e.key === '?') {
       e.preventDefault();
       showShortcuts();
     }
@@ -321,6 +421,9 @@ function router() {
     ]));
   }
   window.scrollTo(0, 0);
+  /* A rendered question should be typeable at once. Every route goes
+     through here, so this is the one place that can promise it. */
+  focusTheWork();
 }
 
 function paintNav(active) {
@@ -1816,6 +1919,17 @@ function ollamaCard(p) {
   } else if (modelSearch && modelSearch.running) {
     card.appendChild(h('p', { class: 'okline',
       text: `Found a model at ${modelSearch.at}.` }));
+    if (modelSearch.why) {
+      card.appendChild(h('p', { class: 'muted small', text: `Chose it as ${modelSearch.why}.` }));
+    }
+    /* Said out loud. A setting that changes itself without telling anybody
+       is how somebody ends up wondering why the answers got worse. */
+    for (const swapped of modelSearch.replaced || []) {
+      card.appendChild(h('p', { class: 'warnline small',
+        text: swapped.now
+          ? `${swapped.was} is no longer installed, so ${swapped.now} is being used instead.`
+          : `${swapped.was} is no longer installed, and nothing suitable has replaced it.` }));
+    }
   }
 
   const urlInput = h('input', { type: 'text', class: 'textinput', value: p.settings.ollamaUrl || 'http://localhost:11434' });
@@ -2970,12 +3084,46 @@ function mathKeys(target) {
    function nobody anticipated. The builder's steps are still shown
    underneath when it has something extra to say - the limit definition's
    four lines, or why only those x values. */
+/* "Product rule, then the chain rule twice."
+
+   The rules used, in one line, before any algebra. Somebody who got this
+   wrong usually picked the wrong rule, and reading which rules it wanted
+   is often the whole correction - the working underneath is for when it
+   is not. `workFor` has always returned this list and nothing ever
+   showed it. */
+function rulesLine(rules) {
+  const names = (rules || [])
+    .map((r) => String(r).replace(/:.*$/, '').trim().toLowerCase())
+    .filter(Boolean);
+  if (!names.length) return '';
+  const counts = new Map();
+  for (const name of names) counts.set(name, (counts.get(name) || 0) + 1);
+  const said = [...counts.entries()].map(([name, n]) => (
+    n === 1 ? name : `the ${name} ${n === 2 ? 'twice' : `${n} times`}`
+  ));
+  if (said.length === 1) return said[0];
+  return `${said.slice(0, -1).join(', ')}, then ${said[said.length - 1]}`;
+}
+
 function workedPanel(problem) {
   const det = h('details', { class: 'steps', open: true });
   det.appendChild(h('summary', { text: 'How to get there' }));
 
-  const derived = problem.original ? solve.workFor(problem.original, problem.variable || 'x') : null;
+  /* An implicit question used to get no derived working at all, only
+     whatever canned steps its builder carried - and implicit is the shape
+     being got wrong. solve.implicitWork walks the curve the same way. */
+  const derived = problem.implicit
+    ? solve.implicitWork(problem.curve)
+    : (problem.original ? solve.workFor(problem.original, problem.variable || 'x') : null);
+
   if (derived) {
+    const summary = rulesLine(derived.rules);
+    if (summary) {
+      det.appendChild(h('p', { class: 'wrules' }, [
+        h('span', { class: 'wruleslabel', text: 'What it needs' }),
+        h('span', { text: summary }),
+      ]));
+    }
     const ol = h('ol', { class: 'working' });
     for (const line of derived.lines) {
       ol.appendChild(h('li', { class: `w${Math.min(line.depth, 3)}` }, [
@@ -2988,6 +3136,16 @@ function workedPanel(problem) {
       ]));
     }
     det.appendChild(ol);
+    /* And the answer, which the working built up to and never stated.
+       Reading four lines of rules and then having to scroll back to the
+       marking to see what they add up to is a small thing that happens
+       every single time. */
+    if (derived.answer) {
+      det.appendChild(h('p', { class: 'wanswer' }, [
+        h('span', { class: 'wruleslabel', text: 'So' }),
+        h('span', { class: 'eq', html: derived.answer }),
+      ]));
+    }
   }
 
   if (problem.steps && problem.steps.length) {
@@ -3617,7 +3775,11 @@ function paintWorkspaceProblem(slot) {
           workspace.lastAnswer = input.value;
           router();
         },
-      }, 'See it graphed'),
+        /* "Graph it" everywhere, including here, where it had been "See
+           it graphed" since before the practice card had a graph at all.
+           The same action under two names is the kind of thing nobody
+           reports and everybody notices. */
+      }, 'Graph it'),
       problem.steps && problem.steps.length
         ? h('button', {
           class: 'btn ghost', type: 'button',
@@ -4127,34 +4289,87 @@ let graphOpen = false;
 
    A fresh one every time, because the problems are generated: there is no
    finite stock of worksheets to work through and then be stuck. */
+/* How much room a question needs, in lines.
+
+   Every question used to get the same 86px, which is wrong in both
+   directions: a power-rule derivative needs two lines and a limit
+   definition needs most of a side. Working in a box that is too small is
+   the commonest reason working ends up crammed into the margin, and the
+   generator already knows which kind of question it made. */
+function roomFor(problem) {
+  if (!problem) return 3;
+  if (problem.kind === 'parts' && problem.parts) {
+    return Math.max(6, problem.parts.length * 2 + 2);
+  }
+  if (problem.noGraph) return 7;       /* a set of x values, found by algebra */
+  if (problem.implicit) return 6;      /* differentiate, collect, divide */
+  const stem = String(problem.stem || '');
+  if (/limit definition/i.test(stem)) return 9;
+  if (/second derivative|twice/i.test(stem)) return 5;
+  return stem.length > 90 ? 5 : 3;
+}
+
 function renderPrintable(root, args) {
   const count = Math.max(5, Math.min(60, Number((args || [])[0]) || 20));
+  /* A SHEET HAS A SEED, for the same reason a question does.
+
+     Printing used to be a one-way door: fresh seeds every time, so the
+     sheet you printed could never be printed again, never sent to
+     somebody to do alongside you, and never rebuilt later to check your
+     working against. The seed is now in the URL and the whole page
+     rebuilds identically - the property every other part of this already
+     had, and the one place it was missing. */
+  const asked = Number((args || [])[1]);
+  const seed = Number.isFinite(asked) ? asked >>> 0 : freshSeed() >>> 0;
+  if (!Number.isFinite(asked)) {
+    /* Into the address bar without a reload, so the back button and a
+       copied URL both do what they look like they do. */
+    try {
+      history.replaceState(null, '', `#/print/${count}/${seed}`);
+    } catch (err) { /* file://, where replaceState throws */ }
+  }
+
   const skip = examSkips();
   const slots = examSlots(count, { skip });
   const problems = [];
   const seen = new Set();
-  for (const slot of slots) {
+  /* Derived from the sheet's seed, so question 7 is always question 7. */
+  const seedFor = (i, tries) => (MathKit.hashSeed(`sheet:${seed}:${i}:${tries}`) >>> 0);
+  slots.forEach((slot, i) => {
     let made = null;
     for (let tries = 0; tries < 30 && !made; tries++) {
-      made = buildProblem({ skills: [slot.skill], level: slot.level }, freshSeed());
+      made = buildProblem({ skills: [slot.skill], level: slot.level }, seedFor(i, tries));
       if (made && seen.has(made.stem)) made = null;
     }
     if (made) { problems.push(made); seen.add(made.stem); }
-  }
+  });
+
+  const link = `${location.origin}${location.pathname}#/print/${count}/${seed}`;
 
   root.appendChild(h('header', { class: 'pagehead noprint' }, [
     h('h1', { text: 'A worksheet' }),
-    h('p', { class: 'lead', text: `${problems.length} questions, generated now, `
-      + 'to whatever concepts are still switched on. The answer key is on its '
-      + 'own page.' }),
+    h('p', { class: 'lead', text: `${problems.length} questions, to whatever `
+      + 'concepts are still switched on. The answer key is on its own page, and '
+      + 'says which rules each one needs.' }),
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: () => window.print() },
         'Print it'),
+      h('a', {
+        class: 'btn ghost small',
+        href: `#/print/${count}/${freshSeed() >>> 0}`,
+        onclick: () => setTimeout(router, 0),
+      }, 'A different one'),
       ...[10, 20, 30].map((n) => h('a', {
-        class: 'btn ghost small', href: `#/print/${n}`,
+        class: 'btn ghost small', href: `#/print/${n}/${seed}`,
         onclick: () => setTimeout(router, 0),
       }, `${n} questions`)),
       h('a', { class: 'btn ghost small', href: '#/start' }, 'Back'),
+    ]),
+    h('p', { class: 'small muted' }, [
+      h('span', { text: 'This exact sheet rebuilds from its address: ' }),
+      h('code', { class: 'sheetlink', text: link }),
+      h('span', { text: ' - print it again, or send it to someone to do '
+        + 'alongside you.' }),
     ]),
   ]));
 
@@ -4162,13 +4377,25 @@ function renderPrintable(root, args) {
   sheet.appendChild(h('div', { class: 'sheethead' }, [
     h('h2', { text: 'Calculus practice' }),
     h('p', { class: 'small', text: `${store.activeProfile().name} \u00b7 `
-      + `${new Date().toLocaleDateString()} \u00b7 ${problems.length} questions` }),
+      + `${new Date().toLocaleDateString()} \u00b7 ${problems.length} questions `
+      + `\u00b7 sheet ${seed.toString(36)}` }),
+    /* Lines to write on. A sheet that gets put in a folder or handed over
+       needs a name on it, and these cost nothing. */
+    h('div', { class: 'sheetrule' }, [
+      h('span', { text: 'Name' }),
+      h('span', { class: 'ruleline' }),
+      h('span', { text: 'Date' }),
+      h('span', { class: 'ruleline short' }),
+    ]),
   ]));
   const ol = h('ol', { class: 'sheetlist' });
   for (const p of problems) {
     ol.appendChild(h('li', {}, [
       h('div', { class: 'qtext', html: p.stem }),
-      h('div', { class: 'qspace', 'aria-hidden': 'true' }),
+      h('div', {
+        class: 'qspace', 'aria-hidden': 'true',
+        style: `height:${roomFor(p) * 26}px`,
+      }),
     ]));
   }
   sheet.appendChild(ol);
@@ -4177,12 +4404,22 @@ function renderPrintable(root, args) {
   const key = h('section', { class: 'sheet answerkey' });
   key.appendChild(h('div', { class: 'sheethead' }, [
     h('h2', { text: 'Answer key' }),
-    h('p', { class: 'small', text: 'Fold this under before you start.' }),
+    h('p', { class: 'small', text: 'Fold this under before you start. Each '
+      + 'answer says which rules it needed, so a wrong one tells you where you '
+      + 'went wrong and not only that you did.' }),
   ]));
   const kl = h('ol', { class: 'keylist' });
   for (const p of problems) {
+    /* An answer on its own says you were wrong. It does not say where -
+       the only part that helps when the sheet is being marked an hour
+       later at a kitchen table with no computer open. */
+    const work = p.implicit
+      ? solve.implicitWork(p.curve)
+      : (p.original ? solve.workFor(p.original, p.variable || 'x') : null);
+    const needs = work ? rulesLine(work.rules) : '';
     kl.appendChild(h('li', {}, [
       h('span', { class: 'eq', html: p.answerHtml || '\u2014' }),
+      needs ? h('span', { class: 'keyrule', text: needs }) : null,
     ]));
   }
   key.appendChild(kl);
@@ -4198,6 +4435,38 @@ function renderPrintable(root, args) {
 
    #/q/implicit/3/12345 is that exact question, on any device, for anybody.
    No account, no copy and paste of half-rendered maths. */
+/* The chip that copies a problem's link.
+
+   One definition, used by practice and by the page a link opens, because
+   two copies drift: the first had a `prompt` fallback for a browser with
+   no clipboard and the second had nothing at all. The fallback matters
+   more than it looks - navigator.clipboard is undefined on any page not
+   served over HTTPS or localhost, which includes a phone on the local
+   network. */
+function copyLinkChip(problem) {
+  const link = problemLink(problem);
+  if (!link) return null;
+  const chip = h('button', { class: 'chip', type: 'button' }, 'Copy link');
+  let timer = null;
+  chip.addEventListener('click', () => {
+    const say = (text) => { chip.textContent = text; };
+    const byHand = () => {
+      /* Not an error. Select the text and let them copy it themselves,
+         which is what a person does anyway when a copy button fails. */
+      say('Copy link');
+      window.prompt('Copy this link', link);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => say('Link copied')).catch(byHand);
+    } else {
+      byHand();
+    }
+    clearTimeout(timer);
+    timer = setTimeout(() => say('Copy link'), 2500);
+  });
+  return chip;
+}
+
 function problemLink(problem) {
   if (!problem || !problem.skill || problem.seed === undefined) return null;
   const bits = ['q', problem.skill, problem.difficulty || 2, problem.seed >>> 0];
@@ -4239,40 +4508,109 @@ function renderShared(root, args) {
   });
   const field = answerBox(input);
   const marking = h('div', { class: 'exammark' });
+  const graphSlot = h('div', { class: 'graphslot' });
+  /* A link is somebody about to do a problem, and until now this page gave
+     them a box and nothing else: no paper to work it out on, no graph, and
+     no record that they had done it. Practice has had all three for
+     months. */
+  const scratch = scratchPanel(problem);
+
+  const started = Date.now();
+  let tries = 0;
+  let recorded = false;
 
   const mark = () => {
     const res = grade(problem, input.value);
+    tries++;
+    /* One retry before the answer appears. A link you were sent is a
+       question, and burning it on a typo - or on a form the grader could
+       not read - is the difference between practice and a spoiler. The
+       answer still comes on the second go, always. */
+    const hold = !res.correct && tries === 1 && res.decided !== false;
+
     marking.innerHTML = '';
     marking.appendChild(h('div', {
       class: 'feedback ' + (res.correct ? 'right' : res.decided === false ? 'warn' : 'wrong'),
     }, [
       h('p', { class: 'verdict', text: res.correct ? 'Correct'
-        : res.decided === false ? 'Could not check that one' : 'Not quite' }),
-      !res.correct && problem.answerHtml
+        : res.decided === false ? 'Could not check that one'
+          : hold ? 'Not quite - one more go' : 'Not quite' }),
+      !res.correct && !hold && problem.answerHtml
         ? h('p', { class: 'answerline', html: `The answer is <b>${problem.answerHtml}</b>` })
         : null,
       res.detail ? h('p', { text: res.detail }) : null,
+      hold ? h('p', { class: 'small muted', text: 'The answer and the working '
+        + 'are one more Check away. Have another look first.' }) : null,
     ]));
-    if (!res.correct) {
+
+    if (!res.correct && !hold) {
       const worked = workedPanel(problem);
       if (worked) marking.appendChild(worked);
       const watch = helpPanel(problem, null);
       if (watch) marking.appendChild(watch);
+    }
+
+    /* Recorded once, on the first verdict, so the dashboard and the plan
+       see it. A question answered from a link is still a question
+       answered; leaving it out made the plan quietly wrong for anybody
+       who studies by sending links to themselves. */
+    if (!recorded && res.decided !== false && !hold) {
+      recorded = true;
+      store.recordAttempt({
+        topicId: problem.topicId,
+        correct: !!res.correct,
+        ms: Date.now() - started,
+        difficulty: problem.difficulty || 2,
+        seed: problem.seed || 0,
+        mode: 'link',
+        diagnosis: res.diagnosis || '',
+      });
     }
   };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); mark(); }
   });
 
+  const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
+    .includes(problem.kind);
+
   card.appendChild(h('div', { class: 'answerform' }, [
     field,
     mathKeys(input),
+    expressionish ? attachEcho(input, problem) : null,
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: mark }, 'Check'),
       h('a', { class: 'btn ghost', href: '#/lockin' }, 'Practise more like it'),
     ]),
+    h('div', { class: 'toolrow' }, [
+      scratch.toggle,
+      problem.noGraph ? null : h('button', {
+        class: 'chip', type: 'button',
+        onclick: () => examGraph(problem, input.value, graphSlot),
+      }, 'Graph it'),
+      expressionish ? h('button', {
+        class: 'chip', type: 'button',
+        onclick: () => {
+          const where = onTrack(problem, input.value);
+          marking.innerHTML = '';
+          marking.appendChild(h('div', { class: 'feedback track ' + where.state }, [
+            h('strong', { text: trackLabel(where.state) }),
+            h('p', { text: where.message }),
+          ]));
+        },
+      }, 'Am I on track?') : null,
+      /* Pass it on. A link that cannot be re-shared from the page it opens
+         is a dead end, and this is the one page where sharing is the
+         obvious thing to want. */
+      copyLinkChip(problem),
+    ]),
+    problem.noGraph ? h('p', { class: 'small muted', text: 'No graph on this '
+      + 'one - the graph would hand you the answer, and the point is the '
+      + 'algebra.' }) : null,
     h('p', { class: 'small muted', text: 'This exact question rebuilds from the '
       + 'link on any device - it is the seed that travels, not the text.' }),
+    scratch.slot,
+    graphSlot,
     marking,
   ]));
   root.appendChild(card);
@@ -5073,23 +5411,7 @@ function renderQuiz(root) {
     ]),
     h('div', { class: 'toolrow' }, [
       /* Every problem has a URL, because every problem is a seed. */
-      problemLink(q)
-        ? h('button', {
-          class: 'chip', type: 'button',
-          onclick: (e) => {
-            const link = problemLink(q);
-            const say = (text) => { e.target.textContent = text; };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(link)
-                .then(() => say('Link copied'))
-                .catch(() => { prompt('Copy this link', link); });
-            } else {
-              prompt('Copy this link', link);
-            }
-            setTimeout(() => say('Copy link'), 2500);
-          },
-        }, 'Copy link')
-        : null,
+      copyLinkChip(q),
       immediate && !q.noGraph
         ? h('button', {
           class: 'chip', type: 'button',

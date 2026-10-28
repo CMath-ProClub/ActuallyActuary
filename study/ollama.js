@@ -741,17 +741,71 @@ export function canSee(model) {
    photograph. Either may be null, and the caller must cope: a machine with
    only a coder model installed can still explain, just less well, and one
    with no vision model cannot read a photo at all. */
+/* Roughly what a consumer graphics card will hold.
+
+   BIGGER IS NOT BETTER PAST THE EDGE OF THE CARD, and that is the whole
+   point of this number. A 30B model at 4-bit is about 18GB; on a 16GB
+   card it spills into system memory and answers at perhaps a tenth of the
+   speed, which in practice means somebody clicks the button, waits three
+   minutes, and concludes the feature is broken. A 14B that fits beats a
+   30B that does not, every time, and the browser cannot see the card - so
+   this is a deliberate ceiling rather than a measurement, set where the
+   common 12GB and 16GB cards sit.
+
+   It is a preference, not a ban: if the only model installed is enormous,
+   it is still better than nothing and gets used, with the reason said. */
+const COMFORTABLE_GB = 13;
+const GB = 1024 * 1024 * 1024;
+
+function sizeGb(model) {
+  const bytes = Number(model && model.size);
+  return Number.isFinite(bytes) && bytes > 0 ? bytes / GB : 0;
+}
+
+/* Billions of parameters, guessed from the file size.
+
+   Ollama does not always report parameter_size - a model built from a
+   Modelfile often has no details at all - and a zero there used to put
+   the model below the 3B floor and out of the running entirely, losing to
+   models that are genuinely worse. A 4-bit quantization runs at roughly
+   0.6GB per billion parameters, which is close enough to rank with and is
+   only ever used when the real figure is missing. */
+const GB_PER_BILLION = 0.6;
+
+function paramsOrEstimate(model) {
+  const said = paramCount(model);
+  if (said) return said;
+  const gb = sizeGb(model);
+  return gb ? gb / GB_PER_BILLION : 0;
+}
+
 export function chooseModels(models) {
   const list = (models || []).filter((m) => m && m.name);
   if (!list.length) return { explain: null, see: null, why: 'no models installed' };
 
   const scored = list.map((m) => ({
     model: m,
-    params: paramCount(m),
+    params: paramsOrEstimate(m),
+    stated: !!paramCount(m),
+    gb: sizeGb(m),
     coder: CODER.test(m.name),
     ocr: /ocr/i.test(m.name || ''),
     sees: canSee(m),
   }));
+
+  /* Biggest first, but a model that will not fit loses to one that will.
+
+     Parameter count alone was also the only sort key, which meant a model
+     Ollama reported no parameter_size for scored zero and sank below
+     everything - including models that are genuinely worse. Falling back
+     to the file size keeps those in the running. */
+  const fits = (m) => (m.gb ? m.gb <= COMFORTABLE_GB : m.params <= 20);
+  const better = (a, b) => {
+    if (fits(a) !== fits(b)) return fits(a) ? -1 : 1;
+    const byParams = (b.params || 0) - (a.params || 0);
+    if (byParams) return byParams;
+    return (b.gb || 0) - (a.gb || 0);
+  };
 
   /* For explaining: not a coder, not an OCR model, and big enough to
      write a sentence worth reading.
@@ -764,20 +818,43 @@ export function chooseModels(models) {
   const explainers = usable.filter((m) => !m.coder);
   const pool = explainers.length ? explainers
     : (usable.length ? usable : scored.filter((m) => !m.ocr));
-  const explain = pool.slice().sort((a, b) => b.params - a.params)[0];
+  const explain = pool.slice().sort(better)[0];
 
-  /* For seeing: anything that can, biggest first. */
-  const seers = scored.filter((m) => m.sees).sort((a, b) => b.params - a.params);
+  /* For seeing: anything that can, biggest that fits. */
+  const seers = scored.filter((m) => m.sees).sort(better);
 
+  const spilled = explain && !fits(explain);
   return {
     explain: explain ? explain.model.name : null,
     see: seers.length ? seers[0].model.name : null,
-    why: explainers.length
-      ? 'the largest installed model that is not a coder'
-      : usable.length
-        ? 'only coder models are installed, so one of those is doing it'
-        : 'nothing installed is really suited to explaining',
+    why: spilled
+      ? 'the only suitable model installed is larger than most graphics cards '
+        + 'hold, so it may be slow'
+      : explainers.length
+        ? 'the largest model that is not a coder and fits on a graphics card'
+        : usable.length
+          ? 'only coder models are installed, so one of those is doing it'
+          : 'nothing installed is really suited to explaining',
   };
+}
+
+/* Is the model somebody chose still there?
+
+   A model can be deleted with `ollama rm` and the setting that names it
+   does not change, so every request afterwards comes back as a 404 from
+   Ollama with a message about a model the person may not remember
+   choosing - and on a page that only ever says "could not reach the
+   model", that reads as the whole feature being broken. */
+export function stillInstalled(models, name) {
+  if (!name) return true;
+  const wanted = String(name);
+  return (models || []).some((m) => {
+    const got = String((m && m.name) || '');
+    /* "qwen2.5:14b" and "qwen2.5:14b" obviously; also "llama3.2" when
+       what is installed is "llama3.2:latest", which is the same model. */
+    return got === wanted
+      || got.replace(/:latest$/, '') === wanted.replace(/:latest$/, '');
+  });
 }
 
 /* Ask the machine what it has, and decide.

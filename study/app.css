@@ -594,6 +594,19 @@ h3.unit {
 .preview li { margin-bottom: 12px; }
 .preview .stem { font-size: .98rem; margin-bottom: 4px; }
 .warnings summary { cursor: pointer; font-size: .86rem; color: var(--warnc); }
+/* The worked solution: what it needs, then how, then what it comes to. */
+.wrules, .wanswer {
+  display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.wanswer { margin: 10px 0 0; padding-top: 9px; border-top: 1px solid var(--hair); }
+.wruleslabel {
+  font-family: var(--face-ui); font-size: .68rem;
+  text-transform: uppercase; letter-spacing: .12em;
+  color: var(--faint); font-weight: 650; flex: none;
+}
+.wanswer .eq { font-size: 1.08rem; }
+
 .errline { color: var(--bad-ink); }
 .okline { color: var(--good-ink); }
 .warnline { color: var(--warnc); font-weight: 600; }
@@ -719,6 +732,13 @@ button.barrow:hover { background: var(--sunk); }
 
 .radical { margin-right: -.08em; }
 .radicand { border-top: 1px solid currentColor; padding: 0 .18em; margin-left: .02em; }
+/* |x|. Rules rather than pipe characters, so the bars are exactly as tall
+   as what is between them - a literal | beside a fraction or a root is
+   half the height it should be. */
+.absbar {
+  border-left: 1px solid currentColor; border-right: 1px solid currentColor;
+  padding: 0 .22em; margin: 0 .05em;
+}
 .rootidx { font-size: .68em; vertical-align: .55em; margin-right: -.3em; }
 
 .angle {
@@ -785,8 +805,16 @@ footer {
 }
 
 @media print {
-  .topbar, .cta, .actions, .qnav, footer { display: none; }
+  .topbar, .cta, .actions, .qnav, footer, .noprint { display: none; }
   .card { break-inside: avoid; box-shadow: none; }
+  /* A question and the space to answer it belong on the same side of the
+     paper. Splitting them puts the working on the next page from the
+     question, which is worse than a short page. */
+  .sheetlist li, .keylist li { break-inside: avoid; page-break-inside: avoid; }
+  /* The key starts its own sheet, so it can be folded under or thrown
+     away without taking a question with it. */
+  .answerkey { break-before: page; page-break-before: always; }
+  .qspace { border-bottom: 1px solid #bbb; }
 }
 
 /* ------------------------------------------------------------ the landing */
@@ -1728,6 +1756,27 @@ body.noscroll { overflow: hidden; }
 .qspace { height: 86px; border-bottom: 1px solid var(--hair); margin: 6px 0 14px; }
 .keylist { padding-left: 26px; }
 .keylist li { margin-bottom: 6px; break-inside: avoid; }
+/* What the question needed, beside the answer. Quiet - the answer is what
+   is being looked up, this is what explains it. */
+.keyrule {
+  display: block; font-family: var(--face-ui); font-size: .74rem;
+  color: var(--faint); margin-top: 1px;
+}
+
+/* Lines to write a name and a date on. */
+.sheetrule {
+  display: flex; gap: 8px; align-items: baseline; margin-top: 10px;
+  font-family: var(--face-ui); font-size: .76rem; color: var(--muted);
+}
+.sheetrule .ruleline {
+  flex: 1 1 auto; border-bottom: 1px solid var(--edge); height: 1em;
+}
+.sheetrule .ruleline.short { flex: 0 0 110px; }
+
+.sheetlink {
+  font-size: .78rem; word-break: break-all;
+  background: var(--sunk); padding: 1px 5px; border-radius: 3px;
+}
 .answerkey { margin-top: 28px; }
 
 @media print {

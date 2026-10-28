@@ -806,6 +806,16 @@ function html(node, parent = 0) {
     }
     case 'fn': {
       if (node.n === 'sqrt') return MathKit.sqrt(html(node.a, 0));
+      /* |x|, not abs(x).
+
+         Nobody writes abs() on paper, and it turned up in the middle of
+         every inverse-secant answer - which is already the ugliest thing
+         on the page - reading like a leaked function name. The bars are
+         their own span so they can be sized with the content rather than
+         being a pair of stretched pipe characters. */
+      if (node.n === 'abs') {
+        return `<span class="absbar">${html(node.a, 0)}</span>`;
+      }
       /* Nobody writes asin. The parser accepts both spellings; the page
          shows the one a textbook uses. */
       if (FN_SHOWN[node.n]) return `${FN_SHOWN[node.n]}(${html(node.a, 0)})`;
