@@ -31,6 +31,8 @@ import * as solve from './solve.js';
 const { num, vr, neg, add, sub, mul, div, pow, fn, derivative, simplify,
   text, html, latex, equivalent } = Expr;
 
+import { buildRate, SHAPE_IDS } from './rates.js';
+
 const X = vr('x');
 const Y = vr('y');
 /* Motion problems are in time, not x. */
@@ -1736,6 +1738,8 @@ export function buildProblem(spec, seed) {
   if (skill.form) return buildForm(id, skill, built, level, seed);
   if (skill.parts) return buildLimitDefinition(id, skill, built, level, seed);
   if (skill.tangent) return buildTangent(id, skill, built, level, seed);
+  if (skill.rates) return buildRateProblem(id, skill, built, level, seed);
+  if (skill.extrema) return buildExtrema(id, skill, built, level, seed);
   if (skill.zeroset) return buildZeroSet(id, skill, built, level, seed);
   if (skill.motion || skill.order === 2) return buildRepeated(id, skill, built, level, seed);
 
@@ -2026,6 +2030,123 @@ function substituteShift(node) {
    These also carry noGraph. On a test this has to be shown with algebra,
    and a graph would hand over the answer - which Carter pointed out before
    I did. */
+/* =============================================== maxima and minima
+
+   Set f' = 0, solve, then say what each solution IS. The second half is
+   the half people skip, and it is the half that is actually being asked:
+   a critical point is not a maximum until something says it is.
+
+   Asked in THREE PARTS, line by line, for the same reason the limit
+   definition is: a single box accepts the right x-values from somebody
+   who found them by staring at a graph, and teaches nothing. The parts
+   are the derivative, its zeros, and the classification - which is
+   exactly the working a marker wants to see.
+
+   BUILT BACKWARD. The critical points are chosen first as whole numbers,
+   f' is formed as a product of the factors that vanish there, and f is
+   the integral of that with whole coefficients. Choosing f first gives
+   critical points like (3 +/- sqrt(17))/4, which makes this an exercise
+   in the quadratic formula rather than in extrema.
+
+   THE REPEATED ROOT IS NOT AN OVERSIGHT. f'(x) = 3(x - 2)^2 vanishes at
+   x = 2 and does not change sign there, so x = 2 is neither a maximum nor
+   a minimum. It is the case that separates somebody who understands the
+   first derivative test from somebody who has learned "f' = 0 means
+   extremum", and it appears at level 3 on purpose. */
+const EXTREMA = {
+  extrema: {
+    name: 'Maxima and minima',
+    topicId: 'calc.extrema',
+    ask: 'where f\u2032 = 0, and whether each one is a peak or a valley',
+    extrema: true,
+    build(r, level) {
+      /* A parabola: one critical point, and which kind is decided by the
+         sign out front. */
+      if (level === 1) {
+        const p = r.int(-5, 5);
+        const a = r.nz(1, 4) * (r() < 0.5 ? -1 : 1);
+        /* f = a(x - p)^2 + c, expanded so it is not given away. */
+        const c = r.int(-8, 8);
+        let f = mul(num(a), pow(X, num(2)));
+        f = signedTerm(f, -2 * a * p, X);
+        f = signedTerm(f, a * p * p + c, num(1));
+        return {
+          f,
+          points: [{ x: p, kind: a > 0 ? 'min' : 'max' }],
+        };
+      }
+
+      /* A repeated root: f' = k(x - p)^2, which never changes sign. */
+      if (level === 3 && r() < 0.3) {
+        const p = r.int(-4, 4);
+        const k = r.nz(1, 2) * 3;
+        /* f' = k(x - p)^2  ->  f = (k/3)(x - p)^3, expanded with whole
+           coefficients because k is a multiple of 3. */
+        const m = k / 3;
+        let f = mul(num(m), pow(X, num(3)));
+        f = signedTerm(f, -3 * m * p, pow(X, num(2)));
+        f = signedTerm(f, 3 * m * p * p, X);
+        f = signedTerm(f, r.int(-6, 6), num(1));
+        return {
+          f,
+          points: [{ x: p, kind: 'neither' }],
+          note: 'f\u2032 is a perfect square here, so it touches zero without '
+            + 'crossing it.',
+        };
+      }
+
+      /* A cubic: two critical points, one of each, and which is which
+         depends on the sign of the leading coefficient. */
+      const p = r.int(-4, 2);
+      const q = p + r.int(1, 4);
+      const flip = level >= 2 && r() < 0.4;
+      /* f' = 6(x - p)(x - q), integrated.  Negated when flipped. */
+      const sign = flip ? -1 : 1;
+      let f = mul(num(2 * sign), pow(X, num(3)));
+      f = signedTerm(f, -3 * sign * (p + q), pow(X, num(2)));
+      f = signedTerm(f, 6 * sign * p * q, X);
+      if (r() < 0.6) f = signedTerm(f, r.int(-9, 9), num(1));
+      return {
+        f,
+        /* With a positive leading coefficient f' goes +,-,+ so the FIRST
+           critical point is the maximum. Flipping the sign swaps them. */
+        points: [
+          { x: p, kind: flip ? 'min' : 'max' },
+          { x: q, kind: flip ? 'max' : 'min' },
+        ],
+      };
+    },
+  },
+};
+
+/* ================================================== related rates
+
+   The calculus in a related rates question is one line. Everything hard
+   about it happens before that line: reading a paragraph, naming the
+   quantities, spotting which equation ties them together, and noticing
+   which thing is constant.
+
+   So the question carries all of that as DATA - the governing equation,
+   every quantity with its units, which rate is given and which is wanted
+   - rather than only as prose. That is what lets the tip button show the
+   formula on one press and lay the variables out on the next, and what
+   lets the diagram label itself.
+
+   The shapes and their arithmetic live in rates.js, which is tested
+   against the geometry by tools/test_rates.mjs. */
+const RELATED = {
+  rates: {
+    name: 'Related rates',
+    topicId: 'calc.related',
+    ask: 'one quantity changing because another is',
+    rates: true,
+    build(r, level, spec) {
+      const only = spec && spec.shapes && spec.shapes.length ? spec.shapes : null;
+      return { rate: buildRate(r, level, only) };
+    },
+  },
+};
+
 const ZERO_SET = {
   horizontal: {
     name: 'Horizontal tangents',
@@ -2178,6 +2299,235 @@ function gcd(a, b) {
    the roots came from the construction, but the integration, the
    simplification and the differentiation all sit between that and the
    question on screen. */
+/* The words a person writes for "what kind of point is this". */
+const KIND_WORDS = {
+  max: ['max', 'maximum', 'local max', 'local maximum', 'relative max',
+        'relative maximum', 'maxima', 'peak'],
+  min: ['min', 'minimum', 'local min', 'local minimum', 'relative min',
+        'relative minimum', 'minima', 'valley'],
+  neither: ['neither', 'none', 'no', 'not an extremum', 'not an extrema',
+            'inflection', 'inflexion', 'saddle', 'point of inflection'],
+};
+
+export function kindOfWord(raw) {
+  const said = String(raw || '').trim().toLowerCase().replace(/[.\s]+$/, '');
+  if (!said) return null;
+  for (const [kind, words] of Object.entries(KIND_WORDS)) {
+    if (words.includes(said)) return kind;
+  }
+  /* "local maximum at x=2" and similar: look for the word inside. */
+  if (/\bneither\b|\binflect/.test(said)) return 'neither';
+  if (/\bmax/.test(said)) return 'max';
+  if (/\bmin/.test(said)) return 'min';
+  return null;
+}
+
+/* Units are written by people and are not part of the number.
+
+   Somebody who answers "48 cm^2/s" has the right answer, and rejecting it
+   because of the unit would be marking handwriting rather than calculus.
+   The unit is stripped before the number is read - and kept, so the
+   feedback can mention it when it was wrong or missing. */
+export function splitUnits(raw) {
+  const said = String(raw == null ? '' : raw).trim();
+  if (!said) return { number: '', units: '' };
+  /* The number is the leading mathematical part: digits, operators,
+     brackets, pi and a decimal point. Anything after that is a unit. */
+  const m = said.match(/^\s*([-+0-9.\s*/()^\u03c0]|pi\b)+/i);
+  if (!m) return { number: said, units: '' };
+  const number = m[0].trim();
+  const units = said.slice(m[0].length).trim();
+  /* "pi" alone would be eaten as a unit by a lazier split, so a trailing
+     bare number with nothing after it keeps everything. */
+  return number ? { number, units } : { number: said, units: '' };
+}
+
+function buildRateProblem(id, skill, built, level, seed) {
+  const q = built.rate;
+  if (!q) return null;
+
+  let answerNode = null;
+  try {
+    answerNode = simplify(Expr.parse(q.answerText, { vars: [] }));
+  } catch (err) {
+    return null;
+  }
+  if (!answerNode) return null;
+
+  return {
+    source: 'sandbox',
+    kind: 'rate',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 't',
+    stem: q.story,
+    instruction: `Give ${q.wantedRate.sym} as a number. Units are optional, and `
+      + 'an exact value like 5/6 or 8*pi beats a rounded one.',
+    /* A graph of what? There is no function of x here. The picture that
+       helps is the SHAPE, which is why this carries a diagram instead. */
+    noGraph: true,
+    noGraphWhy: 'There is no curve to plot here - the picture that helps is the '
+      + 'shape itself, which is on the Diagram button.',
+    diagram: q.diagram,
+    diagramLabels: q.labels,
+    /* Everything the tip button needs, in the order it reveals it. */
+    rate: {
+      shape: q.shape,
+      shapeName: q.shapeName,
+      formula: q.formula,
+      differentiated: q.differentiated,
+      hintText: q.hint,
+      note: q.note,
+      quantities: q.quantities,
+      givenRate: q.givenRate,
+      givenRate2: q.givenRate2,
+      wantedRate: q.wantedRate,
+      setup: q.setup,
+    },
+    answerNode,
+    answerText: q.answerText,
+    answerHtml: `${q.answerShown} ${q.answerUnits}`,
+    answerValue: q.answerValue,
+    answerUnits: q.answerUnits,
+    hints: [
+      q.hint,
+      `The equation that ties these together is ${q.formula.html}.`,
+      `Differentiate both sides with respect to t: ${q.differentiated.html}.`
+        + (q.note ? ` ${q.note}` : ''),
+    ],
+    steps: [
+      { title: 'What is changing', html: q.setup.map((l) => `${l.sym} = ${l.eq}`).join(',&nbsp; ') },
+      { title: 'The equation that relates them', html: q.formula.html },
+      { title: 'Differentiate both sides with respect to t', html: q.differentiated.html },
+      { title: 'Put the numbers in', html: `${q.wantedRate.sym} = ${q.answerShown} ${q.answerUnits}` },
+    ],
+  };
+}
+
+function buildExtrema(id, skill, built, level, seed) {
+  const f = simplify(built.f);
+  const d = simplify(derivative(f));
+  const points = (built.points || []).slice().sort((a, b) => a.x - b.x);
+  if (!points.length) return null;
+
+  /* VERIFY BEFORE SHIPPING, because the whole value of this is that the
+     answer key is right. Three separate things are checked against the
+     actual derivative rather than against the intention:
+       - f' really is zero at every stated point
+       - f' really is NOT zero anywhere else in the window
+       - the stated kind really matches the sign change            */
+  const at = (x) => Expr.evaluate(d, { x });
+  for (const pt of points) {
+    if (!isFinite(at(pt.x)) || Math.abs(at(pt.x)) > 1e-9) return null;
+  }
+
+  const lo = Math.min(...points.map((p) => p.x)) - 3;
+  const hi = Math.max(...points.map((p) => p.x)) + 3;
+  const steps = 2000;
+  for (let i = 0; i <= steps; i++) {
+    const x = lo + ((hi - lo) * i) / steps;
+    if (points.some((p) => Math.abs(p.x - x) < 1e-3)) continue;
+    if (Math.abs(at(x)) < 1e-9) return null;    /* a zero nobody listed */
+  }
+
+  /* The first derivative test, done numerically. A gap small enough to
+     stay inside the neighbouring critical point and large enough that
+     floating point noise cannot flip the sign. */
+  for (const pt of points) {
+    const gap = Math.min(0.25, ...points.filter((o) => o !== pt)
+      .map((o) => Math.abs(o.x - pt.x) / 3)) || 0.25;
+    const before = at(pt.x - gap);
+    const after = at(pt.x + gap);
+    const actual = before > 0 && after < 0 ? 'max'
+      : before < 0 && after > 0 ? 'min' : 'neither';
+    if (actual !== pt.kind) return null;
+  }
+
+  const xs = points.map((p) => p.x);
+  const kinds = points.map((p) => p.kind);
+  const many = points.length > 1;
+
+  return {
+    source: 'sandbox',
+    kind: 'parts',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Find every local maximum and minimum of `
+      + `<span class="eq">f(x) = ${html(f)}</span>`,
+    instruction: 'Three lines: the derivative, where it is zero, and what each '
+      + 'one is. Write "max", "min" or "neither".',
+    /* A graph of f would point straight at the answer, and on a test this
+       is done with algebra. */
+    noGraph: true,
+    noGraphWhy: 'The graph would show you the peaks, and the question is '
+      + 'whether the algebra finds them.',
+    parts: [
+      {
+        label: 'f\u2032(x)',
+        prompt: 'Differentiate first.',
+        answerNode: d,
+        vars: ['x'],
+      },
+      {
+        label: `where f\u2032(x) = 0`,
+        prompt: many ? 'Both values, separated by a comma.' : 'The x-value.',
+        answers: xs,
+        set: true,
+      },
+      {
+        label: many ? 'what each one is, in that order' : 'what it is',
+        prompt: 'max, min or neither.',
+        kinds,
+        words: true,
+      },
+    ],
+    answerNode: d,
+    answerText: xs.join(', '),
+    /* The contract every `kind: 'parts'` question owes the test suites:
+       its own correct answer, line by line, so a generator that states
+       something it would itself mark wrong fails the build rather than a
+       student. */
+    partAnswers: [text(d), xs.join(', '), kinds.join(', ')],
+    answerHtml: points
+      .map((p) => `x = ${p.x} (${p.kind})`)
+      .join(', '),
+    points,
+    original: f,
+    functionText: text(f),
+    note: built.note || '',
+    hints: [
+      'A local maximum or minimum can only happen where f\u2032(x) = 0, so '
+        + 'differentiate and solve that first.',
+      `f\u2032(x) = ${html(d)}. Set it to zero and factor.`,
+      'Then test the sign of f\u2032 either side of each solution: + to \u2212 is '
+        + 'a maximum, \u2212 to + is a minimum, and no change is neither.',
+    ],
+    steps: [
+      { title: 'Differentiate', html: `f\u2032(x) = ${html(d)}` },
+      { title: 'Set it to zero', html: `${html(d)} = 0` },
+      { title: 'Solve', html: xs.map((x) => `x = ${x}`).join(' and ') },
+      {
+        title: 'Test the sign either side',
+        html: points.map((p) => `at x = ${p.x}: ${
+          p.kind === 'neither' ? 'f\u2032 does not change sign, so neither'
+            : p.kind === 'max' ? 'f\u2032 goes + to \u2212, so a maximum'
+              : 'f\u2032 goes \u2212 to +, so a minimum'}`).join('; '),
+      },
+    ],
+  };
+}
+
 function buildZeroSet(id, skill, built, level, seed) {
   const f = simplify(built.f);
   const roots = built.roots || [];
@@ -2429,6 +2779,70 @@ export function gradeParts(problem, answers) {
     if (!raw) {
       return { correct: false, decided: true, kind: 'blank', hint: 'Nothing written here yet.' };
     }
+
+    /* A line that wants a SET of values rather than an expression: the
+       x-values where f' is zero. Marked by comparing sets, so the order
+       does not matter and a missing root is named as missing rather than
+       as simply wrong. */
+    if (part.set) {
+      const rep = MathKit.setReport(raw, part.answers, 1e-4);
+      if (rep.correct) return { correct: true, decided: true, kind: '', hint: '' };
+      if (rep.found.length && rep.missing.length) {
+        return {
+          correct: false, decided: true, kind: 'incomplete-set',
+          hint: `You have ${rep.found.length} of the ${rep.wanted}. `
+            + `${rep.missing.length === 1 ? 'One more' : `${rep.missing.length} more`} to find.`,
+        };
+      }
+      if (rep.extra.length) {
+        return {
+          correct: false, decided: true, kind: 'extra-root',
+          hint: `${rep.extra.map((v) => MathKit.num(v, 4)).join(', ')} does not make f\u2032 zero.`,
+        };
+      }
+      return {
+        correct: false, decided: true,
+        kind: rep.unreadable ? 'unreadable' : 'wrong',
+        hint: rep.unreadable
+          ? 'Separate the values with commas, like -2, 3.'
+          : `Expected ${rep.wanted} value${rep.wanted === 1 ? '' : 's'}.`,
+      };
+    }
+
+    /* A line that wants WORDS: max, min or neither, one per critical
+       point, in the order they were given. */
+    if (part.words) {
+      const said = raw.split(/[,;]|\band\b/).map((w) => w.trim()).filter(Boolean);
+      if (said.length !== part.kinds.length) {
+        return {
+          correct: false, decided: true, kind: 'wrong-count',
+          hint: `There ${part.kinds.length === 1 ? 'is one critical point'
+            : `are ${part.kinds.length} critical points`}, so I need `
+            + `${part.kinds.length} answer${part.kinds.length === 1 ? '' : 's'}, `
+            + 'separated by a comma.',
+        };
+      }
+      const read = said.map(kindOfWord);
+      const unknown = read.findIndex((k) => k === null);
+      if (unknown !== -1) {
+        return {
+          correct: false, decided: false, kind: 'unreadable',
+          hint: `I could not read "${said[unknown]}". Write max, min or neither.`,
+        };
+      }
+      const firstBad = read.findIndex((k, n) => k !== part.kinds[n]);
+      if (firstBad === -1) return { correct: true, decided: true, kind: '', hint: '' };
+      const wanted = part.kinds[firstBad];
+      return {
+        correct: false, decided: true, kind: `said-${read[firstBad]}-not-${wanted}`,
+        hint: wanted === 'neither'
+          ? 'One of these is neither: f\u2032 touches zero there without changing '
+            + 'sign, so the graph flattens and carries on the same way.'
+          : `Check the sign of f\u2032 just either side of that one. ${
+            wanted === 'max' ? '+ then \u2212 is a maximum' : '\u2212 then + is a minimum'}.`,
+      };
+    }
+
     const v = Expr.judge(raw, part.answerNode, { vars: part.vars || ['x', 'h'] });
     if (!v.correct || !part.mustBeFiniteAtZero) return v;
     /* Equal to the quotient is not enough on this line: so is the
@@ -2502,6 +2916,64 @@ export function gradeExpression(problem, raw) {
   }
   /* A question asked line by line is marked line by line. */
   if (problem.kind === 'parts') return gradeParts(problem, raw);
+
+  /* A rate is a number with a unit written after it. The unit is not
+     marked - writing cm^2/s instead of cm^2/sec is not a calculus
+     mistake - but a missing MINUS sign is the whole question on half of
+     these, so that gets said plainly rather than hidden in "not quite". */
+  if (problem.kind === 'rate') {
+    const { number } = splitUnits(raw);
+    if (!number) {
+      return {
+        correct: false, decided: false, kind: 'unreadable',
+        hint: 'Write the number first, then the units if you want them.',
+      };
+    }
+    const verdict = Expr.judge(number, problem.answerNode, { vars: [] });
+    if (verdict.correct) return verdict;
+    const node = Expr.tryParse(number, { vars: [] });
+    if (node) {
+      const got = Expr.evaluate(node, {});
+      const want = problem.answerValue;
+      if (isFinite(got) && isFinite(want)) {
+        const close = (a, b) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b));
+        if (close(got, -want)) {
+          return {
+            correct: false, decided: true, kind: 'sign',
+            hint: 'The size is right and the sign is not. Something here is '
+              + 'shrinking while something else grows - check which way each '
+              + 'quantity moves.',
+          };
+        }
+        if (close(got / Math.PI, want) || close(got * Math.PI, want)) {
+          return {
+            correct: false, decided: true, kind: 'lost-pi',
+            hint: 'There is a \u03c0 missing or one too many. The formula for this '
+              + 'shape has one in it.',
+          };
+        }
+        /* Right to a couple of decimal places but not exact: that is a
+           ROUNDED answer, which is a different thing from a wrong one
+           and deserves a different sentence. */
+        if (Math.abs(got - want) <= 5e-3 * Math.max(1, Math.abs(want))) {
+          return {
+            correct: false, decided: true, kind: 'rounded',
+            hint: 'That is the rounded value, and the exact one is wanted - '
+              + 'leave the \u03c0 in it, or write it as a fraction.',
+          };
+        }
+      }
+    }
+    /* Anything else. Expr.judge's wording is written for EXPRESSIONS -
+       "off by a constant factor", "zero for every x" - and reads as
+       nonsense under a question whose answer is a single number. */
+    return {
+      correct: false, decided: true, kind: 'wrong',
+      hint: 'Not that number. Check which quantity the question is asking '
+        + 'for the rate of, and whether anything in your equation was '
+        + 'constant.',
+    };
+  }
   /* "Find every x where ..." is answered with a set of values, not a
      function, so it is marked by comparing sets. */
   if (problem.kind === 'set') {
@@ -2538,7 +3010,7 @@ export function gradeExpression(problem, raw) {
   return Expr.judge(raw, problem.answerNode, context);
 }
 
-Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET);
+Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET, EXTREMA, RELATED);
 
 /* ------------------------------------------------------ am I on track */
 

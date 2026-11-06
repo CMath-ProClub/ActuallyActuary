@@ -607,6 +607,92 @@ h3.unit {
 }
 .wanswer .eq { font-size: 1.08rem; }
 
+/* ------------------------------------------------- the tip, one press at a time */
+.tipslot:empty { display: none; }
+.tipslot { margin-top: 12px; }
+.tipstep {
+  border-left: 3px solid var(--accent);
+  padding: 9px 0 9px 13px; margin-bottom: 10px;
+  background: var(--sunk);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.tiplabel {
+  display: block; font-family: var(--face-ui); font-size: .66rem;
+  text-transform: uppercase; letter-spacing: .13em;
+  color: var(--faint); font-weight: 650; margin-bottom: 5px;
+}
+.tipformula { font-size: 1.18rem; margin: 0 0 6px; }
+.tipchip[disabled] { opacity: .55; }
+
+/* The variable setup, laid out as it would be written on paper.
+
+   Named rset* and not setup*, because .setupgrid ALREADY EXISTS further
+   down this file for the workspace, with auto-fit columns. The later
+   rule won and this grid silently rendered at four columns with the
+   labels wrapping onto the next line - a collision that looks like a
+   layout bug and is really two features sharing a name. */
+.ratesetup {
+  display: grid;
+  grid-template-columns: auto auto auto auto 1fr;
+  gap: 3px 8px; align-items: baseline;
+  margin: 8px 0; font-size: .98rem;
+  /* Selectable as a block, because the point of this panel is to copy
+     it onto paper. */
+  user-select: all;
+}
+.rsetsym { font-family: var(--face-math, serif); font-style: italic; font-weight: 600; }
+.rseteq { color: var(--faint); }
+.rsetval { font-family: var(--face-math, serif); }
+.rsetunit { color: var(--muted); font-size: .86rem; }
+.rsetwhat { color: var(--faint); font-size: .78rem; font-family: var(--face-ui); }
+.rsetsym.wanted, .rsetval.wanted { color: var(--accent); font-weight: 700; }
+
+/* ----------------------------------------------------------- the diagram */
+.diagramslot:empty { display: none; }
+.diagramslot { margin-top: 12px; }
+.dgtitle { margin: 0 0 6px; }
+.diagramwrap {
+  position: relative; max-width: 460px;
+  background: var(--paper); border: 1px solid var(--edge);
+  border-radius: var(--radius); padding: 8px;
+}
+.dgsvg { display: block; width: 100%; height: auto; color: var(--ink); }
+.dgsvg .dgline { stroke: currentColor; stroke-width: 1.6; fill: none; }
+.dgsvg .dgbold { stroke: currentColor; stroke-width: 3; fill: none; stroke-linecap: round; }
+.dgsvg .dgdash { stroke: currentColor; stroke-width: 1.2; fill: none;
+  stroke-dasharray: 5 4; opacity: .5; }
+.dgsvg .dgarrow { stroke: var(--accent); stroke-width: 1.8; }
+.dgsvg .dgfill { fill: var(--accent); fill-opacity: .13;
+  stroke: currentColor; stroke-width: 1.6; }
+.dgsvg .dgwater { stroke: var(--accent); stroke-width: 2.2; fill: none; }
+.dgsvg .dgdot { fill: var(--accent); }
+
+.dglabels { position: absolute; inset: 8px; pointer-events: none; }
+.dgtag {
+  position: absolute; transform: translate(-50%, -50%);
+  pointer-events: auto; cursor: pointer;
+  font-family: var(--face-math, serif); font-size: .95rem; font-style: italic;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--edge); border-radius: 5px;
+  padding: 1px 7px; line-height: 1.5;
+  min-width: 26px;
+}
+.dgtag:hover, .dgtag:focus { border-color: var(--accent); color: var(--accent); }
+.dgtag.empty {
+  color: var(--faint); border-style: dashed; font-style: normal; font-weight: 700;
+}
+.dgfoot {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.chip.tiny { font-size: .74rem; padding: 2px 8px; }
+
+@media (max-width: 560px) {
+  .ratesetup { grid-template-columns: auto auto auto 1fr; font-size: .92rem; }
+  .rsetwhat { display: none; }
+  .dgtag { font-size: .85rem; padding: 0 5px; }
+}
+
 .errline { color: var(--bad-ink); }
 .okline { color: var(--good-ink); }
 .warnline { color: var(--warnc); font-weight: 600; }

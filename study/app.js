@@ -17,6 +17,7 @@ import * as flow from './flow.js';
 import * as mistakes from './mistakes.js';
 import * as persist from './persist.js';
 import * as room from './room.js';
+import * as diagram from './diagram.js';
 import * as ask from './ask.js';
 import * as store from './store.js';
 import * as sched from './scheduler.js';
@@ -274,6 +275,9 @@ const SHORTCUTS = [
   ['n', 'next question'],
   ['b', 'back a question'],
   ['g', 'show the graph'],
+  ['d', 'the diagram'],
+  ['f', 'the next tip - formula, then your variables, then d/dt'],
+  ['a', 'another one like this'],
   ['s', 'scratch paper'],
   ['t', 'am I on track'],
   ['/', 'jump to the answer box'],
@@ -295,6 +299,12 @@ const KEY_ACTIONS = {
   n: () => pressTool('next'),
   b: () => pressTool('back'),
   g: () => pressTool('graph'),
+  d: () => pressTool('diagram'),
+  /* The tip chip renames itself as it reveals - "Tip: the formula",
+     then "Tip: set up my variables" - so the key matches the stem that
+     all of them share rather than any one label. */
+  f: () => pressTool('tip'),
+  a: () => pressTool('another'),
   s: () => pressTool('scratch'),
   t: () => pressTool('am i'),
 };
@@ -3245,6 +3255,187 @@ function whyNoModel({ compact = true } = {}) {
   return note;
 }
 
+/* ============================================ the tip, one press at a time
+
+   A related rates problem is hard in a specific place: not the calculus,
+   the setup. So the help is given in that order and NO FASTER.
+
+     press 1   the relation          the formula you were meant to recall
+     press 2   your variables        what is known, what is not
+     press 3   after d/dt            the differentiated relation
+
+   Three presses rather than one button marked "hint", because handing
+   over all three at once skips the two steps being practised. Whoever
+   only forgot the formula for a cone stops at the first press; whoever
+   cannot see which quantity is wanted goes on to the second.
+
+   The third is deliberately last. Differentiating the relation IS the
+   question, so it is available - a stuck student should never be stuck
+   forever - but it is behind the other two. */
+function tipPanel(problem) {
+  const rate = problem && problem.rate;
+  if (!rate) return null;
+
+  const slot = h('div', { class: 'tipslot' });
+  const out = h('div', { class: 'tipout' });
+  const STEPS = 3;
+  let shown = 0;
+
+  const button = h('button', { class: 'chip tipchip', type: 'button' }, 'Tip');
+  const label = () => {
+    button.textContent = shown === 0 ? 'Tip: the formula'
+      : shown === 1 ? 'Tip: set up my variables'
+        : shown === 2 ? 'Tip: after d/dt'
+          : 'Tip (all shown)';
+    button.disabled = shown >= STEPS;
+  };
+
+  const reveal = () => {
+    if (shown >= STEPS) return;
+    shown += 1;
+
+    if (shown === 1) {
+      out.appendChild(h('div', { class: 'tipstep' }, [
+        h('span', { class: 'tiplabel', text: 'The relation' }),
+        h('p', { class: 'eq tipformula', html: rate.formula.html }),
+        rate.hintText ? h('p', { class: 'small muted', text: rate.hintText }) : null,
+      ]));
+    } else if (shown === 2) {
+      /* Exactly the layout Carter asked for: one line per quantity, the
+         knowns with their values, the unknown with a question mark. */
+      const table = h('div', { class: 'ratesetup' });
+      for (const row of rate.setup || []) {
+        table.append(
+          h('span', { class: `rsetsym${row.wanted ? ' wanted' : ''}`, text: row.sym }),
+          h('span', { class: 'rseteq', text: '=' }),
+          h('span', { class: `rsetval${row.wanted ? ' wanted' : ''}`, text: row.eq }),
+          h('span', { class: 'rsetunit', text: row.units || '' }),
+          h('span', { class: 'rsetwhat', text: row.constant ? 'constant'
+            : (row.label || (row.rate ? 'rate' : '')) }),
+        );
+      }
+      out.appendChild(h('div', { class: 'tipstep' }, [
+        h('span', { class: 'tiplabel', text: 'Your variables' }),
+        table,
+        h('p', { class: 'small muted', text: 'Everything the question gave you, and '
+          + 'the one thing it did not. Copy this onto your paper before you '
+          + 'differentiate anything.' }),
+      ]));
+    } else {
+      out.appendChild(h('div', { class: 'tipstep' }, [
+        h('span', { class: 'tiplabel', text: 'After d/dt' }),
+        h('p', { class: 'eq tipformula', html: rate.differentiated.html }),
+        rate.note ? h('p', { class: 'small muted', text: rate.note }) : null,
+        h('p', { class: 'small muted', text: 'Now put your numbers in. That is the '
+          + 'whole question.' }),
+      ]));
+    }
+    label();
+  };
+
+  button.addEventListener('click', reveal);
+  label();
+  slot.append(out);
+  return { toggle: button, slot, reveal };
+}
+
+/* ====================================================== the picture
+
+   A shape, with every part of it labellable.
+
+   Assigning your own letters to a drawing is the step this is trying to
+   make easier, so the labels are YOURS - the generator offers what it
+   thinks each part probably is, and you can take it, change it, or
+   clear it. They are saved against the question, so coming back to it
+   later finds your own naming still there. */
+function diagramPanel(problem) {
+  const which = problem && problem.diagram;
+  if (!which || !diagram.has(which)) return null;
+
+  const key = persist.workspaceKey(
+    store.activeProfile().id, `labels:${problem.key || which}`,
+  );
+  let mine = {};
+  try {
+    mine = JSON.parse(localStorage.getItem(key) || '{}') || {};
+  } catch (err) {
+    mine = {};
+  }
+  const remember = () => {
+    try { localStorage.setItem(key, JSON.stringify(mine)); } catch (err) { /* full */ }
+  };
+
+  const slot = h('div', { class: 'diagramslot' });
+  let open = false;
+
+  const toggle = h('button', { class: 'chip', type: 'button' }, 'Diagram');
+  const label = () => {
+    const named = Object.keys(mine).filter((k) => mine[k]).length;
+    toggle.textContent = open ? 'Hide the diagram'
+      : named ? `Diagram (${named} labelled)` : 'Diagram';
+  };
+
+  const build = () => {
+    slot.innerHTML = '';
+    const wrap = h('div', { class: 'diagramwrap' });
+    wrap.innerHTML = diagram.svgFor(which);
+
+    const layer = h('div', { class: 'dglabels' });
+    for (const part of diagram.partsFor(which)) {
+      const place = diagram.placeOf(part);
+      const current = Object.prototype.hasOwnProperty.call(mine, part.id)
+        ? mine[part.id] : part.suggest;
+
+      const tag = h('button', {
+        class: `dgtag${current ? '' : ' empty'}`,
+        type: 'button',
+        title: part.hint,
+        'aria-label': `${part.hint}. Currently labelled ${current || 'nothing'}.`,
+      }, current || '+');
+      tag.style.left = place.left;
+      tag.style.top = place.top;
+
+      tag.addEventListener('click', () => {
+        const said = window.prompt(
+          `${part.hint}
+
+What do you want to call it? (blank to clear)`,
+          current,
+        );
+        if (said === null) return;
+        mine[part.id] = said.trim().slice(0, 12);
+        remember();
+        build();
+        label();
+      });
+      layer.appendChild(tag);
+    }
+
+    wrap.appendChild(layer);
+    slot.append(
+      h('p', { class: 'small muted dgtitle', text: diagram.titleFor(which) }),
+      wrap,
+      h('div', { class: 'dgfoot' }, [
+        h('span', { class: 'small muted', text: 'Tap any label to rename it. '
+          + 'These are yours and they are saved with the question.' }),
+        h('button', {
+          class: 'chip tiny', type: 'button',
+          onclick: () => { mine = {}; remember(); build(); label(); },
+        }, 'Reset labels'),
+      ]),
+    );
+  };
+
+  toggle.addEventListener('click', () => {
+    open = !open;
+    if (open) build(); else slot.innerHTML = '';
+    label();
+  });
+
+  label();
+  return { toggle, slot };
+}
+
 /* Hand the working to the model on this machine.
 
    Only for a question asked line by line, only when a model is configured,
@@ -4628,14 +4819,67 @@ function renderShared(root, args) {
 
    It is a tab rather than a mode inside the drill because it has a deadline
    attached to it and wants to be one tap away. */
-const LOCK_IN_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
+/* What Lock In is pointed at.
+
+   This moved from the four implicit shapes to the current unit, and the
+   implicit families are NOT gone - they are still registered, still
+   reachable by name from the landing flow, and still what
+   FOCUS_FAMILIES holds. What changed is the default target of one
+   button.
+
+   Related rates is split by the KIND of relationship rather than by
+   object, because that is what transfers: once you can do a cone you
+   can do any 3D shape whose formula you know, but similar triangles are
+   a different move entirely. Each group eases off once it has three
+   right in a row, the same rule the implicit lock-in used. */
+const UNIT_FOCUS = [
+  {
+    skill: 'extrema',
+    key: 'extrema',
+    label: 'Maxima and minima from f\u2032 = 0',
+    study: 'differentiate, solve f\u2032 = 0, then test the sign either side',
+  },
+  {
+    skill: 'rates',
+    key: 'rates:3d',
+    label: 'Related rates \u00b7 3D shapes',
+    study: 'sphere, cone, cylinder and cube - volume and surface area',
+    spec: { shapes: ['sphereVolume', 'snowball', 'snowballDiameter', 'coneFill',
+      'cylinder', 'cubeVolume', 'cubeSurface'] },
+  },
+  {
+    skill: 'rates',
+    key: 'rates:triangles',
+    label: 'Related rates \u00b7 similar triangles',
+    study: 'spotlights and lampposts - set the proportion up before differentiating',
+    spec: { shapes: ['spotlightWall', 'lamppost'] },
+  },
+  {
+    skill: 'rates',
+    key: 'rates:pythagoras',
+    label: 'Related rates \u00b7 Pythagoras',
+    study: 'ladders and kites - the hypotenuse is constant, or it is not',
+    spec: { shapes: ['ladder', 'kite'] },
+  },
+  {
+    skill: 'rates',
+    key: 'rates:2d',
+    label: 'Related rates \u00b7 2D shapes',
+    study: 'circles, squares and triangles - area and perimeter',
+    spec: { shapes: ['circleArea', 'circleCircumference', 'square', 'triangle'] },
+  },
+];
+
+/* Kept so the implicit work is one tap away rather than deleted. */
+const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
+const LOCK_IN_FOCUS = UNIT_FOCUS;
 
 function renderLockIn(root) {
   root.appendChild(h('header', { class: 'pagehead' }, [
     h('h1', { text: 'Lock in' }),
-    h('p', { class: 'lead', text: 'The four shapes from the quiz, drilled until '
-      + 'they are solid. Each one eases off once you have had three in a row '
-      + 'right, and the rules they are built out of get sprinkled through.' }),
+    h('p', { class: 'lead', text: 'Related rates and finding maxima and minima, '
+      + 'drilled until they are solid. Each group eases off once you have had '
+      + 'three in a row right, and comes straight back if you miss one.' }),
   ]));
 
   /* A lock-in session already running is resumed rather than restarted, or
@@ -4646,23 +4890,31 @@ function renderLockIn(root) {
   const progress = state ? drill.focusProgress(state) : [];
   const byFamily = new Map(progress.map((p) => [p.family, p]));
 
+  const byKey = new Map(progress.map((p) => [p.key, p]));
+
   const list = h('ol', { class: 'focuslist' });
   for (const entry of LOCK_IN_FOCUS) {
-    const family = focusFamily(entry.family);
-    if (!family) continue;
-    const seen = byFamily.get(entry.family);
+    /* A focus entry is either a named implicit SHAPE, which carries its
+       own label and study line, or a plain group like "3D shapes" that
+       brings its own. Both render the same. */
+    const family = entry.family ? focusFamily(entry.family) : null;
+    const label = (family && family.label) || entry.label || entry.skill;
+    const study = (family && family.study) || entry.study || '';
+    const seen = byKey.get(entry.key || entry.family || entry.skill);
+
     list.appendChild(h('li', { class: seen && seen.solid ? 'solid' : '' }, [
       h('div', { class: 'focusname' }, [
-        h('strong', { text: family.label }),
+        h('strong', { text: label }),
         seen && seen.solid ? h('span', { class: 'pill good', text: 'solid' }) : null,
       ]),
-      h('p', { class: 'small muted', text: `Study: ${family.study}.` }),
-      ...help.helpForFamily(entry.family).map((video) => h('p', { class: 'small watchline' }, [
-        h('a', {
-          href: video.url, target: '_blank', rel: 'noreferrer noopener',
-        }, video.title),
-        video.who ? h('span', { class: 'watchwho', text: ` ${video.who}` }) : null,
-      ])),
+      study ? h('p', { class: 'small muted', text: `Study: ${study}.` }) : null,
+      ...(entry.family ? help.helpForFamily(entry.family) : [])
+        .map((video) => h('p', { class: 'small watchline' }, [
+          h('a', {
+            href: video.url, target: '_blank', rel: 'noreferrer noopener',
+          }, video.title),
+          video.who ? h('span', { class: 'watchwho', text: ` ${video.who}` }) : null,
+        ])),
       seen && (seen.right || seen.wrong)
         ? h('p', { class: 'small focusscore', text: `${seen.right} right, `
           + `${seen.wrong} wrong${seen.run ? ` \u00b7 ${seen.run} in a row` : ''}` })
@@ -4683,6 +4935,16 @@ function renderLockIn(root) {
           onclick: () => { if (confirm('Start again from the top?')) startLockIn(); },
         }, 'Start again')
         : null,
+      /* The implicit shapes are still here. Pointing this button at the
+         current unit does not retire the last one, and a unit you are
+         not being quizzed on this week is exactly the one that quietly
+         rots if there is no way back to it. */
+      h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => startDrill({
+          focus: IMPLICIT_FOCUS, label: 'Implicit differentiation', lockin: true,
+        }),
+      }, 'Drill implicit instead'),
     ]),
     state
       ? h('p', { class: 'small muted', text: `Right now ${Math.round(drill.focusShare(state) * 100)}% `
@@ -4945,6 +5207,40 @@ function startDrill(opts = {}) {
 /* One question from the drill's scheduler. Retries, because a generator is
    allowed to decline a seed - it would rather build nothing than build a
    question whose numbers are ugly. */
+/* One more of exactly this kind, with different numbers.
+
+   Getting a shape wrong and then waiting for it to come round again is
+   how the thing you are worst at gets practised least. This puts the
+   same shape back immediately - same skill, same family or shape, fresh
+   seed - without disturbing whatever the drill had planned. */
+function againLikeThis(problem) {
+  if (!quizRun || !problem) return;
+  const spec = {
+    skills: [problem.skill],
+    level: problem.difficulty || 2,
+    family: problem.family || null,
+  };
+  /* A related rates question names its shape, so "another like this"
+     means another cone and not another anything. */
+  if (problem.rate && problem.rate.shape) spec.shapes = [problem.rate.shape];
+
+  for (let tries = 0; tries < 30; tries++) {
+    const made = buildProblem(spec, freshSeed());
+    if (!made) continue;
+    /* Not literally the same question again. */
+    if (made.stem === problem.stem) continue;
+    const at = quizRun.index + 1;
+    quizRun.problems.splice(at, 0, made);
+    quizRun.slots.splice(at, 0, quizRun.slots[quizRun.index] || null);
+    quizRun.responses.splice(at, 0, '');
+    quizRun.verdicts.splice(at, 0, null);
+    quizRun.index = at;
+    saveQuiz();
+    router();
+    return;
+  }
+}
+
 function drillQuestion(state, index) {
   for (let tries = 0; tries < 30; tries++) {
     const slot = drill.nextSlot(state, index);
@@ -4953,6 +5249,10 @@ function drillQuestion(state, index) {
       level: slot.level,
       /* A focus slot names the exact shape it wants. */
       family: slot.family || null,
+      /* And for related rates, which of the physical shapes. A focus on
+         "similar triangles" has to mean the lamppost and the spotlight,
+         not whatever shape the generator felt like. */
+      ...(slot.spec || {}),
     }, freshSeed());
     if (problem) return { slot, problem };
   }
@@ -5270,6 +5570,11 @@ function renderQuiz(root) {
   const readAnswer = () => (multi ? multi.read() : input.value);
   /* Somewhere to work it out, kept with the question. */
   const scratch = scratchPanel(q);
+  /* Only a related rates question has a tip to give; only a question
+     with a shape has a picture. Both return null otherwise and the chip
+     simply does not appear. */
+  const tip = tipPanel(q);
+  const picture = diagramPanel(q);
 
   const advance = (delta) => {
     quizRun.responses[quizRun.index] = readAnswer();
@@ -5420,6 +5725,11 @@ function renderQuiz(root) {
         : null,
       /* Paper is not a reward for finishing - it is how you get there. */
       scratch.toggle,
+      /* A shape beats a graph when the question is about a shape. */
+      picture ? picture.toggle : null,
+      /* And the setup help, which for a related rates question is the
+         part that is actually hard. */
+      tip ? tip.toggle : null,
       immediate && expressionish
         ? h('button', {
           class: 'chip', type: 'button',
@@ -5433,6 +5743,15 @@ function renderQuiz(root) {
           },
         }, 'Am I on track?')
         : null,
+      /* One more of exactly this kind, with different numbers. Getting a
+         shape wrong and then waiting for it to come round again is how
+         the thing you are worst at gets practised least. */
+      q.rate || q.skill === 'extrema'
+        ? h('button', {
+          class: 'chip', type: 'button',
+          onclick: () => againLikeThis(q),
+        }, 'Another like this')
+        : null,
     ]),
     h('p', { class: 'small muted', text: immediate
       ? 'Marked as you go, so you find out what went wrong while you still remember what you were thinking.'
@@ -5444,6 +5763,8 @@ function renderQuiz(root) {
     q.noGraph && q.noGraphWhy
       ? h('p', { class: 'small muted nograph', text: q.noGraphWhy })
       : null,
+    tip ? tip.slot : null,
+    picture ? picture.slot : null,
     scratch.slot,
     marking,
     graphSlot,

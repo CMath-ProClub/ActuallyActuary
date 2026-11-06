@@ -43,6 +43,37 @@ const SKILL_PHRASES = [
   ['horizontal tangents', 'horizontal'],
   ['horizontal tangent', 'horizontal'],
   ['where the derivative is zero', 'horizontal'],
+
+  /* The newer unit. Longest phrases first, because the reader takes the
+     first match and "maxima" would otherwise swallow "maxima and
+     minima". Every way somebody actually says it is here - a topic you
+     cannot name is a topic you cannot reach. */
+  ['maxima and minima', 'extrema'],
+  ['maximums and minimums', 'extrema'],
+  ['local maximum and minimum', 'extrema'],
+  ['relative extrema', 'extrema'],
+  ['local extrema', 'extrema'],
+  ['first derivative test', 'extrema'],
+  ['critical points', 'extrema'],
+  ['critical numbers', 'extrema'],
+  ['turning points', 'extrema'],
+  ['max and min', 'extrema'],
+  ['maxima', 'extrema'],
+  ['minima', 'extrema'],
+  ['extrema', 'extrema'],
+  ['extremas', 'extrema'],
+  ['extremum', 'extrema'],
+
+  ['related rates', 'rates'],
+  ['related rate', 'rates'],
+  ['rate of change problems', 'rates'],
+  ['word problems with rates', 'rates'],
+  ['ladder problems', 'rates'],
+  ['ladder problem', 'rates'],
+  ['shadow problems', 'rates'],
+  ['similar triangles', 'rates'],
+  ['how fast is it changing', 'rates'],
+  ['rates', 'rates'],
   ['second derivatives', 'secondderiv'],
   ['second derivative', 'secondderiv'],
   ['double prime', 'secondderiv'],

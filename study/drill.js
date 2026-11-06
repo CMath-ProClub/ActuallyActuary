@@ -126,8 +126,14 @@ export function createDrill(seed, opts = {}) {
     .map((f) => ({
       skill: f.skill || 'implicit',
       family: f.family || null,
-      key: f.family || f.skill,
+      key: f.key || f.family || f.skill,
       label: f.label || '',
+      study: f.study || '',
+      /* Anything else the builder needs to make THIS kind of question -
+         for related rates, which physical shapes count as this focus.
+         Carried rather than interpreted: drill.js schedules questions
+         and has no opinion about what is in them. */
+      spec: f.spec || null,
     }));
   return {
     seed: (seed >>> 0) || 1,
@@ -269,6 +275,7 @@ export function nextSlot(state, index) {
         family: chosen.family || null,
         key,
         level,
+        spec: chosen.spec || null,
         why: 'focus',
         repeat: false,
       };
@@ -391,6 +398,10 @@ export function recordResult(state, index, slot, correct) {
       family: slot.family || null,
       key: slot.key || slot.family || slot.skill,
       level,
+      /* The repeat has to be the same KIND of question. Without this a
+         missed cone came back as a circle, which is a different problem
+         wearing the same topic name. */
+      spec: slot.spec || null,
       why: 'missed',
       easier: level < slot.level,
     };

@@ -19,6 +19,27 @@
 const LECTURE = 'Professor Leonard';
 
 const VIDEOS = {
+  /* Checked on 6 November 2026, for the related rates and extrema unit.
+     Each title below was fetched and read back off the page, same rule
+     as everything above it. The third has no `who` because the channel
+     name was not visible on the page I read - and guessing an
+     attribution is the same sin as guessing a link. */
+  'c1-2.8': {
+    url: 'https://www.youtube.com/watch?v=43Qt6wc44To',
+    title: 'Calculus 1 Lecture 2.8: Related Rates',
+    who: LECTURE,
+  },
+  'c1-3.3': {
+    url: 'https://www.youtube.com/watch?v=nQ6tOORDQ3I',
+    title: 'Calculus 1 Lecture 3.3: The First Derivative Test for Increasing and Decreasing',
+    who: LECTURE,
+  },
+  'extrema-worked': {
+    url: 'https://www.youtube.com/watch?v=V239IIoGVT8',
+    title: 'Relative Extrema, Local Maximum and Minimum, First Derivative Test, '
+      + 'Critical Points- Calculus',
+  },
+
   'c1-2.1': {
     url: 'https://www.youtube.com/watch?v=962lLfW-8Jo',
     title: 'Calculus 1 Lecture 2.1: Introduction to the Derivative of a Function',
@@ -131,6 +152,17 @@ const BY_SKILL = {
   ],
   motion: [
     ['c1-2.4', 'Position, velocity and acceleration as derivatives.'],
+  ],
+  rates: [
+    ['c1-2.8', 'The whole method, worked through on real shapes - the lecture to '
+      + 'watch if the setup is what keeps going wrong.'],
+    ['c1-2.2', 'The chain rule underneath it, if differentiating the relation is '
+      + 'the part that is slipping.'],
+  ],
+  extrema: [
+    ['c1-3.3', 'Where f\u2032 = 0, and the sign test that says which kind each one is.'],
+    ['extrema-worked', 'Shorter, and worked example first if the lecture is too '
+      + 'long to sit through tonight.'],
   ],
 };
 
