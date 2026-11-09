@@ -8,7 +8,7 @@
 
 import MathKit from './math.js';
 
-const { sup, poly, coef, terms, frac, sqrt, num, linFactor, F } = MathKit;
+const { sup, poly, coef, terms, frac, sqrt, num, linFactor, F , plus } = MathKit;
 
 function mc(rng, correct, distractors) {
   const seen = new Set([String(correct)]);
@@ -152,8 +152,8 @@ export function continuity(rng, level) {
   return {
     stem: `For what value of k is this function continuous at x = ${a}?`
       + `<div class="piecewise"><span class="brace">{</span><span>`
-      + `kx ${c >= 0 ? '+' : '−'} ${Math.abs(c)}<span class="cond">for x &lt; ${a}</span><br>`
-      + `x${sup(2)} ${d >= 0 ? '+' : '−'} ${Math.abs(d)}<span class="cond">for x ≥ ${a}</span>`
+      + `kx${plus(c)}<span class="cond">for x &lt; ${a}</span><br>`
+      + `x${sup(2)}${plus(d)}<span class="cond">for x ≥ ${a}</span>`
       + `</span></div>`,
     kind: 'numeric',
     answer: k,

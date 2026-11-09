@@ -21,7 +21,9 @@
 
 import MathKit from './math.js';
 
-const { F, sup, poly, coef, terms, linFactor, frac, sqrt, num, gcd, esc } = MathKit;
+const {
+  F, sup, poly, coef, terms, linFactor, frac, sqrt, num, gcd, esc, shifted,
+} = MathKit;
 
 /* Shuffle a correct answer in among its distractors, dropping any distractor
    that collided with the right answer (which happens for small coefficients
@@ -97,7 +99,10 @@ export function linEquation(rng, level) {
   const inner = sol + b;
   const rhsConst = a * inner - c * sol;
   return {
-    stem: `Solve for x: ${eq(`${a}(x ${b >= 0 ? '+' : '−'} ${Math.abs(b)})`,
+    /* shifted() rather than a hand-written sign, so b = 0 gives
+       "4(x)" ... no: it gives "4x", because shifted drops the term and
+       the bracket is only wanted when there is something in it. */
+    stem: `Solve for x: ${eq(b ? `${a}(${shifted('x', b)})` : coef(a, 'x'),
       terms([coef(c, 'x'), String(rhsConst)]))}`,
     kind: 'numeric',
     answer: sol,
@@ -923,7 +928,7 @@ export function radicalEquation(rng, level) {
   if (good === undefined) return radicalEquation(rng, 1);
 
   return {
-    stem: `Solve for x: ${eq(sqrt(`x + ${b}`), `x ${c >= 0 ? '+' : '−'} ${Math.abs(c)}`)}`
+    stem: `Solve for x: ${eq(sqrt(shifted('x', b)), shifted('x', c))}`
       + `<div class="aside">Give only the solutions that actually work.</div>`,
     kind: 'set',
     answers: [good],

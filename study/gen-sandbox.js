@@ -32,6 +32,7 @@ const { num, vr, neg, add, sub, mul, div, pow, fn, derivative, simplify,
   text, html, latex, equivalent } = Expr;
 
 import { buildRate, SHAPE_IDS } from './rates.js';
+import { buildOptimize } from './optimize.js';
 
 const X = vr('x');
 const Y = vr('y');
@@ -1739,6 +1740,7 @@ export function buildProblem(spec, seed) {
   if (skill.parts) return buildLimitDefinition(id, skill, built, level, seed);
   if (skill.tangent) return buildTangent(id, skill, built, level, seed);
   if (skill.rates) return buildRateProblem(id, skill, built, level, seed);
+  if (skill.optimize) return buildOptimizeProblem(id, skill, built, level, seed);
   if (skill.extrema) return buildExtrema(id, skill, built, level, seed);
   if (skill.zeroset) return buildZeroSet(id, skill, built, level, seed);
   if (skill.motion || skill.order === 2) return buildRepeated(id, skill, built, level, seed);
@@ -2147,6 +2149,30 @@ const RELATED = {
   },
 };
 
+/* ====================================================== optimization
+
+   The sibling of related rates, hard in the same place. The calculus is
+   one derivative and one solve; what defeats people is the two lines
+   before it - writing the CONSTRAINT down, and using it to get the
+   thing being maximised into one variable.
+
+   So it is asked the way it is done, in three lines, and the tip gives
+   the constraint first because the constraint is the step that is
+   missing. The shapes and the arithmetic live in optimize.js, verified
+   against a blind numeric search by tools/test_optimize.mjs. */
+const OPTIMIZE = {
+  optimize: {
+    name: 'Optimization',
+    topicId: 'calc.optimize',
+    ask: 'the largest or smallest something can be',
+    optimize: true,
+    build(r, level, spec) {
+      const only = spec && spec.shapes && spec.shapes.length ? spec.shapes : null;
+      return { opt: buildOptimize(r, level, only) };
+    },
+  },
+};
+
 const ZERO_SET = {
   horizontal: {
     name: 'Horizontal tangents',
@@ -2342,6 +2368,99 @@ export function splitUnits(raw) {
   return number ? { number, units } : { number: said, units: '' };
 }
 
+function buildOptimizeProblem(id, skill, built, level, seed) {
+  const o = built.opt;
+  if (!o) return null;
+
+  const atText = o.rounded ? String(Math.round(o.at * 1000) / 1000) : String(o.at);
+  const answerText = o.rounded
+    ? String(Math.round(o.answer * 1000) / 1000)
+    : String(o.answer);
+
+  let answerNode = null;
+  try {
+    answerNode = simplify(Expr.parse(answerText, { vars: [] }));
+  } catch (err) {
+    return null;
+  }
+
+  return {
+    source: 'sandbox',
+    kind: 'parts',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `${o.story} ${o.asks}`,
+    instruction: 'Three lines: the quantity in terms of x alone, where its '
+      + 'derivative is zero, and the number asked for.',
+    /* A graph of the objective function would show the peak, and
+       finding the peak is the question. */
+    noGraph: true,
+    noGraphWhy: 'A graph of the thing being maximised would just show you the '
+      + 'top of it, and finding the top is the question.',
+    diagram: o.diagram || null,
+    parts: [
+      {
+        label: `${o.quantity.sym}(x), using the constraint`,
+        prompt: 'In terms of x only - that is what the constraint is for.',
+        answerNode: o.f,
+        vars: ['x'],
+      },
+      {
+        label: `where ${o.quantity.sym}\u2032(x) = 0`,
+        prompt: 'The x that makes the derivative vanish.',
+        answers: [o.at],
+        set: true,
+        of: `${o.quantity.sym}\u2032`,
+      },
+      {
+        label: o.answerLabel,
+        prompt: o.units ? `A number, in ${o.units}.` : 'A number.',
+        answerNode,
+        vars: [],
+      },
+    ],
+    partAnswers: [text(o.f), atText, answerText],
+    answerNode,
+    answerText,
+    answerHtml: `${o.answerLabel}: ${answerText}${o.units ? ` ${o.units}` : ''} `
+      + `(at x = ${atText})`,
+    /* What the tip button reveals, in the order it reveals it. */
+    optimize: {
+      shape: o.shape,
+      shapeName: o.shapeName,
+      constraint: o.constraint,
+      quantity: o.quantity,
+      hintText: o.hint,
+      note: o.note,
+      quantities: o.quantities,
+    },
+    original: o.f,
+    functionText: text(o.f),
+    note: o.note || '',
+    hints: [
+      o.hint,
+      `The constraint is ${o.constraint.html}. Use it to remove the second variable.`,
+      `That gives ${o.quantity.html}. Now differentiate it and set it to zero.`,
+    ],
+    steps: [
+      { title: 'The constraint', html: o.constraint.html },
+      { title: 'In one variable', html: o.quantity.html },
+      { title: 'Differentiate and set to zero', html: `${html(o.d)} = 0` },
+      { title: 'Solve', html: `x = ${atText}` },
+      {
+        title: o.answerLabel,
+        html: `${answerText}${o.units ? ` ${o.units}` : ''}`,
+      },
+    ],
+  };
+}
+
 function buildRateProblem(id, skill, built, level, seed) {
   const q = built.rate;
   if (!q) return null;
@@ -2484,6 +2603,7 @@ function buildExtrema(id, skill, built, level, seed) {
         prompt: many ? 'Both values, separated by a comma.' : 'The x-value.',
         answers: xs,
         set: true,
+        of: 'f\u2032',
       },
       {
         label: many ? 'what each one is, in that order' : 'what it is',
@@ -2797,7 +2917,12 @@ export function gradeParts(problem, answers) {
       if (rep.extra.length) {
         return {
           correct: false, decided: true, kind: 'extra-root',
-          hint: `${rep.extra.map((v) => MathKit.num(v, 4)).join(', ')} does not make f\u2032 zero.`,
+          /* Named after the line being marked rather than always "f'",
+             because on an optimisation question the line is A'(x) and
+             telling somebody their value does not make f' zero is
+             talking about a function that is not on screen. */
+          hint: `${rep.extra.map((v) => MathKit.num(v, 4)).join(', ')} does not make `
+            + `${part.of || 'the derivative'} zero.`,
         };
       }
       return {
@@ -3010,7 +3135,7 @@ export function gradeExpression(problem, raw) {
   return Expr.judge(raw, problem.answerNode, context);
 }
 
-Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET, EXTREMA, RELATED);
+Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET, EXTREMA, RELATED, OPTIMIZE);
 
 /* ------------------------------------------------------ am I on track */
 

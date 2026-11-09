@@ -146,9 +146,19 @@ export const MathKit = (() => {
   }
 
   /* Join signed terms: ["3x²", "-2x", "5"] -> "3x² − 2x + 5". Terms arriving as
-     empty strings (zero coefficients) drop out entirely. */
+     empty strings (zero coefficients) drop out entirely.
+
+     SO DOES A TERM THAT IS LITERALLY "0", and that is not fussiness.
+     `coef()` returns '' for a zero coefficient, but a caller writing a
+     constant does `String(b)` and gets "0" - which survived the filter
+     and printed as "f(x) = (3x + 0)²". A zero term in a generated
+     question is how it announces that nobody looked at it, and this one
+     reached ten different generators because they all build their
+     constant the same way. Fixed here rather than ten times. */
   function terms(list) {
-    const parts = list.filter((t) => t !== '' && t != null);
+    const parts = list
+      .filter((t) => t !== '' && t != null)
+      .filter((t) => !/^[-−+]?0$/.test(String(t).trim()));
     if (!parts.length) return '0';
     let out = String(parts[0]);
     for (let i = 1; i < parts.length; i++) {
@@ -170,6 +180,30 @@ export const MathKit = (() => {
       if (p === 1) return coef(c, v);
       return coef(c, `${v}${sup(p)}`);
     }));
+  }
+
+  /* " + 3", " − 3", or NOTHING AT ALL when it is zero.
+
+     Forty-one places across the generators wrote this by hand as
+
+         `${n >= 0 ? '+' : '−'} ${Math.abs(n)}`
+
+     which is correct for every value except the one that matters, and
+     produced questions reading "Solve for x: 4(x + 0) = 3x − 1". A zero
+     term in a generated question is how it announces that nobody looked
+     at it. Written once, here, so the zero case cannot be forgotten
+     again - and it returns the leading space too, because half the
+     callers forgot that as well. */
+  function plus(n, { space = true } = {}) {
+    if (!n) return '';
+    const gap = space ? ' ' : '';
+    return `${gap}${n < 0 ? '\u2212' : '+'}${gap}${Math.abs(n)}`;
+  }
+
+  /* The same thing wrapped around a variable: "x + 3", "x − 3", or just
+     "x". What every (x + b) in a question wants. */
+  function shifted(v, n) {
+    return `${v}${plus(n)}`;
   }
 
   /* (x - r) with the sign folded in, the form every factoring answer wants. */
@@ -498,7 +532,9 @@ export const MathKit = (() => {
   }
 
   return { rng, hashSeed, Frac, F, gcd, sup, esc, frac, sqrt, coef, terms, poly,
-    linFactor, parseNumber, numericEqual, textEqual, setEqual, setReport,
+    linFactor,
+    plus,
+    shifted, parseNumber, numericEqual, textEqual, setEqual, setReport,
     matchBracket, bracketAt, groupStart,
     num, money, pct,
     fact, nCr, nPr };

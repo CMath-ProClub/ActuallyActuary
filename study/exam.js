@@ -1,4 +1,4 @@
-/* The shape of a Unit 2 practice test.
+/* The shape of a practice test. One per unit, plus a cumulative one.
 
    Separate from app.js because it is the one part of the exam that can be
    checked without a browser: tools/test_exam.mjs expands the blueprint at
@@ -42,6 +42,89 @@ export const EXAM_PLAN = [
   { skill: 'logdiff', share: 1, levels: [2], phase: 4 },
 ];
 
+/* ===================================================== one paper per unit
+
+   The blueprint above was the only one there was, which meant that once
+   the course moved on you could drill the new unit but could not sit a
+   paper on it - the mock test quietly stayed a Unit 2 paper forever.
+   That is the worst kind of gap, because nothing announces it: the test
+   still works, it is just testing last month.
+
+   So papers are named. EXAM_PLAN stays exactly as it was and stays the
+   default, because a link or a saved session that asked for "a paper"
+   before any of this existed must still get the same paper.
+
+   A cumulative paper is NOT the two lists concatenated. Sitting forty
+   questions where thirty are revision is how you spend an evening
+   confirming what you already knew, so it leans on the current unit and
+   keeps the older one as the minority. */
+export const PAPERS = {
+  unit2: {
+    id: 'unit2',
+    name: 'Unit 2 \u00b7 Derivatives',
+    blurb: 'The four rules, the transcendental mixes, the limit definition, '
+      + 'tangents and implicit differentiation.',
+    plan: EXAM_PLAN,
+  },
+
+  unit3: {
+    id: 'unit3',
+    name: 'Unit 3 \u00b7 Applications',
+    blurb: 'Related rates, optimisation, and finding maxima and minima, with '
+      + 'the rules they are built out of.',
+    plan: [
+      /* The rules underneath, warming up - a related rates question is a
+         chain rule question wearing a hat, and a paper that opens with a
+         cone is a paper nobody finishes. */
+      { skill: 'chain', share: 2, levels: [1, 2], phase: 1 },
+      { skill: 'implicit', share: 2, levels: [2, 2], phase: 1 },
+
+      /* The unit itself, which is most of it. */
+      { skill: 'extrema', share: 4, levels: [1, 2, 2, 3], phase: 2 },
+      { skill: 'optimize', share: 3, levels: [1, 2, 3], phase: 2 },
+      { skill: 'rates', share: 5, levels: [1, 2, 2, 3, 3], phase: 3 },
+
+      /* The neighbours it sits between: where f' = 0 is the same
+         question extrema asks, and the second derivative is what comes
+         next after it. */
+      { skill: 'horizontal', share: 2, levels: [2, 3], phase: 4 },
+      { skill: 'secondderiv', share: 1, levels: [2], phase: 4 },
+    ],
+  },
+
+  cumulative: {
+    id: 'cumulative',
+    name: 'Everything so far',
+    blurb: 'Both units, weighted towards the one you are on now.',
+    plan: [
+      { skill: 'power', share: 1, levels: [2], phase: 1 },
+      { skill: 'product', share: 1, levels: [2], phase: 1 },
+      { skill: 'quotient', share: 1, levels: [2], phase: 1 },
+      { skill: 'chain', share: 2, levels: [2, 3], phase: 1 },
+      { skill: 'trig', share: 2, levels: [2, 3], phase: 2 },
+      { skill: 'exp', share: 1, levels: [3], phase: 2 },
+      { skill: 'log', share: 1, levels: [3], phase: 2 },
+      { skill: 'limitdef', share: 1, levels: [2], phase: 2 },
+      { skill: 'tangent', share: 1, levels: [2], phase: 3 },
+      { skill: 'implicit', share: 2, levels: [2, 3], phase: 3 },
+      /* The current unit, and deliberately the biggest share. */
+      { skill: 'extrema', share: 3, levels: [2, 2, 3], phase: 4 },
+      { skill: 'optimize', share: 2, levels: [2, 3], phase: 4 },
+      { skill: 'rates', share: 4, levels: [1, 2, 3, 3], phase: 4 },
+    ],
+  },
+};
+
+export const PAPER_IDS = Object.keys(PAPERS);
+
+/* The one a paper means when nobody said which. Kept as unit2 so every
+   existing link, saved session and test keeps the paper it had. */
+export const DEFAULT_PAPER = 'unit2';
+
+export function paperFor(id) {
+  return PAPERS[id] || PAPERS[DEFAULT_PAPER];
+}
+
 export const EXAM_LENGTHS = [20, 30, 40];
 
 /* Expand the blueprint to exactly `count` question slots, keeping every
@@ -57,19 +140,23 @@ export const EXAM_LENGTHS = [20, 30, 40];
    question whose POINT is that concept. That distinction is the whole
    value of the switch - "I know the power rule, stop spending my revision
    on it" is a different request from "never show me a polynomial". */
-export function planFor(skip = []) {
+export function planFor(skip = [], paper = DEFAULT_PAPER) {
+  const base = paperFor(paper).plan;
   const off = new Set(skip || []);
-  const left = EXAM_PLAN.filter((e) => !off.has(e.skill));
-  return left.length ? left : EXAM_PLAN;
+  const left = base.filter((e) => !off.has(e.skill));
+  /* Everything switched off is a mistake, not a request: a paper with no
+     questions is worse than ignoring the switches. */
+  return left.length ? left : base;
 }
 
 /* Everything a paper can be about, for the switches themselves. */
-export function examConcepts() {
-  return EXAM_PLAN.map((e) => ({ skill: e.skill, share: e.share, phase: e.phase }));
+export function examConcepts(paper = DEFAULT_PAPER) {
+  return paperFor(paper).plan
+    .map((e) => ({ skill: e.skill, share: e.share, phase: e.phase }));
 }
 
 export function examSlots(count, opts = {}) {
-  const plan = planFor(opts.skip);
+  const plan = planFor(opts.skip, opts.paper);
   const total = plan.reduce((s, e) => s + e.share, 0);
   const slots = [];
   for (const entry of plan) {

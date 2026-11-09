@@ -693,6 +693,28 @@ h3.unit {
   .dgtag { font-size: .85rem; padding: 0 5px; }
 }
 
+/* Which paper the landing page offers. */
+.paperpick {
+  display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+
+/* A unit heading now carries how that unit is going. */
+h3.unit { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+h3.unit > span:first-child { flex: 1 1 auto; }
+
+/* ------------------------------------------- choosing what Lock In drills */
+.focuspick { margin-top: 14px; }
+.focuspick > summary { cursor: pointer; font-weight: 650; }
+.focuschecks { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.focuscheck {
+  display: flex; gap: 9px; align-items: baseline; cursor: pointer;
+  padding: 5px 8px; border-radius: var(--radius);
+}
+.focuscheck:hover { background: var(--sunk); }
+.focuscheck input { margin: 0; flex: none; }
+.focuscheck strong { font-weight: 600; }
+
 .errline { color: var(--bad-ink); }
 .okline { color: var(--good-ink); }
 .warnline { color: var(--warnc); font-weight: 600; }

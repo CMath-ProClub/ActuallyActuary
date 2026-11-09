@@ -12,7 +12,7 @@
 
 import MathKit from './math.js';
 
-const { sup, frac, sqrt, num, money, pct, nCr, nPr, fact, F } = MathKit;
+const { sup, frac, sqrt, num, money, pct, nCr, nPr, fact, F , plus , coef } = MathKit;
 
 function mc(rng, correct, distractors) {
   const seen = new Set([String(correct)]);
@@ -514,7 +514,7 @@ export function transformRV(rng, level) {
   if (ask === 'mean') {
     const val = a * ex + b;
     return {
-      stem: `E[X] = ${ex} and Var(X) = ${varx}. Find E[${a}X ${b >= 0 ? '+' : '−'} ${Math.abs(b)}].`,
+      stem: `E[X] = ${ex} and Var(X) = ${varx}. Find E[${coef(a, 'X')}${plus(b)}].`,
       kind: 'numeric',
       answer: val,
       answerHtml: `${a}(${ex}) ${b >= 0 ? '+' : '−'} ${Math.abs(b)} = ${val}`,
@@ -526,7 +526,7 @@ export function transformRV(rng, level) {
   if (ask === 'var') {
     const val = a * a * varx;
     return {
-      stem: `E[X] = ${ex} and Var(X) = ${varx}. Find Var(${a}X ${b >= 0 ? '+' : '−'} ${Math.abs(b)}).`,
+      stem: `E[X] = ${ex} and Var(X) = ${varx}. Find Var(${coef(a, 'X')}${plus(b)}).`,
       kind: 'numeric',
       answer: val,
       answerHtml: `(${a})${sup(2)} · ${varx} = ${val}`,
@@ -542,7 +542,7 @@ export function transformRV(rng, level) {
   }
   const val = Math.abs(a) * Math.sqrt(varx);
   return {
-    stem: `Var(X) = ${varx}. Find the standard deviation of ${a}X ${b >= 0 ? '+' : '−'} ${Math.abs(b)}.`
+    stem: `Var(X) = ${varx}. Find the standard deviation of ${coef(a, 'X')}${plus(b)}.`
       + `<div class="aside">Round to 4 decimal places.</div>`,
     kind: 'numeric',
     answer: val,

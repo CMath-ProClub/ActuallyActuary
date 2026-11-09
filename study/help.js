@@ -34,6 +34,11 @@ const VIDEOS = {
     title: 'Calculus 1 Lecture 3.3: The First Derivative Test for Increasing and Decreasing',
     who: LECTURE,
   },
+  'c1-3.7': {
+    url: 'https://www.youtube.com/watch?v=SWZcq_biZLw',
+    title: 'Calculus 1 Lecture 3.7: Optimization; Max/Min Application Problems',
+    who: LECTURE,
+  },
   'extrema-worked': {
     url: 'https://www.youtube.com/watch?v=V239IIoGVT8',
     title: 'Relative Extrema, Local Maximum and Minimum, First Derivative Test, '
@@ -158,6 +163,12 @@ const BY_SKILL = {
       + 'watch if the setup is what keeps going wrong.'],
     ['c1-2.2', 'The chain rule underneath it, if differentiating the relation is '
       + 'the part that is slipping.'],
+  ],
+  optimize: [
+    ['c1-3.7', 'The whole method on real word problems - the constraint first, '
+      + 'which is the step that goes missing.'],
+    ['c1-3.3', 'The sign test underneath it, if deciding max from min is the '
+      + 'part that slips.'],
   ],
   extrema: [
     ['c1-3.3', 'Where f\u2032 = 0, and the sign test that says which kind each one is.'],

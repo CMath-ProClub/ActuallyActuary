@@ -23,7 +23,9 @@ import * as store from './store.js';
 import * as sched from './scheduler.js';
 import * as charts from './charts.js';
 import * as ollama from './ollama.js';
-import { EXAM_LENGTHS, examSlots, examConcepts } from './exam.js';
+import {
+  EXAM_LENGTHS, examSlots, examConcepts, PAPERS, PAPER_IDS, paperFor, DEFAULT_PAPER,
+} from './exam.js';
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
@@ -563,8 +565,22 @@ function renderDashboard(root) {
     + 'Practicing the same generated pattern until the percentage goes up is the easiest way to fool yourself here.',
   ]));
 
-  /* Browse everything. */
+  /* Browse everything.
+
+     Topics have carried `course` and `unit` since the beginning and this
+     card has always grouped by them. What it never said was HOW A UNIT
+     IS GOING - and "my Applications unit is at 48%" is the sentence that
+     decides what to do tonight.
+
+     A unit's figure counts only the topics that have been TOUCHED.
+     Averaging in topics nobody has opened reads as "you are bad at this"
+     when the truth is "you have not started it", and those two want
+     opposite responses.
+
+     The course you last opened opens again, because six collapsed
+     courses is a filing cabinet rather than a dashboard. */
   const browse = h('section', { class: 'card' }, [h('h2', { text: 'All topics' })]);
+  const openCourse = COURSE_BY_ID[p.settings.browseCourse] ? p.settings.browseCourse : 'calc1';
   for (const c of COURSES) {
     const topics = topicsIn(c.id).filter((t) => hasGenerator(t.id));
     if (!topics.length) continue;
@@ -574,10 +590,30 @@ function renderDashboard(root) {
         h('span', { class: 'muted small', text: `${topics.length} topics` }),
       ]),
     ]);
+    if (c.id === openCourse) det.open = true;
+    det.addEventListener('toggle', () => {
+      if (det.open) store.setSetting('browseCourse', c.id);
+    });
     for (const u of unitsIn(c.id)) {
       const avail = u.topics.filter((t) => hasGenerator(t.id));
       if (!avail.length) continue;
-      det.appendChild(h('h3', { class: 'unit', text: u.name }));
+      const rows = sched.topicStats(avail.map((t) => t.id), p);
+      const touched = rows.filter((row) => row.seen > 0 && row.accuracy != null);
+      const unitAcc = touched.length
+        ? touched.reduce((sum, row) => sum + row.accuracy, 0) / touched.length
+        : null;
+      det.appendChild(h('h3', { class: 'unit' }, [
+        h('span', { text: u.name }),
+        unitAcc == null
+          ? h('span', { class: 'pill', text: 'not started' })
+          : h('span', {
+            class: `pill ${unitAcc >= 0.8 ? 'good' : unitAcc >= 0.6 ? '' : 'warn'}`,
+            text: `${Math.round(unitAcc * 100)}%`,
+          }),
+        touched.length && touched.length < avail.length
+          ? h('span', { class: 'muted small', text: `${touched.length} of ${avail.length} started` })
+          : null,
+      ]));
       const chips = h('div', { class: 'chips' });
       for (const t of avail) {
         const m = store.masteryOf(t.id, p);
@@ -2206,14 +2242,25 @@ function renderStart(root) {
      the flow rather than four questions into it. */
   root.appendChild(todayCard());
 
+  const paper = currentPaper();
   root.appendChild(h('section', { class: 'examcall' }, [
     h('button', {
       class: 'btn big exambtn', type: 'button', onclick: () => startExam(30),
     }, 'Study for the calc exam'),
-    h('p', { class: 'small muted', text: 'Unit 2 end to end: the limit definition, '
-      + 'the four rules, the transcendental mixes, tangent lines, horizontal tangents, '
-      + 'second derivatives, implicit, logarithmic differentiation and motion. Mixed '
-      + 'difficulty, marked as you go, with the working for anything you miss.' }),
+    /* Which paper, chosen here rather than fixed in the source. The
+       blueprint used to be Unit 2 and nothing else, so once the course
+       moved on the mock test quietly kept testing last month - and
+       nothing announced it, because the test still worked. */
+    h('div', { class: 'paperpick' }, [
+      h('span', { class: 'small muted', text: 'Paper:' }),
+      ...PAPER_IDS.map((id) => h('button', {
+        class: `btn small ${id === paper ? '' : 'ghost'}`,
+        type: 'button',
+        onclick: () => { store.setSetting('examPaper', id); router(); },
+      }, PAPERS[id].name)),
+    ]),
+    h('p', { class: 'small muted', text: `${paperFor(paper).blurb} Mixed difficulty, `
+      + 'marked as you go, with the working for anything you miss.' }),
     h('div', { class: 'examsizes' }, [
       h('span', { class: 'small muted', text: 'Length:' }),
       ...EXAM_LENGTHS.map((n) => h('button', {
@@ -4521,7 +4568,7 @@ function renderPrintable(root, args) {
   }
 
   const skip = examSkips();
-  const slots = examSlots(count, { skip });
+  const slots = examSlots(count, { skip, paper: currentPaper() });
   const problems = [];
   const seen = new Set();
   /* Derived from the sheet's seed, so question 7 is always question 7. */
@@ -4862,6 +4909,12 @@ const UNIT_FOCUS = [
     spec: { shapes: ['ladder', 'kite'] },
   },
   {
+    skill: 'optimize',
+    key: 'optimize',
+    label: 'Optimisation \u00b7 largest and smallest',
+    study: 'write the constraint, get it into one variable, then maximise it',
+  },
+  {
     skill: 'rates',
     key: 'rates:2d',
     label: 'Related rates \u00b7 2D shapes',
@@ -4870,9 +4923,62 @@ const UNIT_FOCUS = [
   },
 ];
 
-/* Kept so the implicit work is one tap away rather than deleted. */
+/* The implicit shapes, as a group like any other. */
 const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
-const LOCK_IN_FOCUS = UNIT_FOCUS;
+
+/* ================================================== what Lock In points at
+
+   This used to be a constant, which meant that every time the course
+   moved on somebody had to edit this file. That is fine for the person
+   who wrote it and useless for the person using it - and the whole
+   point of Lock In is that it follows whatever you are behind on THIS
+   week.
+
+   So the groups are a catalogue and the choice is a setting. Tick what
+   you are working on, start. Nothing here is deleted when you change
+   units; it is just not ticked. */
+const FOCUS_GROUPS = [
+  ...UNIT_FOCUS.map((g) => ({ ...g, unit: 'Unit 3 \u00b7 Applications' })),
+  ...IMPLICIT_FOCUS.map((f) => {
+    const family = focusFamily(f.family);
+    return {
+      skill: 'implicit',
+      family: f.family,
+      key: f.family,
+      label: (family && family.label) || f.family,
+      study: (family && family.study) || '',
+      unit: 'Unit 2 \u00b7 Derivatives',
+    };
+  }),
+  {
+    skill: 'limitdef',
+    key: 'limitdef',
+    label: 'The limit definition, line by line',
+    study: 'substitute, form the quotient, cancel the h, then let h go to zero',
+    unit: 'Unit 2 \u00b7 Derivatives',
+  },
+  {
+    skill: 'logdiff',
+    key: 'logdiff',
+    label: 'Logarithmic differentiation',
+    study: 'take logs of both sides first, then differentiate implicitly',
+    unit: 'Unit 2 \u00b7 Derivatives',
+  },
+];
+
+const FOCUS_BY_KEY = Object.fromEntries(FOCUS_GROUPS.map((g) => [g.key, g]));
+
+/* Which groups are ticked. Defaults to the current unit, so the button
+   does something sensible before anybody has chosen anything. */
+function lockInKeys() {
+  const saved = store.activeProfile().settings.lockInFocus;
+  const known = Array.isArray(saved) ? saved.filter((k) => FOCUS_BY_KEY[k]) : [];
+  return known.length ? known : UNIT_FOCUS.map((g) => g.key);
+}
+
+function lockInFocus() {
+  return lockInKeys().map((k) => FOCUS_BY_KEY[k]).filter(Boolean);
+}
 
 function renderLockIn(root) {
   root.appendChild(h('header', { class: 'pagehead' }, [
@@ -4891,9 +4997,10 @@ function renderLockIn(root) {
   const byFamily = new Map(progress.map((p) => [p.family, p]));
 
   const byKey = new Map(progress.map((p) => [p.key, p]));
+  const chosen = new Set(lockInKeys());
 
   const list = h('ol', { class: 'focuslist' });
-  for (const entry of LOCK_IN_FOCUS) {
+  for (const entry of lockInFocus()) {
     /* A focus entry is either a named implicit SHAPE, which carries its
        own label and study line, or a plain group like "3D shapes" that
        brings its own. Both render the same. */
@@ -4935,16 +5042,6 @@ function renderLockIn(root) {
           onclick: () => { if (confirm('Start again from the top?')) startLockIn(); },
         }, 'Start again')
         : null,
-      /* The implicit shapes are still here. Pointing this button at the
-         current unit does not retire the last one, and a unit you are
-         not being quizzed on this week is exactly the one that quietly
-         rots if there is no way back to it. */
-      h('button', {
-        class: 'btn ghost', type: 'button',
-        onclick: () => startDrill({
-          focus: IMPLICIT_FOCUS, label: 'Implicit differentiation', lockin: true,
-        }),
-      }, 'Drill implicit instead'),
     ]),
     state
       ? h('p', { class: 'small muted', text: `Right now ${Math.round(drill.focusShare(state) * 100)}% `
@@ -4955,6 +5052,55 @@ function renderLockIn(root) {
   ]));
 
   root.appendChild(worksheetPanel());
+
+  /* ============================================ what to lock in on
+
+     This list used to be a constant in the source, which meant that
+     every time the course moved on somebody had to edit a file. The
+     whole point of Lock In is that it follows whatever you are behind
+     on this week, so it is a setting now.
+
+     Nothing is ever deleted by changing units - the implicit shapes are
+     still right here, just not ticked. */
+  const chooser = h('details', { class: 'card focuspick' });
+  chooser.appendChild(h('summary', { text: `Change what this drills (${chosen.size} chosen)` }));
+  chooser.appendChild(h('p', { class: 'muted small', text: 'Tick whatever you are '
+    + 'behind on. Everything stays on this list whether it is ticked or not, so '
+    + 'moving to a new unit never loses the old one.' }));
+
+  const byUnit = new Map();
+  for (const group of FOCUS_GROUPS) {
+    if (!byUnit.has(group.unit)) byUnit.set(group.unit, []);
+    byUnit.get(group.unit).push(group);
+  }
+
+  for (const [unitName, groups] of byUnit) {
+    chooser.appendChild(h('h3', { class: 'unit' }, [h('span', { text: unitName })]));
+    const rows = h('div', { class: 'focuschecks' });
+    for (const group of groups) {
+      const box = h('input', { type: 'checkbox' });
+      box.checked = chosen.has(group.key);
+      box.addEventListener('change', () => {
+        const next = new Set(lockInKeys());
+        if (box.checked) next.add(group.key); else next.delete(group.key);
+        /* Never let it end up empty: a Lock In with nothing to drill is
+           a button that does nothing and says nothing. */
+        if (!next.size) { box.checked = true; return; }
+        store.setSetting('lockInFocus', [...next]);
+        router();
+      });
+      rows.appendChild(h('label', { class: 'focuscheck' }, [
+        box,
+        h('span', {}, [
+          h('strong', { text: group.label }),
+          group.study ? h('span', { class: 'muted small', text: ` ${group.study}` }) : null,
+        ]),
+      ]));
+    }
+    chooser.appendChild(rows);
+  }
+  root.appendChild(chooser);
+
 }
 
 /* Build a session out of a worksheet.
@@ -5094,7 +5240,9 @@ function worksheetPanel() {
 }
 
 function startLockIn() {
-  startDrill({ focus: LOCK_IN_FOCUS, label: 'Lock in', lockin: true });
+  const focus = lockInFocus();
+  if (!focus.length) return;
+  startDrill({ focus, label: 'Lock in', lockin: true });
 }
 
 /* Choose what the paper is about.
@@ -5108,7 +5256,7 @@ function startLockIn() {
 function examConceptSwitches() {
   const wrap = h('details', { class: 'concepts' });
   const skipped = new Set(examSkips());
-  const all = examConcepts();
+  const all = examConcepts(currentPaper());
   const on = all.length - skipped.size;
 
   const summary = h('summary', {}, [
@@ -5259,14 +5407,26 @@ function drillQuestion(state, index) {
   return null;
 }
 
+/* Which paper the landing page offers.
+
+   Saved on the profile, because the unit you are on is a fact about you
+   and not about this browser tab - and because the whole point of
+   splitting the papers was that the mock test should follow the course
+   instead of staying on Unit 2 forever. */
+function currentPaper() {
+  const said = store.activeProfile().settings.examPaper;
+  return PAPERS[said] ? said : DEFAULT_PAPER;
+}
+
 /* The concepts switched off for this profile, as a list of skill ids. */
 function examSkips() {
   const raw = store.activeProfile().settings.examSkip;
   return Array.isArray(raw) ? raw : [];
 }
 
-function startExam(count) {
-  const slots = examSlots(count || 30, { skip: examSkips() });
+function startExam(count, paper) {
+  const which = paper || currentPaper();
+  const slots = examSlots(count || 30, { skip: examSkips(), paper: which });
   const problems = [];
   const seenStems = new Set();
   for (const slot of slots) {
@@ -5280,7 +5440,7 @@ function startExam(count) {
   }
   quizRun = {
     plan: {
-      label: 'Calculus Unit 2',
+      label: paperFor(which).name,
       who: store.activeProfile().name,
       /* Marked as you go, because being told at the end what you got wrong
          is revision; being told now is learning. */
