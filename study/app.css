@@ -1946,6 +1946,17 @@ body.noscroll { overflow: hidden; }
   text-transform: uppercase;
   color: var(--warnc);
 }
+/* Sits in the same header as .daysleft and said the same kind of quiet
+   thing in full body weight, because it had no rule. It is not a warning
+   though - how long the list takes is just a fact - so it is muted
+   rather than amber. */
+.todaycost {
+  font-family: var(--face-ui);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .todaylist { list-style: none; margin: 0 0 12px; padding: 0; counter-reset: todo; }
 .todaylist li {
   counter-increment: todo;
@@ -1957,6 +1968,11 @@ body.noscroll { overflow: hidden; }
 .todaylist li.t-weak { border-left-color: var(--bad); }
 .todaylist li.t-keep { border-left-color: var(--good); }
 .todaywhat { font-weight: 650; font-size: 1.02rem; }
+/* "Sit a short paper" and "20 questions, about 40 minutes" are a link
+   and a span, side by side on one line. .todayhow had no rule at all, so
+   the two ran together as "Sit a short paper20 questions" on every
+   single visit, on the first line of the first card. */
+.todayhow { margin-left: 8px; color: var(--muted); font-size: 0.88rem; }
 .todaylist p { margin: 3px 0 0; }
 .todaydate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .datein { padding: 5px 8px; font-family: var(--face-ui); font-size: 0.84rem; }
