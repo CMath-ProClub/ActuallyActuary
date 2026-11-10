@@ -164,6 +164,10 @@ const BY_SKILL = {
     ['c1-2.2', 'The chain rule underneath it, if differentiating the relation is '
       + 'the part that is slipping.'],
   ],
+  concavity: [
+    ['c1-3.3', 'The sign tests, including the one for concavity - and why '
+      + 'touching zero is not the same as crossing it.'],
+  ],
   optimize: [
     ['c1-3.7', 'The whole method on real word problems - the constraint first, '
       + 'which is the step that goes missing.'],

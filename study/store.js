@@ -221,7 +221,9 @@ export function setSetting(key, value) {
    attempt could only say that chain rule was shaky, never that the same slip
    happens every time. Adding a field is safe for sync: the merge unions
    attempts by id, so an older device simply contributes rows without one. */
-export function recordAttempt({ topicId, correct, ms, difficulty, hintsUsed, seed, mode, diagnosis }) {
+export function recordAttempt({
+  topicId, correct, ms, difficulty, hintsUsed, seed, mode, diagnosis, key,
+}) {
   let row;
   update((st) => {
     const p = st.profiles[st.activeId];
@@ -237,6 +239,18 @@ export function recordAttempt({ topicId, correct, ms, difficulty, hintsUsed, see
       seed: seed || 0,
       mode: mode || 'practice',
       diagnosis: correct ? '' : (diagnosis || ''),
+      /* HOW TO BUILD THIS EXACT QUESTION AGAIN.
+
+         (topicId, difficulty, seed) rebuilds a curriculum question, but
+         several sandbox SKILLS share one topicId - so a wrong implicit
+         question could only be rebuilt as "something from calc.implicit",
+         which is a different question wearing the same label. The
+         sandbox key names the skill and the level as well, and is the
+         only thing that brings back the question you actually missed.
+
+         Absent on attempts recorded before this existed, which is why
+         everything reading it copes with it being missing. */
+      key: key || '',
     });
     /* Keep the log bounded. 5000 attempts is years of study and well inside
        the localStorage budget. */

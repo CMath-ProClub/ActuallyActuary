@@ -24,15 +24,75 @@ import Expr from './expr.js';
 
 /* Words that give a question away before any parsing happens. Order
    matters: the first match wins for the phrase-only concepts. */
+/* What the words ask for.
+
+   Read BEFORE the maths, and for a word problem it is the only thing
+   there is to read. A related rates question contains no expression at
+   all - "a 13 ft ladder leans against a wall, how fast is the top
+   sliding down" is a paragraph of English - so a classifier that only
+   parses expressions returned "could not read the maths" for an entire
+   topic.
+
+   It also matters when the maths DOES parse. "Find every local maximum
+   and minimum of f(x) = 2x^3 - 9x^2 + 12x" was classified as the power
+   rule, because that is the shape of the expression in it. The shape is
+   not the question; the instruction is. Phrases run first and their
+   skill leads the list.
+
+   Ordered longest-idea-first, because "critical point" belongs to
+   extrema and "where f'(x) = 0" belongs to horizontal tangents, and
+   whichever is tested first wins. */
 const PHRASES = [
   [/\blimit\s+definition|difference\s+quotient|first\s+principles/i, 'limitdef'],
-  [/\bhorizontal\s+tangent|where.*\bf'?\s*\(?x\)?\s*=\s*0|critical\s+(number|point)/i, 'horizontal'],
+
+  /* ---- the applications unit, which is mostly prose ---- */
+
+  /* Related rates. The giveaway is a rate given in the question AND a
+     rate asked for: "how fast", "at what rate", "increasing at". */
+  [/\brelated\s+rates?\b/i, 'rates'],
+  [/\bhow\s+fast\b.*\b(chang|increas|decreas|grow|shrink|ris|fall|mov|slid)/i, 'rates'],
+  [/\bat\s+what\s+rate\b/i, 'rates'],
+  [/\b(ladder|spotlight|lamppost|lamp\s+post|street\s*light)\b/i, 'rates'],
+  [/\b(ripple|snowball|conical|cone-shaped)\b/i, 'rates'],
+  [/\b(inflat|deflat)(ed|ing|es)?\b.*\b(balloon|sphere)\b/i, 'rates'],
+  [/\b(is|are)\s+(increasing|decreasing|growing|shrinking|rising|falling)\s+at\b/i, 'rates'],
+
+  /* Optimisation. The giveaway is a superlative. */
+  [/\b(largest|smallest|maximum|minimum|greatest|least)\s+(possible\s+)?(area|volume|perimeter|product|sum|cost|value)/i, 'optimize'],
+  [/\b(maximi[sz]e|minimi[sz]e)\b/i, 'optimize'],
+  [/\boptimi[sz]ation\b/i, 'optimize'],
+  [/\bwhat\s+is\s+the\s+(largest|smallest|greatest|least)\b/i, 'optimize'],
+  [/\b(fencing|fenced|pen\b).*\b(area|largest|maximum)/i, 'optimize'],
+
+  /* Concavity and inflection, before the plain second-derivative rule -
+     "find every inflection point" is a different question from "find
+     f''(x)", and the first contains the second. */
+  [/\binflection|inflexion\b/i, 'concavity'],
+  [/\bconcav(e|ity)\b/i, 'concavity'],
+
+  /* Extrema, before horizontal tangents: "critical point" is this
+     topic's phrase, and the two share the step f'(x) = 0. */
+  [/\b(local|relative|absolute)\s+(maximum|minimum|max|min|extrem)/i, 'extrema'],
+  [/\bmaxima\s+and\s+minima|\bmax(ima)?\s+(and|or)\s+min(ima)?\b/i, 'extrema'],
+  [/\bfirst\s+derivative\s+test\b/i, 'extrema'],
+  [/\bcritical\s+(number|point)s?\b/i, 'extrema'],
+  [/\bturning\s+points?\b/i, 'extrema'],
+
+  /* ---- the earlier unit ---- */
+  [/\bhorizontal\s+tangent|where.*\bf'?\s*\(?x\)?\s*=\s*0/i, 'horizontal'],
   [/\btangent\s+line|equation\s+of\s+the\s+tangent|normal\s+line/i, 'tangent'],
-  [/\bsecond\s+derivative|f\s*''|f\s*″|d²y|concavity/i, 'secondderiv'],
+  [/\bsecond\s+derivative|f\s*''|f\s*″|d²y/i, 'secondderiv'],
   [/\bvelocity|acceleration|position\s+function|\bs\s*\(\s*t\s*\)/i, 'motion'],
   [/\blogarithmic\s+differentiation|take\s+(the\s+)?log/i, 'logdiff'],
   [/\bimplicit/i, 'implicit'],
-  [/\brelated\s+rates/i, 'motion'],
+  /* "Find dy/dx" IS the implicit question. Without this,
+     "For x^2 + y^2 = 25, find dy/dx" reached the expression survey
+     as a bare polynomial and came back as the power rule - the
+     canonical implicit question, classified as the easiest topic on
+     the sheet.
+
+     dy/dt is deliberately NOT here: that is a related rate. */
+  [/\bdy\s*\/\s*dx\b/i, 'implicit'],
 ];
 
 /* Trim the prose a worksheet wraps around its maths.

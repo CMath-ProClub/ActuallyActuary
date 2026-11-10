@@ -535,6 +535,73 @@ export function extrema(rng, level) {
   };
 }
 
+/* Concavity: where the curve changes the way it bends.
+
+   The quick-recall counterpart to the sandbox's three-line version, the
+   same way `extrema` here asks "at what x" while the sandbox asks for
+   the whole working. Both are wanted: one for a fast pass through a
+   topic, one for practising the method.
+
+   Built backward and INTEGRATED TWICE. f'' = 6(x - p) gives
+   f = x^3 - 3px^2 + Ax + B, whose coefficients are all whole when p is.
+
+   Level 3 asks the trap: f'' = 12(x - p)^2 vanishes at p and never
+   changes sign, so there is NO inflection point - and "set the second
+   derivative to zero" gets that wrong every time. */
+export function concavity(rng, level) {
+  if (level >= 3 && rng() < 0.4) {
+    const p = rng.int(-3, 3);
+    const c = rng.int(-5, 5);
+    /* f = x^4 - 4px^3 + 6p^2x^2 + cx, so f'' = 12(x - p)^2. */
+    const f = terms([
+      coef(1, `x${sup(4)}`), coef(-4 * p, `x${sup(3)}`),
+      coef(6 * p * p, `x${sup(2)}`), coef(c, 'x'),
+    ]);
+    return {
+      stem: `How many inflection points does ${eq('f(x)', f)} have?`,
+      kind: 'numeric',
+      answer: 0,
+      answerHtml: `None. f${sup(2)}\u2033(x) = 12(x ${p >= 0 ? '\u2212' : '+'} `
+        + `${Math.abs(p)})${sup(2)}, which touches zero at x = ${p} without `
+        + 'crossing it, so the concavity never changes.',
+      note: 'f\u2033 = 0 is not enough. The second derivative has to CHANGE SIGN, '
+        + 'and a perfect square never does.',
+      hints: ['Differentiate twice, then factor what you get.',
+        'If the second derivative is a perfect square it cannot change sign.'],
+      steps: [
+        { title: 'Second derivative', html: `f\u2033(x) = 12x${sup(2)} ${-24 * p >= 0 ? '+' : '\u2212'} ${Math.abs(24 * p)}x + ${12 * p * p}` },
+        { title: 'Factor it', html: `12(x ${p >= 0 ? '\u2212' : '+'} ${Math.abs(p)})${sup(2)}` },
+        { title: 'Does it change sign?', html: 'No - a square is never negative.' },
+      ],
+    };
+  }
+
+  const p = rng.int(-5, 5);
+  const a = rng.int(-6, 6);
+  const b = rng.int(-8, 8);
+  /* f = x^3 - 3px^2 + ax + b, so f'' = 6x - 6p, zero at x = p. */
+  const f = terms([
+    coef(1, `x${sup(3)}`), coef(-3 * p, `x${sup(2)}`), coef(a, 'x'), String(b),
+  ]);
+  return {
+    stem: `At what x does ${eq('f(x)', f)} have an inflection point?`,
+    kind: 'numeric',
+    answer: p,
+    answerHtml: `f\u2033(x) = 6x ${-6 * p >= 0 ? '+' : '\u2212'} ${Math.abs(6 * p)}, `
+      + `which is zero at x = ${p} and changes sign there.`,
+    note: 'An inflection point needs the second derivative to change sign, not '
+      + 'just to be zero.',
+    hints: ['Inflection points come from the SECOND derivative.',
+      `f\u2032(x) = 3x${sup(2)} ${-6 * p >= 0 ? '+' : '\u2212'} ${Math.abs(6 * p)}x `
+        + `${a >= 0 ? '+' : '\u2212'} ${Math.abs(a)}, so differentiate once more.`],
+    steps: [
+      { title: 'Differentiate twice', html: `f\u2033(x) = 6x ${-6 * p >= 0 ? '+' : '\u2212'} ${Math.abs(6 * p)}` },
+      { title: 'Set it to zero', html: `x = ${p}` },
+      { title: 'Check it crosses', html: 'A linear second derivative always changes sign at its root.' },
+    ],
+  };
+}
+
 export function optimization(rng, level) {
   if (level === 1 || rng() < 0.5) {
     /* Rectangle with fixed perimeter: the square always wins, which is worth

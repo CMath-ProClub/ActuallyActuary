@@ -189,6 +189,96 @@ export const DIAGNOSES = {
     skills: [],
     teachable: false,
   },
+  /* Lines left empty, and the newer markings.
+
+     Every diagnosis a grader can produce has to be describable in plain
+     words, because the whole point of recording them is to say what
+     keeps going wrong. A kind with no description shows up on the
+     dashboard as a blank bullet, which is worse than not recording it -
+     tools/test_mistakes.mjs fails the build on exactly that. */
+  blank: {
+    label: 'Lines left empty',
+    detail: 'A line of working was left blank rather than attempted. On a '
+      + 'question asked line by line, the lines are the question.',
+    skills: [],
+    teachable: false,
+  },
+  'h-not-cancelled': {
+    label: 'The h never cancelled',
+    detail: 'The difference quotient was written again instead of being '
+      + 'simplified. Until the h on the bottom is gone you cannot let h go to '
+      + 'zero, because the line is 0/0.',
+    skills: ['limitdef'],
+    teachable: true,
+  },
+  rounded: {
+    label: 'Rounded instead of exact',
+    detail: 'The value was right but given as a decimal. Leave the pi in it, or '
+      + 'write the fraction - that is what a test wants.',
+    skills: [],
+    teachable: true,
+  },
+  'lost-pi': {
+    label: 'A pi went missing',
+    detail: 'The size is right apart from a factor of pi. The formula for that '
+      + 'shape has one in it.',
+    skills: ['rates'],
+    teachable: true,
+  },
+  'wrong-count': {
+    label: 'The wrong number of answers',
+    detail: 'There is one answer per critical point, and the count did not '
+      + 'match - usually a solution was missed rather than misclassified.',
+    skills: [],
+    teachable: true,
+  },
+  'said-max-not-min': {
+    label: 'Maximum and minimum swapped',
+    detail: 'The critical points were right and the classification was the wrong '
+      + 'way round. Check the sign of f prime either side: plus then minus is a '
+      + 'maximum.',
+    skills: ['extrema'],
+    teachable: true,
+  },
+  'said-min-not-max': {
+    label: 'Minimum and maximum swapped',
+    detail: 'The critical points were right and the classification was the wrong '
+      + 'way round. Check the sign of f prime either side: minus then plus is a '
+      + 'minimum.',
+    skills: ['extrema'],
+    teachable: true,
+  },
+  'said-max-not-neither': {
+    label: 'Called a flat spot a maximum',
+    detail: 'f prime is zero there and does not change sign, so the graph '
+      + 'flattens and carries on the same way. That is neither a maximum nor a '
+      + 'minimum.',
+    skills: ['extrema'],
+    teachable: true,
+  },
+  'said-min-not-neither': {
+    label: 'Called a flat spot a minimum',
+    detail: 'f prime is zero there and does not change sign, so the graph '
+      + 'flattens and carries on the same way. That is neither a maximum nor a '
+      + 'minimum.',
+    skills: ['extrema'],
+    teachable: true,
+  },
+  'said-inflection-not-not': {
+    label: 'f double prime was zero, but nothing bent',
+    detail: 'The second derivative touching zero is not enough - it has to '
+      + 'CROSS. A perfect square never changes sign, so the concavity never '
+      + 'changes.',
+    skills: ['concavity'],
+    teachable: true,
+  },
+  'said-not-not-inflection': {
+    label: 'A real inflection point was dismissed',
+    detail: 'f double prime does cross zero there, so the curve really does '
+      + 'change the way it bends.',
+    skills: ['concavity'],
+    teachable: true,
+  },
   wrong: {
     label: 'Wrong, with no pattern found',
     detail: 'Nothing specific to say about these ones.',

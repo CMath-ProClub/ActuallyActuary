@@ -1730,6 +1730,23 @@ export function buildProblem(spec, seed) {
   if (!ids.length) return null;
   const id = r.pick(ids);
   const skill = SKILLS[id];
+  /* THE WHOLE POOL, because a combined question is a function of all of
+     it.
+
+     At level 3 a question can be two skills multiplied or added
+     together, and WHICH second skill gets picked depends on how many
+     were offered. Recording only the primary skill therefore does not
+     rebuild it: a level-3 question from a four-topic practice session,
+     shared by link or handed back by the redo list, came back as the
+     plain single-skill version. A different question wearing the same
+     name.
+
+     "A question is (skill, level, seed)" is the invariant this whole
+     app rests on - a mock test is stored as a list of seeds, a link is
+     three values. For a COMBINED question the first of those three was
+     incomplete, so the key carries the pool. A single-skill question is
+     unaffected: one id joins to itself and the key is what it was. */
+  const pool = ids.slice();
 
   const built = skill.build(r, level, spec);
   if (!built) return null;
@@ -1742,6 +1759,7 @@ export function buildProblem(spec, seed) {
   if (skill.rates) return buildRateProblem(id, skill, built, level, seed);
   if (skill.optimize) return buildOptimizeProblem(id, skill, built, level, seed);
   if (skill.extrema) return buildExtrema(id, skill, built, level, seed);
+  if (skill.concavity) return buildConcavity(id, skill, built, level, seed);
   if (skill.zeroset) return buildZeroSet(id, skill, built, level, seed);
   if (skill.motion || skill.order === 2) return buildRepeated(id, skill, built, level, seed);
 
@@ -1772,12 +1790,14 @@ export function buildProblem(spec, seed) {
     source: 'sandbox',
     kind: 'expression',
     skill: id,
+    /* What it was actually built from, for links and for redo. */
+    pool,
     skillName: skill.name,
     topicName: skill.name,
     topicId: skill.topicId,
     difficulty: level,
     seed: seed >>> 0,
-    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    key: `sandbox:${pool.join('+')}:${level}:${seed >>> 0}`,
     variable: 'x',
     stem: id === 'limitdef'
       ? `Use the limit definition to find f′(x) for ${eqHtml('f(x)', html(f))}`
@@ -2173,6 +2193,75 @@ const OPTIMIZE = {
   },
 };
 
+/* ============================================ concavity and inflection
+
+   The application of the second derivative, and the natural next step
+   after extrema. It also carries the SAME trap, which is why it is
+   worth asking rather than just "find f double prime":
+
+       f''(x) = 0 DOES NOT MEAN an inflection point.
+
+   For f(x) = x^4 the second derivative is 12x^2, which vanishes at zero
+   and never changes sign - the curve is concave up on both sides, so
+   the origin is not an inflection point at all. Somebody who has
+   learned "set the second derivative to zero" gets this wrong every
+   time, exactly as "set the first derivative to zero" gets a repeated
+   root wrong in extrema.
+
+   BUILT BACKWARD, twice over. The bend points are chosen first, f'' is
+   formed as a product that vanishes there, and then it is integrated
+   TWICE - with the constants arranged so every coefficient of f comes
+   out whole. */
+const CONCAVITY = {
+  concavity: {
+    name: 'Concavity and inflection points',
+    topicId: 'calc.concavity',
+    ask: 'where a curve changes the way it bends',
+    concavity: true,
+    build(r, level) {
+      /* ONE bend point: f'' = 6(x - p), so f = x^3 - 3px^2 + Ax + B. */
+      if (level === 1 || (level === 2 && r() < 0.5)) {
+        const p = r.int(-4, 4);
+        const A = r.int(-6, 6);
+        let f = pow(X, num(3));
+        f = signedTerm(f, -3 * p, pow(X, num(2)));
+        f = signedTerm(f, A, X);
+        f = signedTerm(f, r.int(-8, 8), num(1));
+        return { f, bends: [{ x: p, kind: 'inflection' }] };
+      }
+
+      /* NO bend point, despite f'' vanishing: f'' = 12(x - p)^2, which
+         touches zero without crossing. The case that separates knowing
+         the rule from knowing what it means. */
+      if (level === 3 && r() < 0.35) {
+        const p = r.int(-3, 3);
+        let f = pow(X, num(4));
+        f = signedTerm(f, -4 * p, pow(X, num(3)));
+        f = signedTerm(f, 6 * p * p, pow(X, num(2)));
+        f = signedTerm(f, r.int(-5, 5), X);
+        return {
+          f,
+          bends: [{ x: p, kind: 'not' }],
+          note: 'f\u2033 is a perfect square here, so it touches zero without '
+            + 'crossing - the curve never stops being concave up.',
+        };
+      }
+
+      /* TWO bend points: f'' = 12(x - p)(x - q), integrated twice. */
+      const p = r.int(-3, 2);
+      const q = p + r.int(1, 3);
+      let f = pow(X, num(4));
+      f = signedTerm(f, -2 * (p + q), pow(X, num(3)));
+      f = signedTerm(f, 6 * p * q, pow(X, num(2)));
+      f = signedTerm(f, r.int(-6, 6), X);
+      return {
+        f,
+        bends: [{ x: p, kind: 'inflection' }, { x: q, kind: 'inflection' }],
+      };
+    },
+  },
+};
+
 const ZERO_SET = {
   horizontal: {
     name: 'Horizontal tangents',
@@ -2335,6 +2424,25 @@ const KIND_WORDS = {
             'inflection', 'inflexion', 'saddle', 'point of inflection'],
 };
 
+/* Inflection points have their own vocabulary, and their own trap. */
+const BEND_WORDS = {
+  inflection: ['inflection', 'inflexion', 'inflection point', 'yes', 'it is',
+    'changes', 'concavity changes', 'point of inflection', 'poi'],
+  not: ['not', 'no', 'neither', 'none', 'not an inflection point',
+    'no inflection', 'does not change', 'not inflection'],
+};
+
+export function bendOfWord(raw) {
+  const said = String(raw || '').trim().toLowerCase().replace(/[.\s]+$/, '');
+  if (!said) return null;
+  for (const [kind, words] of Object.entries(BEND_WORDS)) {
+    if (words.includes(said)) return kind;
+  }
+  if (/\bnot?\b|\bneither\b|does ?n.t/.test(said)) return 'not';
+  if (/inflect|inflex/.test(said)) return 'inflection';
+  return null;
+}
+
 export function kindOfWord(raw) {
   const said = String(raw || '').trim().toLowerCase().replace(/[.\s]+$/, '');
   if (!said) return null;
@@ -2354,6 +2462,36 @@ export function kindOfWord(raw) {
    because of the unit would be marking handwriting rather than calculus.
    The unit is stripped before the number is read - and kept, so the
    feedback can mention it when it was wrong or missing. */
+/* Units written the several ways people write them, reduced to one.
+
+   "cm^2/s", "cm2/sec", "cm\u00b2 / second" and "CM^2/S" are the same unit
+   and a study tool that marks four of them wrong is testing typing. */
+export function normaliseUnits(raw) {
+  let said = String(raw == null ? '' : raw).trim().toLowerCase();
+  if (!said) return '';
+  said = said
+    .replace(/\u00b2/g, '^2').replace(/\u00b3/g, '^3')
+    .replace(/\bseconds?\b|\bsec\b/g, 's')
+    .replace(/\bminutes?\b|\bmins?\b/g, 'min')
+    .replace(/\bhours?\b|\bhrs?\b/g, 'h')
+    .replace(/\bfeet\b|\bfoot\b/g, 'ft')
+    .replace(/\bmeters?\b|\bmetres?\b/g, 'm')
+    .replace(/\bcentimet(er|re)s?\b/g, 'cm')
+    .replace(/\bmillimet(er|re)s?\b/g, 'mm')
+    .replace(/\binch(es)?\b/g, 'in')
+    .replace(/\bkilomet(er|re)s?\b/g, 'km')
+    .replace(/\bper\b/g, '/')
+    /* The spaces come out HERE, not earlier. Stripping them before
+       the word replacements above turns "feet per second" into one
+       long token with no word boundaries left in it, and every one
+       of them then silently misses. */
+    .replace(/\s+/g, '')
+    .replace(/(\d)\^?(\d)/g, '$1^$2');
+  /* "cm2" and "cm^2" are the same thing written twice. */
+  said = said.replace(/([a-z])(\d)/g, '$1^$2');
+  return said;
+}
+
 export function splitUnits(raw) {
   const said = String(raw == null ? '' : raw).trim();
   if (!said) return { number: '', units: '' };
@@ -2524,6 +2662,114 @@ function buildRateProblem(id, skill, built, level, seed) {
       { title: 'The equation that relates them', html: q.formula.html },
       { title: 'Differentiate both sides with respect to t', html: q.differentiated.html },
       { title: 'Put the numbers in', html: `${q.wantedRate.sym} = ${q.answerShown} ${q.answerUnits}` },
+    ],
+  };
+}
+
+function buildConcavity(id, skill, built, level, seed) {
+  const f = simplify(built.f);
+  const d1 = simplify(derivative(f));
+  const d2 = simplify(derivative(d1));
+  const bends = (built.bends || []).slice().sort((a, b) => a.x - b.x);
+  if (!bends.length) return null;
+
+  const at = (x) => Expr.evaluate(d2, { x });
+
+  /* VERIFIED BEFORE IT SHIPS, against the actual second derivative:
+     it vanishes at every stated point, vanishes NOWHERE ELSE in the
+     window, and changes sign exactly where the question says it does. */
+  for (const b of bends) {
+    if (!isFinite(at(b.x)) || Math.abs(at(b.x)) > 1e-9) return null;
+  }
+  const lo = Math.min(...bends.map((b) => b.x)) - 3;
+  const hi = Math.max(...bends.map((b) => b.x)) + 3;
+  for (let i = 0; i <= 2000; i++) {
+    const x = lo + ((hi - lo) * i) / 2000;
+    if (bends.some((b) => Math.abs(b.x - x) < 1e-3)) continue;
+    if (Math.abs(at(x)) < 1e-9) return null;
+  }
+  for (const b of bends) {
+    const gap = Math.min(0.25, ...bends.filter((o) => o !== b)
+      .map((o) => Math.abs(o.x - b.x) / 3)) || 0.25;
+    const before = at(b.x - gap);
+    const after = at(b.x + gap);
+    const changes = (before > 0 && after < 0) || (before < 0 && after > 0);
+    if (changes !== (b.kind === 'inflection')) return null;
+  }
+
+  const xs = bends.map((b) => b.x);
+  const kinds = bends.map((b) => b.kind);
+  const many = bends.length > 1;
+
+  return {
+    source: 'sandbox',
+    kind: 'parts',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    stem: `Find every inflection point of `
+      + `<span class="eq">f(x) = ${html(f)}</span>`,
+    instruction: 'Three lines: the second derivative, where it is zero, and '
+      + 'whether each one really is an inflection point.',
+    noGraph: true,
+    noGraphWhy: 'The graph would show you where it bends, and finding that with '
+      + 'algebra is the question.',
+    parts: [
+      {
+        label: 'f\u2033(x)',
+        prompt: 'Differentiate twice.',
+        answerNode: d2,
+        vars: ['x'],
+      },
+      {
+        label: 'where f\u2033(x) = 0',
+        prompt: many ? 'Both values, separated by a comma.' : 'The x-value.',
+        answers: xs,
+        set: true,
+        of: 'f\u2033',
+      },
+      {
+        label: many ? 'is each one an inflection point?' : 'is it an inflection point?',
+        prompt: 'Write "inflection" or "not" for each.',
+        kinds,
+        words: true,
+        vocab: 'bend',
+      },
+    ],
+    partAnswers: [text(d2), xs.join(', '), kinds.join(', ')],
+    answerNode: d2,
+    answerText: xs.join(', '),
+    answerHtml: bends
+      .map((b) => `x = ${b.x} (${b.kind === 'inflection' ? 'inflection' : 'not'})`)
+      .join(', '),
+    bends,
+    original: f,
+    functionText: text(f),
+    note: built.note || '',
+    hints: [
+      'Concavity is about the SECOND derivative, so differentiate twice before '
+        + 'anything else.',
+      `f\u2033(x) = ${html(d2)}. Set it to zero and solve.`,
+      'Then check whether f\u2033 actually CHANGES SIGN there. Touching zero is '
+        + 'not enough - if it does not cross, the curve never stops bending the '
+        + 'same way.',
+    ],
+    steps: [
+      { title: 'First derivative', html: `f\u2032(x) = ${html(d1)}` },
+      { title: 'Second derivative', html: `f\u2033(x) = ${html(d2)}` },
+      { title: 'Set it to zero', html: `${html(d2)} = 0` },
+      { title: 'Solve', html: xs.map((x) => `x = ${x}`).join(' and ') },
+      {
+        title: 'Does the concavity actually change?',
+        html: bends.map((b) => `at x = ${b.x}: ${b.kind === 'inflection'
+          ? 'f\u2033 crosses zero, so yes'
+          : 'f\u2033 touches zero without crossing, so NO'}`).join('; '),
+      },
     ],
   };
 }
@@ -2947,12 +3193,14 @@ export function gradeParts(problem, answers) {
             + 'separated by a comma.',
         };
       }
-      const read = said.map(kindOfWord);
+      const reader = part.vocab === 'bend' ? bendOfWord : kindOfWord;
+      const read = said.map(reader);
       const unknown = read.findIndex((k) => k === null);
       if (unknown !== -1) {
         return {
           correct: false, decided: false, kind: 'unreadable',
-          hint: `I could not read "${said[unknown]}". Write max, min or neither.`,
+          hint: `I could not read "${said[unknown]}". Write `
+            + `${part.vocab === 'bend' ? 'inflection or not' : 'max, min or neither'}.`,
         };
       }
       const firstBad = read.findIndex((k, n) => k !== part.kinds[n]);
@@ -2960,11 +3208,17 @@ export function gradeParts(problem, answers) {
       const wanted = part.kinds[firstBad];
       return {
         correct: false, decided: true, kind: `said-${read[firstBad]}-not-${wanted}`,
-        hint: wanted === 'neither'
-          ? 'One of these is neither: f\u2032 touches zero there without changing '
-            + 'sign, so the graph flattens and carries on the same way.'
-          : `Check the sign of f\u2032 just either side of that one. ${
-            wanted === 'max' ? '+ then \u2212 is a maximum' : '\u2212 then + is a minimum'}.`,
+        hint: part.vocab === 'bend'
+          ? (wanted === 'not'
+            ? 'One of these is not an inflection point: f\u2033 touches zero there '
+              + 'without crossing, so the curve never stops bending the same way.'
+            : 'Check the sign of f\u2033 just either side. If it CROSSES zero the '
+              + 'concavity changes and it is an inflection point.')
+          : (wanted === 'neither'
+            ? 'One of these is neither: f\u2032 touches zero there without changing '
+              + 'sign, so the graph flattens and carries on the same way.'
+            : `Check the sign of f\u2032 just either side of that one. ${
+              wanted === 'max' ? '+ then \u2212 is a maximum' : '\u2212 then + is a minimum'}.`),
       };
     }
 
@@ -3022,7 +3276,7 @@ function finiteAtZero(node) {
    Expr.judge that hands it everything the problem knows: the broken
    derivations, the original function, the inside function, and the curve
    points for an implicit problem. */
-export function gradeExpression(problem, raw) {
+export function gradeExpression(problem, raw, opts = {}) {
   if (!problem) return { correct: false, decided: true, kind: 'wrong', hint: '' };
   const context = {
     distractors: problem.distractors,
@@ -3030,6 +3284,8 @@ export function gradeExpression(problem, raw) {
     inner: problem.inner,
     scopes: problem.scopes,
     variable: problem.variable || 'x',
+    /* Opt-in, and it never turns a right answer into a wrong one. */
+    checkUnits: !!opts.checkUnits,
   };
   /* An antiderivative is marked by differentiating it, and a factoring
      question is marked on its FORM as well as its value. */
@@ -3047,7 +3303,7 @@ export function gradeExpression(problem, raw) {
      mistake - but a missing MINUS sign is the whole question on half of
      these, so that gets said plainly rather than hidden in "not quite". */
   if (problem.kind === 'rate') {
-    const { number } = splitUnits(raw);
+    const { number, units } = splitUnits(raw);
     if (!number) {
       return {
         correct: false, decided: false, kind: 'unreadable',
@@ -3055,7 +3311,37 @@ export function gradeExpression(problem, raw) {
       };
     }
     const verdict = Expr.judge(number, problem.answerNode, { vars: [] });
-    if (verdict.correct) return verdict;
+    if (verdict.correct) {
+      /* UNITS, when asked for.
+
+         Normally the unit is not marked - writing cm^2/s instead of
+         cm^2/sec is handwriting, not calculus, and rejecting it would
+         be marking the wrong thing. But a unit slip is a real loss of
+         marks on a real test, and somebody revising for one may want to
+         be held to it. So it is an opt-in, and even then it never turns
+         a right answer into a wrong one: the number was correct and is
+         still reported correct, with the unit raised separately. */
+      if (context && context.checkUnits && problem.answerUnits) {
+        const said = normaliseUnits(units);
+        const wanted = normaliseUnits(problem.answerUnits);
+        if (!said) {
+          return {
+            ...verdict, units: 'missing',
+            unitHint: `Right number. On a test it would want the units too: `
+              + `${problem.answerUnits}.`,
+          };
+        }
+        if (said !== wanted) {
+          return {
+            ...verdict, units: 'wrong',
+            unitHint: `Right number, but the units are ${problem.answerUnits}, `
+              + `not ${units}. Check what is being divided by what.`,
+          };
+        }
+        return { ...verdict, units: 'right' };
+      }
+      return verdict;
+    }
     const node = Expr.tryParse(number, { vars: [] });
     if (node) {
       const got = Expr.evaluate(node, {});
@@ -3135,7 +3421,8 @@ export function gradeExpression(problem, raw) {
   return Expr.judge(raw, problem.answerNode, context);
 }
 
-Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET, EXTREMA, RELATED, OPTIMIZE);
+Object.assign(SKILLS, SKILL_EXTRAS, EXAM_EXTRAS, ZERO_SET, EXTREMA, RELATED,
+  OPTIMIZE, CONCAVITY);
 
 /* ------------------------------------------------------ am I on track */
 

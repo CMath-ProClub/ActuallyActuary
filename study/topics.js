@@ -120,6 +120,10 @@ export const TOPICS = [
     gen: 'relatedRates', needs: ['calc.implicit'], blurb: 'Two things changing, one equation tying them together.' },
   { id: 'calc.extrema', course: 'calc1', unit: 'Applications', name: 'Critical points and extrema',
     gen: 'extrema', needs: ['calc.power', 'alg2.factor'], blurb: 'First and second derivative tests.' },
+  { id: 'calc.concavity', course: 'calc1', unit: 'Applications',
+    name: 'Concavity and inflection points',
+    gen: 'concavity', needs: ['calc.extrema'],
+    blurb: 'Where the curve changes the way it bends - and why f″ = 0 is not enough.' },
   { id: 'calc.optimize', course: 'calc1', unit: 'Applications', name: 'Optimization',
     gen: 'optimization', needs: ['calc.extrema'], blurb: 'Build the function first, then maximize it.' },
 

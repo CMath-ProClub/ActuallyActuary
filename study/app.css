@@ -715,6 +715,30 @@ h3.unit > span:first-child { flex: 1 1 auto; }
 .focuscheck input { margin: 0; flex: none; }
 .focuscheck strong { font-weight: 600; }
 
+/* A checkbox with an explanation beside it. */
+.togglerow {
+  display: flex; gap: 10px; align-items: baseline; cursor: pointer;
+  margin-top: 12px; padding: 7px 9px; border-radius: var(--radius);
+}
+.togglerow:hover { background: var(--sunk); }
+.togglerow input { margin: 0; flex: none; }
+
+/* The unit note sits under a mark it did not change. */
+.unitnote { color: var(--warnc); margin-top: 4px; }
+
+/* How the labelling lines up with the question. */
+.dgreview:empty { display: none; }
+.dgreview { margin-top: 9px; }
+.dgreview p { margin: 0 0 4px; }
+
+/* The range a percentage plausibly lies in. Quiet - the headline number
+   is what is being read; this is the caveat on it. */
+.band {
+  font-family: var(--face-ui); font-size: .72rem;
+  color: var(--faint); letter-spacing: .02em;
+}
+.band.loose { color: var(--warnc); border-bottom: 1px dotted currentColor; }
+
 .errline { color: var(--bad-ink); }
 .okline { color: var(--good-ink); }
 .warnline { color: var(--warnc); font-weight: 600; }

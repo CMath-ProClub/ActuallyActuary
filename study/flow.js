@@ -347,10 +347,17 @@ function slug(name) {
   return String(name || 'someone').toLowerCase().replace(/[^a-z0-9]/g, '') || 'someone';
 }
 
-function roomName(people) {
+/* Exported because a shared session can now be started straight from a
+   button as well as from the end of the flow, and both have to land in
+   the SAME room or the two people sit in different places looking at
+   nothing. One definition. */
+export function roomName(people) {
   return [...people].map((p) => String(p).toLowerCase().replace(/[^a-z0-9]/g, ''))
     .sort()
     .join('-') || 'room';
 }
 
-export default { STEPS, FIRST_STEP, MODES, pathFor, currentStep, previousStep, rewind, plan };
+export default {
+  STEPS, FIRST_STEP, MODES, pathFor, currentStep, previousStep, rewind, plan,
+  roomName,
+};

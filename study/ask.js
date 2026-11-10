@@ -48,6 +48,14 @@ const SKILL_PHRASES = [
      first match and "maxima" would otherwise swallow "maxima and
      minima". Every way somebody actually says it is here - a topic you
      cannot name is a topic you cannot reach. */
+  ['inflection points', 'concavity'],
+  ['inflection point', 'concavity'],
+  ['points of inflection', 'concavity'],
+  ['concavity', 'concavity'],
+  ['concave up or down', 'concavity'],
+  ['second derivative test', 'concavity'],
+  ['where it changes concavity', 'concavity'],
+
   ['maxima and minima', 'extrema'],
   ['maximums and minimums', 'extrema'],
   ['local maximum and minimum', 'extrema'],

@@ -18,6 +18,7 @@ import * as mistakes from './mistakes.js';
 import * as persist from './persist.js';
 import * as room from './room.js';
 import * as diagram from './diagram.js';
+import * as confidence from './confidence.js';
 import * as ask from './ask.js';
 import * as store from './store.js';
 import * as sched from './scheduler.js';
@@ -459,6 +460,8 @@ function renderDashboard(root) {
   ]));
 
   root.appendChild(mistakesCard(p));
+  root.appendChild(redoCard(p));
+  root.appendChild(togetherCard());
 
   /* Stat tiles. One number each, so not a chart. */
   const tiles = h('div', { class: 'tiles' }, [
@@ -485,16 +488,47 @@ function renderDashboard(root) {
 
   const focus = h('section', { class: 'card' }, [h('h2', { text: 'Work on these' })]);
   if (weak.length) {
-    focus.appendChild(h('p', { class: 'muted', text: 'Lowest recent accuracy, among topics you have answered at least four times.' }));
+    /* "Lowest recent accuracy" is a claim, and on thin evidence it is
+       not one this can support: four attempts against sixty is noise,
+       not a ranking. Said only when the worst one is genuinely clear of
+       the next. */
+    const clear = weak.length > 1 && confidence.clearlyWorse(
+      { correct: weak[0].correct, total: weak[0].seen },
+      { correct: weak[1].correct, total: weak[1].seen },
+    );
+    focus.appendChild(h('p', { class: 'muted', text: clear
+      ? `${weak[0].name} is clearly the weakest - its range does not overlap the next one.`
+      : 'Lowest recent accuracy, among topics you have answered at least four '
+        + 'times. The ranges overlap, so the order between them is not settled.' }));
     const list = h('ul', { class: 'focuslist' });
     for (const w of weak) {
       const rem = sched.remediationFor(w.topicId, p);
+      /* HOW SURE IS THAT PERCENTAGE?
+
+         Four out of six is 67% and five out of six is 83% - one
+         question moved it sixteen points. Printing "67%" alone implies
+         a precision that is not there, so the interval comes with it,
+         and it is WIDE when the evidence is thin. The dashboard already
+         carried a warning about this in words; this is the same thing
+         in numbers, where it can actually be acted on. */
+      const band = confidence.wilson(w.correct, w.seen);
       const li = h('li', {}, [
         h('button', {
           class: 'linkish', onclick: () => startTopic(w.topicId, w.name),
         }, w.name),
         h('span', { class: 'pill warn', text: `${Math.round(w.accuracy * 100)}%` }),
         h('span', { class: 'muted small', text: `${w.correct}/${w.seen}` }),
+        band.low != null
+          ? h('span', {
+            class: `band ${band.enough ? '' : 'loose'}`,
+            title: band.enough
+              ? `On ${band.n} attempts, the true rate is probably between `
+                + `${Math.round(band.low * 100)}% and ${Math.round(band.high * 100)}%.`
+              : `Only ${band.n} attempts - this could be anywhere between `
+                + `${Math.round(band.low * 100)}% and ${Math.round(band.high * 100)}%.`,
+            text: `${Math.round(band.low * 100)}\u2013${Math.round(band.high * 100)}%`,
+          })
+          : null,
       ]);
       if (rem) {
         li.appendChild(h('p', { class: 'remnote', text: sched.remediationMessage(rem) }));
@@ -514,17 +548,66 @@ function renderDashboard(root) {
   root.appendChild(focus);
 
   if (due.length) {
+    /* WHICH UNIT IS GOING STALE.
+
+       The scheduler has tracked when each topic is next worth
+       revisiting since the beginning, and the review card listed the
+       topics without ever saying where they came from. That was fine
+       with one unit of material and stopped being fine the moment there
+       were two: the thing you most need to hear is "Unit 2 implicit is
+       fading while you work on Unit 3", and nothing was saying it.
+
+       Grouped by unit, oldest-due first, because a unit you have
+       stopped touching is exactly the one that rots. */
+    const byUnit = new Map();
+    for (const d of due) {
+      const topic = TOPIC_BY_ID[d.topicId];
+      const unit = topic && topic.unit ? topic.unit : 'Other';
+      if (!byUnit.has(unit)) byUnit.set(unit, []);
+      byUnit.get(unit).push(d);
+    }
+    const units = [...byUnit.keys()];
+    const working = currentPaper();
+    /* The unit the mock test is currently pointed at, so "elsewhere" can
+       be named rather than implied. */
+    const elsewhere = units.filter((u) => !(working === 'unit3' && u === 'Applications')
+      && !(working === 'unit2' && u === 'Derivatives'));
+
     const dueCard = h('section', { class: 'card' }, [
       h('h2', { text: 'Due for review' }),
-      h('p', { class: 'muted', text: 'Spaced out so they come back just as they are starting to fade.' }),
+      h('p', { class: 'muted', text: units.length > 1
+        ? `Spaced out so they come back just as they are starting to fade - and `
+          + `they are from ${units.length} different units.`
+        : 'Spaced out so they come back just as they are starting to fade.' }),
+      elsewhere.length && units.length > 1
+        ? h('p', { class: 'small warnline', text: `${elsewhere.join(' and ')} `
+          + `${elsewhere.length === 1 ? 'is' : 'are'} going stale while you work `
+          + 'on something else. That is what spacing is for.' })
+        : null,
     ]);
-    const chips = h('div', { class: 'chips' });
-    for (const d of due) {
-      chips.appendChild(h('button', {
-        class: 'chip', onclick: () => startTopic(d.topicId, d.name),
-      }, d.name));
+    for (const [unit, rows] of byUnit) {
+      if (units.length > 1) {
+        dueCard.appendChild(h('h3', { class: 'unit' }, [
+          h('span', { text: unit }),
+          h('span', { class: 'muted small', text: `${rows.length} waiting` }),
+        ]));
+      }
+      const chips = h('div', { class: 'chips' });
+      for (const d of rows) {
+        chips.appendChild(h('button', {
+          class: 'chip', onclick: () => startTopic(d.topicId, d.name),
+        }, d.name));
+      }
+      dueCard.appendChild(chips);
+      if (units.length > 1 && rows.length > 1) {
+        dueCard.appendChild(h('button', {
+          class: 'btn small ghost', type: 'button',
+          onclick: () => startSession({
+            pool: rows.map((d) => d.topicId), label: `${unit} review`,
+          }),
+        }, `Just ${unit}`));
+      }
     }
-    dueCard.appendChild(chips);
     dueCard.appendChild(h('button', {
       class: 'btn small', onclick: () => startSession({ pool: due.map((d) => d.topicId), label: 'Review' }),
     }, `Review all ${due.length}`));
@@ -1131,6 +1214,8 @@ function renderProblem(stage, problem, { remediation, mode }) {
       mode: skipped ? 'skip' : mode,
       /* What the grader worked out, kept rather than shown once and lost. */
       diagnosis: skipped ? 'skipped' : (res.diagnosis || ''),
+      /* So a wrong one can be handed back exactly as it was. */
+      key: problem.key || '',
     });
     session.answered++;
     if (res.correct) session.correct++;
@@ -1501,6 +1586,7 @@ function finishTest(problems, timedOut = false) {
       difficulty: prob.difficulty,
       hintsUsed: 0,
       seed: prob.seed,
+      key: prob.key || '',
       mode: 'test',
       diagnosis: res.diagnosis || '',
     });
@@ -1834,6 +1920,25 @@ function renderSettings(root) {
   const goal = h('input', { type: 'number', min: '5', max: '200', step: '5', value: String(p.settings.dailyGoal), class: 'textinput short' });
   goal.addEventListener('change', () => store.setSetting('dailyGoal', Math.max(1, Number(goal.value) || 20)));
   prefs.appendChild(labelled('Daily goal (questions)', goal));
+
+  /* Units, marked only if asked for.
+
+     Off by default on purpose: writing cm^2/s instead of cm^2/sec is
+     handwriting rather than calculus, and marking it would be marking
+     the wrong thing. On, it never turns a right answer into a wrong
+     one either - the number stays correct and the unit is raised
+     underneath it, which is what a marker would do. */
+  const unitBox = h('input', { type: 'checkbox' });
+  unitBox.checked = !!p.settings.checkUnits;
+  unitBox.addEventListener('change', () => store.setSetting('checkUnits', unitBox.checked));
+  card.appendChild(h('label', { class: 'togglerow' }, [
+    unitBox,
+    h('span', {}, [
+      h('strong', { text: 'Hold me to the units' }),
+      h('span', { class: 'muted small', text: ' On a related rates answer, say so '
+        + 'when the units are missing or wrong. Never changes the mark.' }),
+    ]),
+  ]));
   root.appendChild(prefs);
 
   /* Ollama. */
@@ -1842,6 +1947,7 @@ function renderSettings(root) {
   root.appendChild(graphCard(p));
 
   root.appendChild(ollamaCard(p));
+  root.appendChild(installCard());
 
   /* Sync. */
   root.appendChild(syncCard(s));
@@ -2187,10 +2293,177 @@ function scheduleAutoSync() {
   }, 8000);
 }
 
+/* ============================================= installing it as an app
+
+   The manifest and the icons have been shipping for a long time and
+   nothing ever offered to use them, so the only way to install this was
+   to know that "Add to Home Screen" exists and go and find it. It is
+   one line of plumbing to offer it properly.
+
+   The browser decides WHETHER to offer: it fires beforeinstallprompt
+   only when the thing is actually installable - served over https, with
+   a manifest, with a service worker - and only once. So the event is
+   caught and kept, and the button appears only when there is something
+   behind it rather than being a button that sometimes does nothing.
+
+   Already-installed is a different state again, and gets no button at
+   all: display-mode: standalone means you are reading this inside the
+   installed app. */
+let installOffer = null;
+
+function installState() {
+  const standalone = (window.matchMedia
+    && window.matchMedia('(display-mode: standalone)').matches)
+    || window.navigator.standalone === true;
+  if (standalone) return 'installed';
+  if (installOffer) return 'offered';
+  return 'not-yet';
+}
+
+function watchForInstall() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    /* Kept rather than fired: the browser's own moment is rarely the
+       moment somebody wants it. */
+    e.preventDefault();
+    installOffer = e;
+    const route = currentRoute().name;
+    if (route === 'settings' || route === 'dashboard') router();
+  });
+  window.addEventListener('appinstalled', () => {
+    installOffer = null;
+    const route = currentRoute().name;
+    if (route === 'settings') router();
+  });
+}
+
+/* ========================================== studying with the other person
+
+   The shared board and the shared question have worked for a long time
+   and were four steps deep in the landing flow: pick a person, pick
+   "with someone else", pick whether you are in the same room, pick what
+   to study. Four decisions before anything happens, every single time,
+   for the thing this was built for - two people revising together.
+
+   So it is a button. The room name is derived from the two profile
+   names rather than random, which is what makes it work without sending
+   anybody a code: both devices compute the same name and arrive in the
+   same place.
+
+   It only appears when there IS a second person, because "study
+   together" on a one-profile browser is an invitation to nothing. */
+function togetherCard() {
+  const profiles = store.allProfiles ? store.allProfiles() : [];
+  const me = store.activeProfile();
+  const others = profiles.filter((p) => p && p.id !== me.id);
+  if (!others.length) return h('div', { hidden: true });
+
+  const names = profiles.map((p) => p.name);
+  const room = flow.roomName(names);
+
+  const card = h('section', { class: 'card together' }, [
+    h('p', { class: 'eyebrow', text: 'Two of you' }),
+    h('h2', { text: `Study with ${others.map((p) => p.name).join(' and ')}` }),
+    h('p', { text: 'The same question in front of both of you, and one board you '
+      + 'can both write on. Open this on the other device too and it joins by '
+      + 'itself - there is no code to send.' }),
+  ]);
+
+  const start = (shared) => {
+    const plan = {
+      who: me.name,
+      company: 'together',
+      shared,
+      sideBySide: !shared,
+      room: shared ? room : null,
+      ownRoom: shared ? null : `${room}-${slugName(me.name)}`,
+      others: others.map((p) => ({
+        name: p.name,
+        room: shared ? null : `${room}-${slugName(p.name)}`,
+      })),
+      mode: 'practice',
+      pool: ALL_TOPIC_IDS,
+      label: 'Together',
+    };
+    startWorkspace(plan);
+  };
+
+  card.appendChild(h('div', { class: 'cta' }, [
+    h('button', { class: 'btn', type: 'button', onclick: () => start(true) },
+      'Same room, one board'),
+    h('button', { class: 'btn ghost', type: 'button', onclick: () => start(false) },
+      'Apart, side by side'),
+  ]));
+  card.appendChild(h('p', { class: 'small muted', text: 'Same room means one shared '
+    + 'board and the same question. Apart means you each get your own board that '
+    + 'the other one can look into.' }));
+  card.appendChild(h('p', { class: 'small muted', text: `Room: ${room}` }));
+  return card;
+}
+
+/* The same slug flow.js uses, so both sides agree on the room name. */
+function slugName(name) {
+  return String(name).toLowerCase().replace(/[^a-z0-9]/g, '') || 'me';
+}
+
+function installCard() {
+  const state = installState();
+  const card = h('section', { class: 'card' }, [
+    h('h2', { text: 'Use it like an app' }),
+  ]);
+
+  if (state === 'installed') {
+    card.appendChild(h('p', { class: 'okline', text: 'Installed. You are reading '
+      + 'this inside it.' }));
+    card.appendChild(h('p', { class: 'muted small', text: 'It works offline: the '
+      + 'questions are generated in the browser, so a session on a train needs '
+      + 'nothing from the network.' }));
+    return card;
+  }
+
+  if (state === 'offered') {
+    card.appendChild(h('p', { text: 'Add it to your home screen and it opens like '
+      + 'any other app - no browser bar, and it works offline.' }));
+    const btn = h('button', { class: 'btn', type: 'button' }, 'Install');
+    btn.addEventListener('click', async () => {
+      const offer = installOffer;
+      if (!offer) return;
+      btn.disabled = true;
+      try {
+        offer.prompt();
+        const choice = await offer.userChoice;
+        /* The offer is single-use whichever way it went. */
+        installOffer = null;
+        if (choice && choice.outcome === 'dismissed') {
+          card.appendChild(h('p', { class: 'muted small', text: 'No problem. Your '
+            + 'browser\u2019s own menu has "Install" or "Add to Home Screen" whenever '
+            + 'you want it.' }));
+        }
+        router();
+      } catch (err) {
+        btn.disabled = false;
+      }
+    });
+    card.appendChild(h('div', { class: 'cta' }, [btn]));
+    return card;
+  }
+
+  /* Not offered. Say why rather than showing a dead button - on iOS the
+     event does not exist at all and the menu is the only route. */
+  card.appendChild(h('p', { class: 'muted', text: 'Your browser has not offered to '
+    + 'install this. On iPhone there is no prompt at all: use Share, then "Add to '
+    + 'Home Screen". On a desktop browser look for an install icon in the address '
+    + 'bar, or "Install" in the menu.' }));
+  card.appendChild(h('p', { class: 'muted small', text: 'It works offline either '
+    + 'way - the questions are generated in the browser, so a session on a train '
+    + 'needs nothing from the network.' }));
+  return card;
+}
+
 export function boot() {
   store.load();
   mountProfileSwitcher();
   installKeys();
+  watchForInstall();
   findTheModel();
   window.addEventListener('hashchange', router);
   router();
@@ -2516,6 +2789,126 @@ function launch(plan, root) {
 /* What keeps going wrong. The grader already works this out for every wrong
    answer; this is the first place it is remembered rather than shown once
    and forgotten. */
+/* ================================================ the ones you got wrong
+
+   Not the pattern - the actual questions. Every attempt now records how
+   to rebuild the exact question it was, so the ones you missed can be
+   handed straight back.
+
+   This is the oldest idea in revision and the app could not do it:
+   `mistakes.js` has recorded every wrong answer with a diagnosis since
+   the beginning and nothing ever offered them back as a set. You could
+   see WHAT kept going wrong and never go and do those questions again.
+
+   Rebuilt rather than stored. A question is (skill, level, seed), so a
+   hundred missed questions is a hundred short strings - no stored text,
+   no stale copies, and they come back identical. */
+function rebuildFromAttempt(attempt) {
+  if (!attempt) return null;
+  /* The sandbox key names the skill AND the level, which the topicId
+     alone cannot: several skills share one topic. */
+  const key = String(attempt.key || '');
+  const m = key.match(/^sandbox:([^:]+):(\d+):(\d+)$/);
+  if (m) {
+    return buildProblem({ skills: [m[1]], level: Number(m[2]) }, Number(m[3]) >>> 0);
+  }
+  /* Older attempts, recorded before the key existed, and curriculum
+     questions, which (topicId, level, seed) already rebuilds exactly. */
+  if (attempt.topicId && attempt.seed && hasGenerator(attempt.topicId)) {
+    return generate(attempt.topicId, attempt.difficulty || 1, attempt.seed >>> 0);
+  }
+  return null;
+}
+
+/* The wrong ones, most recent first, one per question. */
+function missedQuestions(profile, limit = 20) {
+  const all = (profile && profile.attempts) || [];
+  const seen = new Set();
+  const out = [];
+  for (let i = all.length - 1; i >= 0 && out.length < limit; i--) {
+    const a = all[i];
+    if (!a || a.correct) continue;
+    /* Skipped is not the same as wrong: you never tried it. */
+    if (a.mode === 'skip' || a.diagnosis === 'skipped') continue;
+    const id = a.key || `${a.topicId}:${a.difficulty}:${a.seed}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    /* And if you have since got the same question right, it is not
+       outstanding any more. */
+    const laterRight = all.slice(i + 1).some((b) => b && b.correct
+      && (b.key || `${b.topicId}:${b.difficulty}:${b.seed}`) === id);
+    if (laterRight) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+function startRedo(profile) {
+  const missed = missedQuestions(profile, 20);
+  const problems = [];
+  for (const attempt of missed) {
+    const made = rebuildFromAttempt(attempt);
+    if (made) problems.push(made);
+  }
+  if (!problems.length) return false;
+
+  quizRun = {
+    plan: {
+      label: 'The ones you got wrong',
+      who: profile.name,
+      immediate: true,
+      endless: false,
+      partial: true,
+      hints: true,
+      count: problems.length,
+      minutes: 0,
+    },
+    slots: problems.map(() => null),
+    problems,
+    index: 0,
+    responses: problems.map(() => ''),
+    verdicts: problems.map(() => null),
+    startedAt: Date.now(),
+    endsAt: 0,
+    phase: 'running',
+  };
+  saveQuiz();
+  go('quiz');
+  return true;
+}
+
+function redoCard(p) {
+  const missed = missedQuestions(p, 20);
+  /* Below a handful this is not a revision session, it is a nag. */
+  if (missed.length < 3) return h('div', { hidden: true });
+
+  /* Only the ones that can actually be rebuilt get counted, or the
+     button promises twelve questions and delivers four. */
+  let buildable = 0;
+  for (const attempt of missed) if (rebuildFromAttempt(attempt)) buildable++;
+  if (buildable < 3) return h('div', { hidden: true });
+
+  const names = [...new Set(missed
+    .map((a) => (TOPIC_BY_ID[a.topicId] && TOPIC_BY_ID[a.topicId].name) || ''))]
+    .filter(Boolean).slice(0, 3);
+
+  return h('section', { class: 'card' }, [
+    h('p', { class: 'eyebrow', text: 'Outstanding' }),
+    h('h2', { text: 'The ones you got wrong' }),
+    h('p', { text: `${buildable} question${buildable === 1 ? '' : 's'} you missed and `
+      + 'have not got right since' + (names.length ? `, mostly ${names.join(', ')}` : '')
+      + '. The same questions, not questions like them.' }),
+    h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn', type: 'button',
+        onclick: () => { if (!startRedo(p)) router(); },
+      }, `Redo all ${buildable}`),
+    ]),
+    h('p', { class: 'small muted', text: 'They come back exactly as they were - a '
+      + 'question is a seed, so nothing had to be stored to do this.' }),
+  ]);
+}
+
 function mistakesCard(p) {
   const rows = mistakes.summarize(p.attempts).filter((r) => r.count >= mistakes.PATTERN_FLOOR);
   const teachable = rows.filter((r) => r.teachable);
@@ -3459,17 +3852,84 @@ What do you want to call it? (blank to clear)`,
     }
 
     wrap.appendChild(layer);
+
+    /* ============================== does the labelling match the question?
+
+       Labelling the picture is the step that makes a related rates
+       problem solvable, and until now it was a notepad - you could put
+       anything anywhere and nothing ever said whether it lined up with
+       the quantities the question is actually about.
+
+       This is NOT marked and does not count against anything. It
+       compares what you wrote against the symbols in the question's own
+       setup and tells you which parts of the shape have no quantity on
+       them, which is where the confusion usually is. Getting told "the
+       height has no label and the question is about dh/dt" is the whole
+       value. */
+    const review = h('div', { class: 'dgreview' });
+    const wanted = new Set(
+      ((problem.rate && problem.rate.setup) || [])
+        .map((row) => String(row.sym || '').replace(/^d|\/dt$/g, ''))
+        .filter(Boolean),
+    );
+
+    const checkLabels = () => {
+      const parts = diagram.partsFor(which);
+      const used = new Map();
+      const blank = [];
+      for (const part of parts) {
+        const said = (Object.prototype.hasOwnProperty.call(mine, part.id)
+          ? mine[part.id] : part.suggest) || '';
+        if (!said.trim()) blank.push(part.hint);
+        else used.set(said.trim(), (used.get(said.trim()) || 0) + 1);
+      }
+      const twice = [...used.entries()].filter(([, n]) => n > 1).map(([w]) => w);
+      const unused = [...wanted].filter((sym) => !used.has(sym));
+
+      review.innerHTML = '';
+      const lines = [];
+      if (blank.length) {
+        lines.push(`${blank.length} part${blank.length === 1 ? ' has' : 's have'} `
+          + `no label yet: ${blank.slice(0, 3).join('; ')}.`);
+      }
+      if (twice.length) {
+        lines.push(`"${twice.join('", "')}" is on more than one part. Two things `
+          + 'with the same name is where the algebra goes wrong.');
+      }
+      if (unused.length) {
+        lines.push(`The question talks about ${unused.join(', ')}, which `
+          + `${unused.length === 1 ? 'is' : 'are'} not on your diagram yet.`);
+      }
+      if (!lines.length) {
+        review.appendChild(h('p', { class: 'small okline',
+          text: 'Every part is labelled and every quantity the question mentions '
+            + 'is on the picture. That is the setup done.' }));
+      } else {
+        for (const line of lines) {
+          review.appendChild(h('p', { class: 'small warnline', text: line }));
+        }
+        review.appendChild(h('p', { class: 'small muted', text: 'Nothing here is '
+          + 'marked - it is only a check that the picture and the question are '
+          + 'talking about the same things.' }));
+      }
+    };
+
     slot.append(
       h('p', { class: 'small muted dgtitle', text: diagram.titleFor(which) }),
       wrap,
       h('div', { class: 'dgfoot' }, [
         h('span', { class: 'small muted', text: 'Tap any label to rename it. '
           + 'These are yours and they are saved with the question.' }),
+        wanted.size
+          ? h('button', { class: 'chip tiny', type: 'button', onclick: checkLabels },
+            'Check my labelling')
+          : null,
         h('button', {
           class: 'chip tiny', type: 'button',
           onclick: () => { mine = {}; remember(); build(); label(); },
         }, 'Reset labels'),
       ]),
+      review,
     );
   };
 
@@ -4707,7 +5167,14 @@ function copyLinkChip(problem) {
 
 function problemLink(problem) {
   if (!problem || !problem.skill || problem.seed === undefined) return null;
-  const bits = ['q', problem.skill, problem.difficulty || 2, problem.seed >>> 0];
+  /* The POOL, not just the primary skill. A level-3 question can be two
+     skills combined, and which second one was picked depends on how
+     many were offered - so a link carrying one skill rebuilt a
+     different question on the other end. Single-skill questions are
+     unaffected: the pool is one id and the link is what it always was. */
+  const from = Array.isArray(problem.pool) && problem.pool.length
+    ? problem.pool.join('+') : problem.skill;
+  const bits = ['q', from, problem.difficulty || 2, problem.seed >>> 0];
   if (problem.family) bits.push(problem.family);
   return `${location.origin}${location.pathname}#/${bits.join('/')}`;
 }
@@ -4717,7 +5184,13 @@ function renderShared(root, args) {
   const level = Math.max(1, Math.min(3, Number(levelRaw) || 2));
   const seed = Number(seedRaw);
   const problem = skill && Number.isFinite(seed)
-    ? buildProblem({ skills: [skill], level, family: family || null }, seed >>> 0)
+    ? buildProblem({
+      /* A link may name several skills, joined by +, when the question
+         was built by combining them. */
+      skills: String(skill).split('+').filter(Boolean),
+      level,
+      family: family || null,
+    }, seed >>> 0)
     : null;
 
   root.appendChild(h('header', { class: 'pagehead' }, [
@@ -4758,7 +5231,7 @@ function renderShared(root, args) {
   let recorded = false;
 
   const mark = () => {
-    const res = grade(problem, input.value);
+    const res = grade(problem, input.value, gradeOpts());
     tries++;
     /* One retry before the answer appears. A link you were sent is a
        question, and burning it on a typo - or on a form the grader could
@@ -4777,6 +5250,9 @@ function renderShared(root, args) {
         ? h('p', { class: 'answerline', html: `The answer is <b>${problem.answerHtml}</b>` })
         : null,
       res.detail ? h('p', { text: res.detail }) : null,
+      /* Raised separately from the mark, because the number was
+         right and the unit is a different thing to have got wrong. */
+      res.unitHint ? h('p', { class: 'small unitnote', text: res.unitHint }) : null,
       hold ? h('p', { class: 'small muted', text: 'The answer and the working '
         + 'are one more Check away. Have another look first.' }) : null,
     ]));
@@ -4800,6 +5276,7 @@ function renderShared(root, args) {
         ms: Date.now() - started,
         difficulty: problem.difficulty || 2,
         seed: problem.seed || 0,
+        key: problem.key || '',
         mode: 'link',
         diagnosis: res.diagnosis || '',
       });
@@ -4907,6 +5384,12 @@ const UNIT_FOCUS = [
     label: 'Related rates \u00b7 Pythagoras',
     study: 'ladders and kites - the hypotenuse is constant, or it is not',
     spec: { shapes: ['ladder', 'kite'] },
+  },
+  {
+    skill: 'concavity',
+    key: 'concavity',
+    label: 'Concavity and inflection points',
+    study: 'differentiate twice, solve f″ = 0, then check it actually CROSSES zero',
   },
   {
     skill: 'optimize',
@@ -5418,6 +5901,18 @@ function currentPaper() {
   return PAPERS[said] ? said : DEFAULT_PAPER;
 }
 
+/* What the marker should be strict about.
+
+   Units are normally not marked: writing cm^2/s instead of cm^2/sec is
+   handwriting, not calculus, and refusing it would be marking the wrong
+   thing. But a unit slip is a real loss of marks on a real test, so
+   somebody revising for one can ask to be held to it. Even then it
+   never turns a right answer into a wrong one - the number is still
+   reported correct and the unit is raised separately. */
+function gradeOpts() {
+  return { checkUnits: !!store.activeProfile().settings.checkUnits };
+}
+
 /* The concepts switched off for this profile, as a list of skill ids. */
 function examSkips() {
   const raw = store.activeProfile().settings.examSkip;
@@ -5776,7 +6271,7 @@ function renderQuiz(root) {
   const markNow = () => {
     if (marked) { advance(1); return; }
     quizRun.responses[quizRun.index] = readAnswer();
-    const res = grade(q, readAnswer());
+    const res = grade(q, readAnswer(), gradeOpts());
     if (!quizRun.verdicts) quizRun.verdicts = [];
     quizRun.verdicts[quizRun.index] = res;
     marked = true;
@@ -5787,6 +6282,7 @@ function renderQuiz(root) {
       difficulty: q.difficulty,
       hintsUsed: 0,
       seed: q.seed,
+      key: q.key || '',
       mode: 'exam',
       diagnosis: res.diagnosis || '',
     });
@@ -5811,6 +6307,9 @@ function renderQuiz(root) {
       /* The specific thing that went wrong, which is the whole reason for
          marking now rather than at the end. */
       res.detail ? h('p', { text: res.detail }) : null,
+      /* Raised separately from the mark, because the number was
+         right and the unit is a different thing to have got wrong. */
+      res.unitHint ? h('p', { class: 'small unitnote', text: res.unitHint }) : null,
     ]));
     const lines = partsVerdict(q, res);
     if (lines) marking.appendChild(lines);
@@ -5940,6 +6439,9 @@ function renderQuiz(root) {
         ? h('p', { class: 'answerline', html: 'The answer is <b>' + q.answerHtml + '</b>' })
         : null,
       res.detail ? h('p', { text: res.detail }) : null,
+      /* Raised separately from the mark, because the number was
+         right and the unit is a different thing to have got wrong. */
+      res.unitHint ? h('p', { class: 'small unitnote', text: res.unitHint }) : null,
     ]));
     const lines = partsVerdict(q, res);
     if (lines) marking.appendChild(lines);
@@ -6030,6 +6532,7 @@ function finishQuiz(timedOut = false) {
       difficulty: row.problem.difficulty,
       hintsUsed: 0,
       seed: row.problem.seed,
+      key: row.problem.key || '',
       mode: 'quiz',
       diagnosis: row.res.diagnosis || '',
     });

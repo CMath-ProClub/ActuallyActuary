@@ -88,6 +88,7 @@ export const PAPERS = {
          question extrema asks, and the second derivative is what comes
          next after it. */
       { skill: 'horizontal', share: 2, levels: [2, 3], phase: 4 },
+      { skill: 'concavity', share: 3, levels: [1, 2, 3], phase: 4 },
       { skill: 'secondderiv', share: 1, levels: [2], phase: 4 },
     ],
   },

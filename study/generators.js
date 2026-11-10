@@ -101,7 +101,7 @@ function weightedPick(spec) {
 /* Returns { correct, detail }. `detail` is shown only when the answer is
    wrong, and says what was read rather than just "incorrect" - a student who
    typed a correct value in an unreadable format deserves to know which it was. */
-export function grade(problem, response) {
+export function grade(problem, response, opts = {}) {
   if (problem == null) return { correct: false, detail: '' };
   /* A question asked in parts arrives as an array of lines. Everything
      else is one string. */
@@ -110,7 +110,7 @@ export function grade(problem, response) {
     if (!lines.some((l) => String(l == null ? '' : l).trim())) {
       return { correct: false, detail: 'No answer given.' };
     }
-    const v = gradeExpression(problem, lines);
+    const v = gradeExpression(problem, lines, opts);
     return {
       correct: v.correct,
       detail: v.hint || '',
@@ -138,7 +138,7 @@ export function grade(problem, response) {
     case 'factored':
     case 'expanded':
     case 'expression': {
-      const v = gradeExpression(problem, raw);
+      const v = gradeExpression(problem, raw, opts);
       return {
         correct: v.correct,
         detail: v.hint || '',
