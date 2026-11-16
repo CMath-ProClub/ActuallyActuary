@@ -19,6 +19,19 @@
 const LECTURE = 'Professor Leonard';
 
 const VIDEOS = {
+  /* Checked on 16 November 2026, for the formal definition of a limit.
+     Both titles and the channel were read back from YouTube's own oEmbed
+     record for the video id, not from a search result. */
+  'eps-1': {
+    url: 'https://www.youtube.com/watch?v=-ejyeII0i5c',
+    title: 'Epsilon-delta limit definition 1',
+    who: 'Khan Academy',
+  },
+  'eps-2': {
+    url: 'https://www.youtube.com/watch?v=Fdu5-aNJTzU',
+    title: 'Epsilon-delta limit definition 2',
+    who: 'Khan Academy',
+  },
   /* Checked on 6 November 2026, for the related rates and extrema unit.
      Each title below was fetched and read back off the page, same rule
      as everything above it. The third has no `who` because the channel
@@ -111,6 +124,10 @@ const VIDEOS = {
    because "go and watch an hour of calculus" is not help, and "the bit
    where he collects the dy/dx terms" is. */
 const BY_SKILL = {
+  epsilondelta: [
+    ['eps-1', 'What the definition is actually saying, before any algebra.'],
+    ['eps-2', 'Using it: starting from epsilon and working back to a delta.'],
+  ],
   limitdef: [
     ['c1-2.1', 'The whole difference quotient, worked out slowly.'],
   ],

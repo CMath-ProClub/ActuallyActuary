@@ -886,6 +886,34 @@ const EXAM_EXTRAS = {
     },
   },
 
+  epsilondelta: {
+    name: 'The formal definition of a limit',
+    topicId: 'calc.epsilondelta',
+    ask: 'an epsilon-delta proof, line by line',
+    /* Quiz 3, question 1: "Use the formal definition of limit to prove
+       the limit rigorously", with the proof laid out as blanks. Asked the
+       same way here, one box per blank, because the proof IS its lines -
+       a single answer box could only ask for the delta, and knowing the
+       delta is not the same as being able to show it works. */
+    epsdelta: true,
+    build(r, level) {
+      /* Backward: the slope and the point first, and L = ma + b is then
+         exact. Level 1 keeps the slope positive, 2 lets it go negative
+         (the coefficient that comes out is |m|, which is the usual slip),
+         and 3 adds slopes like 1/4, where delta is BIGGER than epsilon. */
+      const a = r.int(-6, 7);
+      const b = r.int(-9, 9);
+      if (level >= 3 && r() < 0.5) {
+        const k = r.int(2, 6);
+        /* x/k + b at a multiple of k, so L stays whole. */
+        const at = k * r.nz(1, 4);
+        return { num: 1, den: k, a: at, b, L: at / k + b };
+      }
+      let m = r.int(2, level >= 3 ? 12 : 9);
+      if (level >= 2 && r() < 0.4) m = -m;
+      return { num: m, den: 1, a, b, L: m * a + b };
+    },
+  },
   tangent: {
     name: 'Tangent lines',
     topicId: 'calc.tangent',
@@ -1755,6 +1783,7 @@ export function buildProblem(spec, seed) {
   if (skill.integral) return buildIntegral(id, skill, built, level, seed);
   if (skill.form) return buildForm(id, skill, built, level, seed);
   if (skill.parts) return buildLimitDefinition(id, skill, built, level, seed);
+  if (skill.epsdelta) return buildEpsilonDelta(id, skill, built, level, seed);
   if (skill.tangent) return buildTangent(id, skill, built, level, seed);
   if (skill.rates) return buildRateProblem(id, skill, built, level, seed);
   if (skill.optimize) return buildOptimizeProblem(id, skill, built, level, seed);
@@ -3023,6 +3052,153 @@ function buildZeroSet(id, skill, built, level, seed) {
 
 const H = vr('h');
 
+/* An epsilon-delta proof for a linear function, as its four blanks.
+
+   Every line is checked here before the question ships, by a route that
+   does not use the stated answers: the factored form is compared with
+   |f(x) - L| at sampled x, and the delta is then TESTED - for several
+   epsilons, points inside (a - delta, a + delta) must land within epsilon
+   of L, and a delta twice the size must fail. That second half is what
+   says the delta is the largest one and not merely a safe one. */
+function buildEpsilonDelta(id, skill, built, level, seed) {
+  const EPS = vr('ε');
+  const DEL = vr('δ');
+  const { a, b, L } = built;
+  const m = built.num / built.den;
+  const size = Math.abs(m);
+  const f = (x) => m * x + b;
+
+  /* |m| as a node: 8, or 1/4. */
+  const sizeNode = built.den === 1
+    ? num(Math.abs(built.num))
+    : div(num(1), num(built.den));
+  const gap = a === 0 ? X : a > 0 ? sub(X, num(a)) : add(X, num(-a));
+  const factored = mul(sizeNode, fn('abs', gap));
+  const delta = built.den === 1
+    ? div(EPS, num(Math.abs(built.num)))
+    : mul(num(built.den), EPS);
+  const bound = mul(sizeNode, DEL);
+
+  /* --- the independent check --- */
+  const factoredFn = Expr.compile(factored);
+  for (let i = 0; i < 12; i++) {
+    const x = a + (i - 5.5) * 0.37;
+    if (Math.abs(factoredFn({ x }) - Math.abs(f(x) - L)) > 1e-9) return null;
+  }
+  const deltaFn = Expr.compile(delta);
+  for (const eps of [2, 0.5, 0.01]) {
+    const d = deltaFn({ 'ε': eps });
+    if (!(d > 0)) return null;
+    for (const t of [-0.999, -0.5, 0.25, 0.999]) {
+      if (!(Math.abs(f(a + t * d) - L) < eps)) return null;
+    }
+    /* Twice the delta must NOT work, or this is not the largest. */
+    if (Math.abs(f(a + 1.5 * d) - L) < eps) return null;
+  }
+
+  /* A real minus sign, as everywhere else on the page. */
+  const show = (n) => MathKit.num(n).replace('-', '−');
+  const coef = built.den === 1
+    ? (built.num === 1 ? '' : built.num === -1 ? '−' : show(built.num))
+    : '';
+  const fx = built.den === 1
+    ? `${coef}x${MathKit.plus(b)}`
+    : `${MathKit.frac('x', String(built.den))}${MathKit.plus(b)}`;
+  const sizeText = built.den === 1 ? String(Math.abs(built.num)) : `1/${built.den}`;
+  const gapText = a === 0 ? 'x' : a > 0 ? `x − ${a}` : `x + ${-a}`;
+  const lhs = `|${fx} − ${L < 0 ? `(${show(L)})` : show(L)}|`;
+
+  return {
+    source: 'sandbox',
+    kind: 'parts',
+    skill: id,
+    skillName: skill.name,
+    topicName: skill.name,
+    topicId: skill.topicId,
+    difficulty: level,
+    seed: seed >>> 0,
+    key: `sandbox:${id}:${level}:${seed >>> 0}`,
+    variable: 'x',
+    /* A graph of a straight line gives nothing away here and helps
+       nobody: the question is the argument. */
+    noGraph: true,
+    noGraphWhy: 'This one is a proof - there is nothing to read off a graph.',
+    stem: `Use the formal definition of a limit to prove `
+      + `<span class="eq">lim<sub>x→${show(a)}</sub> (${fx}) = ${show(L)}</span>.`,
+    instruction: 'Scratch work first, then the proof. Type eps for ε and '
+      + 'delta for δ, and |x − 4| with the bar key or as abs(x - 4).',
+    functionText: `${built.den === 1 ? `${built.num}x` : `x/${built.den}`}${b ? (b > 0 ? ` + ${b}` : ` - ${-b}`) : ''}`,
+    parts: [
+      {
+        id: 'factored',
+        label: 'Scratch work',
+        promptHtml: `${lhs} = `,
+        answerNode: factored,
+        vars: ['x'],
+        mustFactor: true,
+        placeholder: `a number times |${gapText}|`,
+        hint: `Simplify inside the bars, then pull the constant out in front `
+          + `of |${gapText}|.`,
+      },
+      {
+        id: 'delta',
+        /* Spelled out: these labels are set in capitals, and a capital
+           delta is a different symbol with a different meaning. */
+        label: 'Choose the delta',
+        promptHtml: 'Given ε &gt; 0, let δ = ',
+        answerNode: delta,
+        vars: ['ε'],
+        greek: true,
+        deltaScale: 1 / size,
+        sizeText,
+        gapText,
+        placeholder: 'in terms of eps',
+        hint: `You need ${sizeText}|${gapText}| < ε. What does |${gapText}| `
+          + 'have to be smaller than?',
+      },
+      {
+        id: 'bound',
+        label: 'Use the bound',
+        promptHtml: `If 0 &lt; |${gapText}| &lt; δ, then ${lhs} = `
+          + `${sizeText}|${gapText}| &lt; `,
+        answerNode: bound,
+        vars: ['δ'],
+        greek: true,
+        placeholder: 'in terms of delta',
+        hint: `|${gapText}| is less than δ, so ${sizeText} times it is less than what?`,
+      },
+      {
+        id: 'closes',
+        label: 'Which is',
+        promptHtml: '= ',
+        answerNode: EPS,
+        vars: ['ε'],
+        greek: true,
+        placeholder: 'put your delta in and simplify',
+        hint: 'Substitute the δ you chose into the line above. It should '
+          + 'collapse to exactly what you were asked to get under.',
+      },
+    ],
+    /* Each line as it could be typed back in, which is what a test that
+       checks "the stated answer grades correct" feeds to the marker. */
+    partAnswers: [Expr.text(factored), Expr.text(delta), Expr.text(bound), Expr.text(EPS)],
+    answerText: `|f(x) - L| = ${sizeText}|${gapText}|, delta = ${Expr.text(delta)}`,
+    answerHtml: `δ = ${html(delta)}, because ${lhs} = ${sizeText}|${gapText}| `
+      + `&lt; ${sizeText}δ = ε`,
+    steps: [
+      { title: 'Scratch work: what has to be small',
+        html: `${lhs} = ${sizeText}|${gapText}|` },
+      { title: 'Work back to |x − a|',
+        html: `${sizeText}|${gapText}| &lt; ε exactly when |${gapText}| &lt; ${html(delta)}` },
+      { title: 'So choose',
+        html: `δ = ${html(delta)}` },
+      { title: 'The proof',
+        html: `If 0 &lt; |${gapText}| &lt; δ, then ${lhs} = ${sizeText}|${gapText}| `
+          + `&lt; ${sizeText}δ = ε.` },
+    ],
+  };
+}
+
 function buildLimitDefinition(id, skill, built, level, seed) {
   const f = simplify(built.f);
   const cancelled = built.cancelled;
@@ -3222,7 +3398,66 @@ export function gradeParts(problem, answers) {
       };
     }
 
+    /* "e" is Euler's number in this engine, so e/8 typed for epsilon over
+       eight is 0.34 and would be marked wrong with a hint about constant
+       factors. Said plainly instead, and not counted as a decided miss. */
+    if (part.greek && /(^|[^a-z])e([^a-z]|$)/i.test(raw)) {
+      return {
+        correct: false, decided: false, kind: 'unreadable',
+        hint: 'A bare "e" is Euler’s number here. Type eps for ε and '
+          + 'delta for δ.',
+      };
+    }
     const v = Expr.judge(raw, part.answerNode, { vars: part.vars || ['x', 'h'] });
+    /* A delta that is a different multiple of epsilon is not simply
+       "off by a constant factor". A SMALLER one is a correct proof - any
+       delta under the largest works - and saying "wrong" to that teaches
+       something false. It is sent back undecided, with the reason this
+       page wants the largest. A bigger one genuinely fails, and the hint
+       says where. */
+    if (part.deltaScale && !v.correct) {
+      const typed = Expr.tryParse(raw, { vars: part.vars });
+      if (typed) {
+        const at = Expr.compile(typed);
+        const c1 = at({ 'ε': 1 });
+        const c2 = at({ 'ε': 2 });
+        if (isFinite(c1) && c1 > 0 && Math.abs(c2 - 2 * c1) < 1e-9) {
+          if (c1 < part.deltaScale) {
+            return {
+              correct: false, decided: false, kind: 'smaller-delta',
+              hint: 'That δ does work - any smaller one does. Use the largest '
+                + 'here, so the last line comes out as exactly ε.',
+            };
+          }
+          return {
+            correct: false, decided: true, kind: 'delta-too-big',
+            hint: `Too big. With that δ, ${part.sizeText}|${part.gapText}| can be as `
+              + `large as ${MathKit.num(c1 / part.deltaScale, 4)}ε, which is not under ε. `
+              + `Divide where you multiplied.`,
+          };
+        }
+      }
+    }
+    if (part.mustFactor) {
+      const typed = Expr.tryParse(raw, { vars: part.vars });
+      /* |8x - 32| is equal to 8|x - 4| and is not the step: the proof
+         needs |x - a| standing on its own, because that is the thing
+         delta bounds. */
+      if (v.correct && typed && typed.t === 'fn' && typed.n === 'abs') {
+        return {
+          correct: false, decided: true, kind: 'bars-not-factored',
+          hint: 'True, but keep going: pull the constant out so that what is '
+            + 'left inside the bars is exactly x minus the point.',
+        };
+      }
+      if (!v.correct && typed && !/\||abs/i.test(raw)) {
+        return {
+          correct: false, decided: true, kind: 'lost-bars',
+          hint: 'The absolute value bars have gone. The constant comes out in '
+            + 'front, but |x − a| keeps its bars.',
+        };
+      }
+    }
     if (!v.correct || !part.mustBeFiniteAtZero) return v;
     /* Equal to the quotient is not enough on this line: so is the
        quotient, and writing it again is exactly the step being tested. */

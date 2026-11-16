@@ -203,6 +203,30 @@ export const DIAGNOSES = {
     skills: [],
     teachable: false,
   },
+  'delta-too-big': {
+    label: 'Chose a δ that is too big',
+    detail: 'The δ was multiplied by the slope instead of divided by it. '
+      + 'If |f(x) − L| = 8|x − a|, then |x − a| has to stay under '
+      + 'ε/8 - a steeper line needs a tighter window, not a wider one.',
+    skills: ['epsilondelta'],
+    teachable: true,
+  },
+  'bars-not-factored': {
+    label: 'Stopped before factoring',
+    detail: 'The inside of the absolute value was simplified but the constant '
+      + 'was left in. An epsilon-delta proof needs |x − a| on its own, '
+      + 'because that is the quantity delta controls.',
+    skills: ['epsilondelta'],
+    teachable: true,
+  },
+  'lost-bars': {
+    label: 'Dropped the absolute value',
+    detail: 'The bars disappeared when the constant came out. 8|x − 4| '
+      + 'is not 8(x − 4): to the left of 4 one is positive and the other '
+      + 'is not.',
+    skills: ['epsilondelta'],
+    teachable: true,
+  },
   'h-not-cancelled': {
     label: 'The h never cancelled',
     detail: 'The difference quotient was written again instead of being '

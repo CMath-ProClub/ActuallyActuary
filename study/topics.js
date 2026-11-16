@@ -98,6 +98,10 @@ export const TOPICS = [
     gen: 'limitBasic', needs: ['alg2.factor', 'alg2.rational'], blurb: 'Direct substitution, factoring, and conjugates.' },
   { id: 'calc.limitinf', course: 'calc1', unit: 'Limits', name: 'Limits at infinity',
     gen: 'limitInfinity', needs: ['calc.limit'], blurb: 'Horizontal asymptotes and degree comparison.' },
+  { id: 'calc.epsilondelta', course: 'calc1', unit: 'Limits',
+    name: 'The formal definition of a limit',
+    gen: 'epsilonDelta', needs: ['calc.limit'],
+    blurb: 'Given ε, find the δ that forces it - and show it works.' },
   { id: 'calc.continuity', course: 'calc1', unit: 'Limits', name: 'Continuity',
     gen: 'continuity', needs: ['calc.limit'], blurb: 'Where a piecewise function breaks, and how to patch it.' },
 

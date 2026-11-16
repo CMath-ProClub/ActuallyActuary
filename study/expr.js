@@ -102,6 +102,24 @@ const FN_SHOWN = {
 
 const CONSTS = { pi: Math.PI, e: Math.E, tau: Math.PI * 2 };
 
+/* Epsilon and delta, which an epsilon-delta proof cannot be written without.
+   They have to be their own symbols: "e" is already Euler's number up there,
+   so a student typing e/8 for the delta would silently get 0.3398 and be
+   marked wrong for an answer that was right.
+
+   Typed spellings map onto the same symbol, because the page renders a Greek
+   letter and almost nobody has one on a keyboard. The longest-name-wins loop
+   in tokenize() tries these the same way it tries function names, which is
+   what stops "delta" reading as d*e*l*t*a. */
+const VAR_ALIAS = {
+  epsilon: 'ε', eps: 'ε',
+  delta: 'δ', del: 'δ',
+};
+const GREEK_VARS = {
+  'ε': 'ε', 'ϵ': 'ε',  /* epsilon, lunate epsilon */
+  'δ': 'δ',
+};
+
 /* Characters the page itself renders, so a student who copies the problem
    text and edits it gets a readable expression rather than a parse error.
    math.js writes exponents as Unicode superscripts for exactly that reason. */
@@ -270,6 +288,7 @@ function tokenize(src) {
       i += m[0].length;
       continue;
     }
+    if (GREEK_VARS[c]) { out.push({ k: 'var', v: GREEK_VARS[c] }); i++; continue; }
     if (isAlpha(c)) {
       const word = s.slice(i).match(/^[a-z]+/i)[0].toLowerCase();
       /* Longest known name wins, so "sinh" never reads as "sin" then "h",
@@ -281,12 +300,15 @@ function tokenize(src) {
         const canon = FN_ALIAS[head] || head;
         if (FNS[canon]) { out.push({ k: 'fn', v: canon }); taken = len; break; }
         if (CONSTS[head]) { out.push({ k: 'const', v: head }); taken = len; break; }
+        if (VAR_ALIAS[head]) {
+          out.push({ k: 'var', v: VAR_ALIAS[head] }); taken = len; break;
+        }
       }
       if (!taken) { out.push({ k: 'var', v: word[0] }); taken = 1; }
       i += taken;
       continue;
     }
-    if ('+-*/^(),'.includes(c)) { out.push({ k: c }); i++; continue; }
+    if ('+-*/^(),|'.includes(c)) { out.push({ k: c }); i++; continue; }
     throw new ParseError(`I do not know what to do with "${c}".`);
   }
   return out;
@@ -325,10 +347,17 @@ function parse(src, opts = null) {
 
   /* Can a factor start here? Only then is juxtaposition a multiplication.
      A number may not follow a number (12 3 is a typo, not 36). */
+  let absDepth = 0;
+
   function startsFactor() {
     const p = peek();
     if (!p) return false;
     if (p.k === 'var' || p.k === 'const' || p.k === 'fn' || p.k === '(') return true;
+    /* A bar opens an absolute value only when one is not already open.
+       Inside |x - 4| the second bar is the CLOSE, and treating it as the
+       start of a new factor turns the expression into a parse error at
+       best and |x-4| times something at worst. */
+    if (p.k === '|' && !absDepth) return true;
     return false;
   }
 
@@ -347,6 +376,19 @@ function parse(src, opts = null) {
   function atom() {
     const p = peek();
     if (!p) throw new ParseError('The expression stops early.');
+    /* |x - 4| is how an absolute value is written by hand, and an
+       epsilon-delta proof is nothing but absolute values. It builds the
+       same abs() node the function spelling does, so everything
+       downstream - differentiating, grading, printing - is unchanged. */
+    if (eat('|')) {
+      absDepth++;
+      const v = expression();
+      absDepth--;
+      if (!eat('|')) {
+        throw new ParseError('A closing | is missing.');
+      }
+      return fn('abs', v);
+    }
     if (eat('(')) {
       const v = expression();
       if (!eat(')')) throw new ParseError('A closing parenthesis is missing.');

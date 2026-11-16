@@ -101,6 +101,48 @@ function go(path) {
    this". Opening the site and being asked what you feel like practising is
    how revision time goes on whatever you thought of last, which is rarely
    the thing you are worst at. */
+/* The retakes, one tap from opening the app.
+
+   Lock In is where they live, and it was a tab away from the page the app
+   opens on - which on a phone, between two classes, is the difference
+   between doing three questions and doing none. So the first thing on
+   Start is what is being sat again and a button that begins it.
+
+   It reads the same list Lock In does rather than keeping its own, and it
+   only appears while that list is the retakes: change what Lock In drills
+   and this card goes with it instead of advertising something else. */
+function retakeCard() {
+  const focus = lockInFocus();
+  const retakes = focus.filter((f) => f.quiz);
+  if (!retakes.length || retakes.length !== focus.length) return h('div', { hidden: true });
+
+  const running = quizRun && quizRun.plan && quizRun.plan.lockin
+    && quizRun.phase === 'running';
+  const outcomes = [];
+  for (const f of retakes) {
+    if (!outcomes.some((o) => o.outcome === f.outcome)) outcomes.push(f);
+  }
+  const quizzes = [...new Set(retakes.map((f) => f.quiz.replace('Quiz ', '')))];
+
+  return h('section', { class: 'card retakes' }, [
+    h('p', { class: 'eyebrow', text: `Retakes · Quizzes ${quizzes.join(', ')}` }),
+    h('h2', { text: `${outcomes.length} things to get back` }),
+    h('ul', { class: 'retakelist' }, outcomes.map((f) => h('li', {}, [
+      h('span', { class: 'outcometag', text: f.outcome }),
+      h('span', { text: f.label.replace(/ · .*$/, '') }),
+    ]))),
+    h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn big', type: 'button',
+        onclick: () => (running ? go('quiz') : startLockIn()),
+      }, running ? 'Carry on' : 'Start now'),
+      h('a', { class: 'btn ghost', href: '#/lockin' }, 'See the list'),
+    ]),
+    h('p', { class: 'small muted', text: 'Only what was marked wrong. Nothing you '
+      + 'have already passed is in here.' }),
+  ]);
+}
+
 function todayCard() {
   const profile = store.activeProfile();
   const made = plan.planFor(profile, {
@@ -2513,6 +2555,7 @@ function renderStart(root) {
 
   /* The exam is the thing being studied for this week, so it goes above
      the flow rather than four questions into it. */
+  root.appendChild(retakeCard());
   root.appendChild(todayCard());
 
   const paper = currentPaper();
@@ -3495,13 +3538,26 @@ function scratchPanel(problem) {
   return { toggle, slot };
 }
 
-function mathKeys(target) {
-  if (!touchDevice()) return null;
+/* The three symbols an epsilon-delta proof is written in. Shown on a
+   desktop as well as a phone, unlike the rest of the row: a keyboard has
+   an x and a bracket on it and does not have an epsilon. */
+const PROOF_KEYS = [
+  { label: 'ε', insert: 'ε' },
+  { label: 'δ', insert: 'δ' },
+  { label: '| |', insert: '||', back: 1 },
+];
+
+function mathKeys(target, problem = null) {
+  const proof = !!(problem && problem.skill === 'epsilondelta');
+  if (!touchDevice() && !proof) return null;
+  const keyset = proof
+    ? [...PROOF_KEYS, ...(touchDevice() ? MATH_KEYS : [])]
+    : MATH_KEYS;
   /* `target` may be an input or a function returning one, so a single row of
      keys can serve a four-box answer. Resolved at tap time, not now. */
   const pick = () => (typeof target === 'function' ? target() : target);
   const row = h('div', { class: 'mathkeys', role: 'group', 'aria-label': 'Maths keys' });
-  for (const key of MATH_KEYS) {
+  for (const key of keyset) {
     row.appendChild(h('button', {
       class: 'mathkey', type: 'button', tabindex: '-1',
       /* Keeping focus in the field means the caret does not jump to the end
@@ -4416,7 +4472,7 @@ function paintWorkspaceProblem(slot) {
   const readAnswer = () => (multi ? multi.read() : input.value);
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(problem.kind);
-  const keys = multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null);
+  const keys = multi ? mathKeys(multi.keysFor, problem) : (expressionish ? mathKeys(input) : null);
   const echo = multi ? null : (expressionish ? attachEcho(input, problem) : null);
   const feedback = h('div', { class: 'wsfeedback' });
 
@@ -5213,11 +5269,24 @@ function renderShared(root, args) {
   ]));
   card.appendChild(h('div', { class: 'stem', html: problem.stem }));
 
-  const input = h('input', {
+  /* A line-by-line question arrives by link as its lines.
+
+     This page built one box for everything, so a limit definition or an
+     epsilon-delta proof opened from a link was a single field with the
+     placeholder "one line at a time" and no way to give it four - the
+     question could be read and could not be answered. Practice and the
+     mock test have used partsForm all along; the link page is the one
+     that was missed. */
+  const submitRef = { fn: () => {} };
+  const multi = problem.kind === 'parts' && problem.parts
+    ? partsForm(problem, null, () => submitRef.fn())
+    : null;
+  const input = multi ? multi.inputs[0] : h('input', {
     type: 'text', class: 'answerinput', autocomplete: 'off', spellcheck: 'false',
     placeholder: inputHint(problem), 'aria-label': 'Your answer',
   });
-  const field = answerBox(input);
+  const field = multi ? multi.wrap : answerBox(input);
+  const readAnswer = () => (multi ? multi.read() : input.value);
   const marking = h('div', { class: 'exammark' });
   const graphSlot = h('div', { class: 'graphslot' });
   /* A link is somebody about to do a problem, and until now this page gave
@@ -5231,7 +5300,7 @@ function renderShared(root, args) {
   let recorded = false;
 
   const mark = () => {
-    const res = grade(problem, input.value, gradeOpts());
+    const res = grade(problem, readAnswer(), gradeOpts());
     tries++;
     /* One retry before the answer appears. A link you were sent is a
        question, and burning it on a typo - or on a form the grader could
@@ -5250,6 +5319,8 @@ function renderShared(root, args) {
         ? h('p', { class: 'answerline', html: `The answer is <b>${problem.answerHtml}</b>` })
         : null,
       res.detail ? h('p', { text: res.detail }) : null,
+      /* Which line, and why - the part worth reading on a four-line answer. */
+      multi ? partsVerdict(problem, res) : null,
       /* Raised separately from the mark, because the number was
          right and the unit is a different thing to have got wrong. */
       res.unitHint ? h('p', { class: 'small unitnote', text: res.unitHint }) : null,
@@ -5282,16 +5353,20 @@ function renderShared(root, args) {
       });
     }
   };
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); mark(); }
-  });
+  submitRef.fn = mark;
+  if (!multi) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); mark(); }
+    });
+  }
 
   const expressionish = ['expression', 'antiderivative', 'factored', 'expanded']
     .includes(problem.kind);
 
   card.appendChild(h('div', { class: 'answerform' }, [
+    problem.instruction ? h('p', { class: 'small muted', text: problem.instruction }) : null,
     field,
-    mathKeys(input),
+    multi ? mathKeys(multi.keysFor, problem) : mathKeys(input),
     expressionish ? attachEcho(input, problem) : null,
     h('div', { class: 'cta' }, [
       h('button', { class: 'btn', type: 'button', onclick: mark }, 'Check'),
@@ -5301,7 +5376,7 @@ function renderShared(root, args) {
       scratch.toggle,
       problem.noGraph ? null : h('button', {
         class: 'chip', type: 'button',
-        onclick: () => examGraph(problem, input.value, graphSlot),
+        onclick: () => examGraph(problem, readAnswer(), graphSlot),
       }, 'Graph it'),
       expressionish ? h('button', {
         class: 'chip', type: 'button',
@@ -5319,9 +5394,12 @@ function renderShared(root, args) {
          obvious thing to want. */
       copyLinkChip(problem),
     ]),
-    problem.noGraph ? h('p', { class: 'small muted', text: 'No graph on this '
-      + 'one - the graph would hand you the answer, and the point is the '
-      + 'algebra.' }) : null,
+    /* The question's own reason when it has one: "the graph would hand
+       you the answer" is not true of a proof, and saying it there is the
+       page talking about a different question. */
+    problem.noGraph ? h('p', { class: 'small muted', text: problem.noGraphWhy
+      || 'No graph on this one - the graph would hand you the answer, and '
+      + 'the point is the algebra.' }) : null,
     h('p', { class: 'small muted', text: 'This exact question rebuilds from the '
       + 'link on any device - it is the seed that travels, not the text.' }),
     scratch.slot,
@@ -5406,6 +5484,93 @@ const UNIT_FOCUS = [
   },
 ];
 
+/* The retakes.
+
+   Read off Carter's Math 114 outcomes sheet and the four marked quizzes:
+   an outcome with a star and an empty "Mastered" box is one whose quiz
+   question was marked wrong, and those are the ones being sat again.
+   Everything with a smiley or a tick is deliberately NOT here - L1-L3,
+   L5, L6, D2-D5, D8 and A2-A6 are done, and drilling them is time taken
+   from the five that are not.
+
+     L4  Quiz 3 #1   the formal definition of a limit
+     D1  Quiz 4 #1   the limit definition of the derivative
+     D6  Quiz 6 #1   the chain rule
+     D7  Quiz 6 #2   implicit differentiation
+     A1  Quiz 7 #1   related rates
+
+   `missed` is the question that was actually on the paper, shown on the
+   card so that what is being drilled is recognisably the thing that went
+   wrong. The cone has a line of its own as well as sitting inside related
+   rates: it is the exact question, and what went wrong on it - using the
+   tank's radius where the water's was needed - is specific to cones. */
+const RETAKE_FOCUS = [
+  {
+    skill: 'epsilondelta',
+    key: 'epsilondelta',
+    outcome: 'L4',
+    quiz: 'Quiz 3',
+    label: 'The formal definition of a limit',
+    study: 'simplify |f(x) − L| down to a number times |x − a|, then '
+      + 'choose δ so that number cancels',
+    missed: 'Prove lim x→4 (8x + 3) = 35 rigorously',
+  },
+  {
+    skill: 'limitdef',
+    key: 'limitdef',
+    outcome: 'D1',
+    quiz: 'Quiz 4',
+    label: 'The limit definition of the derivative',
+    study: 'substitute, form the quotient, cancel the h, then let h go to zero',
+    missed: 'Differentiate f(x) = 1/x² using the limit definition',
+  },
+  {
+    skill: 'chain',
+    key: 'chain',
+    outcome: 'D6',
+    quiz: 'Quiz 6',
+    label: 'The chain rule',
+    study: 'differentiate the outside, leave the inside alone, then multiply '
+      + 'by the derivative of the inside - all of it',
+    missed: 'Differentiate y = √(ln x + tan x)',
+  },
+  {
+    skill: 'implicit',
+    key: 'implicit',
+    outcome: 'D7',
+    quiz: 'Quiz 6',
+    label: 'Implicit differentiation',
+    study: 'differentiate both sides as they stand, put a y′ on every y '
+      + 'term, then collect the y′s and divide',
+    missed: 'Find y′ for x·e^y = 2y + y³',
+  },
+  {
+    skill: 'rates',
+    key: 'rates:cone',
+    outcome: 'A1',
+    quiz: 'Quiz 7',
+    label: 'Related rates · the cone',
+    study: 'similar triangles FIRST: write r in terms of h, so the volume '
+      + 'has one variable in it before you differentiate',
+    missed: 'A conical tank, 3 m tall and 2 m across the top radius, filling '
+      + 'at 2 m³/min - how fast is the level rising at 1 m?',
+    spec: { shapes: ['coneFill'] },
+  },
+  {
+    skill: 'rates',
+    key: 'rates',
+    outcome: 'A1',
+    quiz: 'Quiz 7',
+    label: 'Related rates · every other shape',
+    study: 'name the variables, write the one equation that links them, '
+      + 'differentiate with respect to t, and only then put numbers in',
+    spec: { shapes: ['sphereVolume', 'snowball', 'snowballDiameter', 'cylinder',
+      'cubeVolume', 'cubeSurface', 'spotlightWall', 'lamppost', 'ladder', 'kite',
+      'circleArea', 'circleCircumference', 'square', 'triangle'] },
+  },
+];
+const RETAKE_UNIT = 'Retakes · Quizzes 3, 4, 6 and 7';
+
 /* The implicit shapes, as a group like any other. */
 const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
 
@@ -5421,6 +5586,7 @@ const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family })
    you are working on, start. Nothing here is deleted when you change
    units; it is just not ticked. */
 const FOCUS_GROUPS = [
+  ...RETAKE_FOCUS.map((g) => ({ ...g, unit: RETAKE_UNIT })),
   ...UNIT_FOCUS.map((g) => ({ ...g, unit: 'Unit 3 \u00b7 Applications' })),
   ...IMPLICIT_FOCUS.map((f) => {
     const family = focusFamily(f.family);
@@ -5434,13 +5600,6 @@ const FOCUS_GROUPS = [
     };
   }),
   {
-    skill: 'limitdef',
-    key: 'limitdef',
-    label: 'The limit definition, line by line',
-    study: 'substitute, form the quotient, cancel the h, then let h go to zero',
-    unit: 'Unit 2 \u00b7 Derivatives',
-  },
-  {
     skill: 'logdiff',
     key: 'logdiff',
     label: 'Logarithmic differentiation',
@@ -5451,24 +5610,46 @@ const FOCUS_GROUPS = [
 
 const FOCUS_BY_KEY = Object.fromEntries(FOCUS_GROUPS.map((g) => [g.key, g]));
 
+/* The setting's name carries the date it was last re-pointed. A choice
+   saved under the old name was a choice about the applications unit, made
+   before the retakes existed; honouring it would mean the button Carter
+   asked to be changed went on doing what it did. Under a new name the
+   default applies once, and anything ticked from here on is kept. */
+const LOCKIN_SETTING = 'lockInFocus:2026-11';
+
 /* Which groups are ticked. Defaults to the current unit, so the button
    does something sensible before anybody has chosen anything. */
 function lockInKeys() {
-  const saved = store.activeProfile().settings.lockInFocus;
+  const saved = store.activeProfile().settings[LOCKIN_SETTING];
   const known = Array.isArray(saved) ? saved.filter((k) => FOCUS_BY_KEY[k]) : [];
-  return known.length ? known : UNIT_FOCUS.map((g) => g.key);
+  return known.length ? known : RETAKE_FOCUS.map((g) => g.key);
 }
 
 function lockInFocus() {
   return lockInKeys().map((k) => FOCUS_BY_KEY[k]).filter(Boolean);
 }
 
+/* Says what the page is actually pointed at, because it is a setting now
+   and a headline written for one unit is wrong the day it changes. */
+function lockInLead() {
+  const focus = lockInFocus();
+  const retakes = focus.filter((f) => f.quiz);
+  const tail = ' Each one eases off once you have had three in a row right, '
+    + 'and comes straight back if you miss one.';
+  if (retakes.length && retakes.length === focus.length) {
+    const quizzes = [...new Set(retakes.map((f) => f.quiz))];
+    return `The ${quizzes.length === 1 ? 'question' : 'questions'} marked wrong on `
+      + `${quizzes.join(', ').replace(/, ([^,]*)$/, ' and $1')}, and nothing you `
+      + `have already passed.${tail}`;
+  }
+  return `${focus.length} ${focus.length === 1 ? 'thing' : 'things'} you chose, `
+    + `drilled until ${focus.length === 1 ? 'it is' : 'they are'} solid.${tail}`;
+}
+
 function renderLockIn(root) {
   root.appendChild(h('header', { class: 'pagehead' }, [
     h('h1', { text: 'Lock in' }),
-    h('p', { class: 'lead', text: 'Related rates and finding maxima and minima, '
-      + 'drilled until they are solid. Each group eases off once you have had '
-      + 'three in a row right, and comes straight back if you miss one.' }),
+    h('p', { class: 'lead', text: lockInLead() }),
   ]));
 
   /* A lock-in session already running is resumed rather than restarted, or
@@ -5494,10 +5675,18 @@ function renderLockIn(root) {
 
     list.appendChild(h('li', { class: seen && seen.solid ? 'solid' : '' }, [
       h('div', { class: 'focusname' }, [
+        entry.outcome ? h('span', { class: 'outcometag', text: entry.outcome }) : null,
         h('strong', { text: label }),
+        entry.quiz ? h('span', { class: 'quiztag', text: entry.quiz }) : null,
         seen && seen.solid ? h('span', { class: 'pill good', text: 'solid' }) : null,
       ]),
-      study ? h('p', { class: 'small muted', text: `Study: ${study}.` }) : null,
+      entry.missed
+        ? h('p', { class: 'small missedline' }, [
+          h('span', { class: 'missedlabel', text: 'Marked wrong: ' }),
+          h('span', { text: entry.missed }),
+        ])
+        : null,
+      study ? h('p', { class: 'small muted', text: `How: ${study}.` }) : null,
       ...(entry.family ? help.helpForFamily(entry.family) : [])
         .map((video) => h('p', { class: 'small watchline' }, [
           h('a', {
@@ -5528,7 +5717,7 @@ function renderLockIn(root) {
     ]),
     state
       ? h('p', { class: 'small muted', text: `Right now ${Math.round(drill.focusShare(state) * 100)}% `
-        + 'of the questions are these four. That drops as they come good.' })
+        + 'of the questions are these. That drops as they come good.' })
       : h('p', { class: 'small muted', text: 'It never ends - stop when you have '
         + 'had enough. Everything is marked as you go, with the working for '
         + 'anything you miss.' }),
@@ -5569,7 +5758,7 @@ function renderLockIn(root) {
         /* Never let it end up empty: a Lock In with nothing to drill is
            a button that does nothing and says nothing. */
         if (!next.size) { box.checked = true; return; }
-        store.setSetting('lockInFocus', [...next]);
+        store.setSetting(LOCKIN_SETTING, [...next]);
         router();
       });
       rows.appendChild(h('label', { class: 'focuscheck' }, [
@@ -6362,7 +6551,7 @@ function renderQuiz(root) {
     .includes(q.kind);
   card.appendChild(h('div', { class: 'answerform' }, [
     field,
-    multi ? mathKeys(multi.keysFor) : (expressionish ? mathKeys(input) : null),
+    multi ? mathKeys(multi.keysFor, q) : (expressionish ? mathKeys(input) : null),
     multi ? null : (expressionish ? attachEcho(input, q) : null),
     /* One primary action. Answering is the thing; everything else is a
        tool you reach for, and four buttons of equal weight is four

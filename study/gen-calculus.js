@@ -169,6 +169,59 @@ export function continuity(rng, level) {
   };
 }
 
+/* The formal definition, asked as a number.
+
+   Quiz 3 question 1, which is the one outcome in the Limits unit that was
+   never practiseable here: there was no epsilon-delta generator at all, so
+   "state and use the formal definition of a limit" could be revised for by
+   reading and nothing else.
+
+   Built backward, like everything else: pick the slope and the point, and
+   the limit L = ma + b is then exact rather than rounded. For a linear
+   function the proof is always the same move - |mx + b - L| = |m||x - a|,
+   so |x - a| < e/|m| forces it under e - and the number being asked for is
+   that e/|m|. Any SMALLER delta also works, which the marking has to know:
+   the question asks for the largest one that does. */
+export function epsilonDelta(rng, level) {
+  const m = rng.nz(2, level >= 3 ? 12 : 9);
+  const a = rng.int(-6, 7);
+  const b = rng.int(-9, 9);
+  const L = m * a + b;
+  /* An epsilon with an exact quotient, so the answer is not a decimal that
+     invites a rounded key - the trap that marked correct tangent work wrong. */
+  const eps = Math.abs(m) * rng.pick([0.01, 0.05, 0.1, 0.25, 0.5]);
+  const delta = eps / Math.abs(m);
+  /* plus() renders nothing for a zero, which is the whole reason it
+     exists: b is allowed to be 0 here and "5x + 0" is not a question
+     anybody writes. test_generators fails the build on that string. */
+  /* A real minus sign on every negative, like the rest of the page. */
+  const show = (n) => num(n).replace('-', '−');
+  const fx = `${m === 1 ? '' : m === -1 ? '−' : show(m)}x${plus(b)}`;
+  return {
+    stem: `Use the formal definition of a limit for `
+      + `<span class="eq">lim<sub>x→${show(a)}</sub> (${fx}) = ${show(L)}</span>. `
+      + `What is the largest δ that works for ε = ${num(eps)}?`,
+    kind: 'numeric',
+    answer: delta,
+    tol: 1e-9,
+    answerHtml: `δ = ${num(delta)}`,
+    hints: ['Start from |f(x) − L| < ε and work back to a bound on |x − a|.',
+      `|${fx} − (${L})| simplifies to ${Math.abs(m)}|x − ${a}|.`,
+      `So you need ${Math.abs(m)}|x − ${a}| < ε, which is |x − ${a}| < ε/${Math.abs(m)}.`],
+    steps: [
+      { title: 'Write what you must force',
+        html: `|(${fx}) − ${L}| &lt; ε` },
+      { title: 'Simplify the left side',
+        html: `|${fx} − (${L})| = |${m}x − ${m * a}| `
+          + `= ${Math.abs(m)}|x − ${a}|` },
+      { title: 'Solve for |x − a|',
+        html: `${Math.abs(m)}|x − ${a}| &lt; ε, so |x − ${a}| &lt; ε/${Math.abs(m)}` },
+      { title: 'Read off δ',
+        html: `δ = ε/${Math.abs(m)} = ${num(eps)}/${Math.abs(m)} = ${num(delta)}` },
+    ],
+  };
+}
+
 /* ================================================================ derivatives */
 
 export function derivPower(rng, level) {

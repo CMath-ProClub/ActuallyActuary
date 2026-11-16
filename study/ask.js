@@ -34,6 +34,12 @@ const SKILL_PHRASES = [
   ['inverse sine', 'invtrig'],
   ['inverse cosine', 'invtrig'],
   ['inverse tangent', 'invtrig'],
+  /* Ahead of "limit definition": the formal definition OF A LIMIT is the
+     epsilon-delta proof, and the two phrases share most of their words. */
+  ['formal definition', 'epsilondelta'],
+  ['epsilon', 'epsilondelta'],
+  ['delta proof', 'epsilondelta'],
+  ['precise definition', 'epsilondelta'],
   ['limit definition', 'limitdef'],
   ['difference quotient', 'limitdef'],
   ['first principles', 'limitdef'],

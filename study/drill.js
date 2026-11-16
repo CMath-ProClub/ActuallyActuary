@@ -180,6 +180,31 @@ function mix(weighted = false) {
    A question that was scheduled by a miss takes priority, oldest first, so
    a backlog drains rather than piling up. Otherwise it is a weighted draw
    from the blueprint, avoiding whatever was just asked. */
+/* The focus that has had the fewest turns, if it has had unfairly few:
+   none at all, or STARVE_GAP fewer than the one asked most. */
+const STARVE_GAP = 4;
+function starvedFocus(state) {
+  const focus = state.focus || [];
+  if (focus.length < 2) return null;
+  const tried = (f) => {
+    const t = (state.tally || {})[f.key || f.family] || { right: 0, wrong: 0 };
+    return t.right + t.wrong;
+  };
+  let least = focus[0];
+  let most = 0;
+  for (const f of focus) {
+    const n = tried(f);
+    if (n < tried(least)) least = f;
+    if (n > most) most = n;
+  }
+  const n = tried(least);
+  /* Half as often as the most-asked one is the floor. A flat gap of four
+     evened a long session out completely, and the weakest shape is MEANT
+     to come up most - it just must not be the only one that does. */
+  return (n === 0 && most > 0) || n + Math.max(STARVE_GAP, most / 2) <= most
+    ? least : null;
+}
+
 /* Which of the focus shapes to ask about. Weighted by how badly it is
    going: a shape that has been missed twice is three times as likely as one
    that has been missed once, and a shape nobody has tried yet counts as one
@@ -261,11 +286,26 @@ export function nextSlot(state, index) {
      sprinkled one and the sprinkle disappeared entirely. */
   const isFocus = (item) => (state.focus || [])
     .some((f) => f.key === (item.key || item.family || item.skill));
-  const served = serveDue(state, index, locked ? (item) => isFocus(item) === wantFocus : null);
+  /* Coverage before repeats.
+
+     Found with six things ticked and every answer wrong: the first three
+     to be missed booked every focus slot with their own repeats, and the
+     other three were asked once, three times and never - in 240
+     questions. That is the worst session to have it happen in, because it
+     is the one where everything needs work, and it ends with somebody
+     having drilled half of what they sat down to drill.
+
+     So a focus that has fallen well behind the most-asked one, or has not
+     been asked at all, takes the slot ahead of anything owed. The owed
+     question is not lost; it is served at the next focus slot. */
+  const starved = wantFocus ? starvedFocus(state) : null;
+  const served = starved
+    ? null
+    : serveDue(state, index, locked ? (item) => isFocus(item) === wantFocus : null);
   if (served) return served;
 
   if (wantFocus) {
-    const chosen = pickFocus(state, r);
+    const chosen = starved || pickFocus(state, r);
     if (chosen) {
       const key = chosen.key || chosen.family || chosen.skill;
       const level = offeredLevel({ levels: [2, 3] }, ladderFor(state, key));

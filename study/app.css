@@ -1976,3 +1976,60 @@ body.noscroll { overflow: hidden; }
 .todaylist p { margin: 3px 0 0; }
 .todaydate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .datein { padding: 5px 8px; font-family: var(--face-ui); font-size: 0.84rem; }
+
+/* ------------------------------------------------ Lock In: the retake cards
+
+   Which outcome on the course sheet, which quiz, and the question that was
+   actually marked wrong - so the list reads as the sheet does. */
+.focusname { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.outcometag {
+  font-family: var(--face-ui);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.quiztag {
+  font-family: var(--face-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.missedline { margin: 4px 0 2px; color: var(--body); }
+.missedlabel {
+  font-family: var(--face-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bad);
+}
+
+/* Two rules both called .focuslist li. The older one, two thousand lines
+   up, is a flex row for a different list - and it was still applying
+   here, so each card laid its number, its name and its paragraphs out in
+   one wrapping row. Whether "marked wrong" landed beside the heading or
+   under it depended on how long the heading was. */
+.lockin .focuslist li { display: block; padding: 2px 0 2px 14px; border-top: 0; }
+.lockin .focuslist p { margin: 5px 0 0; }
+
+/* ------------------------------------------- Start: the retakes, up top */
+.card.retakes { border-left: 4px solid var(--bad); }
+.card.retakes h2 { margin: 2px 0 10px; }
+.retakelist {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 18px;
+}
+.retakelist li { display: flex; align-items: baseline; gap: 10px; }
+.retakelist .outcometag { flex: 0 0 auto; min-width: 2.4em; text-align: center; }
+/* Thumb-sized on a phone, and the two buttons share the row. */
+@media (max-width: 600px) {
+  .card.retakes .cta { display: flex; gap: 8px; }
+  .card.retakes .cta .btn { flex: 1 1 0; text-align: center; padding-left: 8px; padding-right: 8px; }
+}

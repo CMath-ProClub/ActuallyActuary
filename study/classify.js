@@ -43,6 +43,10 @@ import Expr from './expr.js';
    extrema and "where f'(x) = 0" belongs to horizontal tangents, and
    whichever is tested first wins. */
 const PHRASES = [
+  /* Before the limit definition OF THE DERIVATIVE: "formal definition of
+     a limit" is the epsilon-delta proof, a different question that
+     happens to share two words with it. */
+  [/\bformal\s+definition|\bepsilon\b|\u03b5|prove\s+the\s+limit|rigorous/i, 'epsilondelta'],
   [/\blimit\s+definition|difference\s+quotient|first\s+principles/i, 'limitdef'],
 
   /* ---- the applications unit, which is mostly prose ---- */
