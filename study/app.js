@@ -6379,6 +6379,29 @@ function renderQuiz(root) {
   ]);
   root.appendChild(bar);
 
+  /* Where you are in the paper, one cell a question.
+
+     "Question 14 of 30" is a fact you have to do arithmetic on; a strip
+     that is half filled in is not. Each cell is green or red as it was
+     marked, so the same strip also says how it is going without anybody
+     having to ask - and without printing a percentage, which this app is
+     careful about. A drill has no length, so it has no strip. */
+  if (!endless && quizRun.problems.length > 1) {
+    const strip = h('div', {
+      class: 'runstrip', role: 'img',
+      'aria-label': `Question ${quizRun.index + 1} of ${quizRun.problems.length}, `
+        + `${right} right so far`,
+    });
+    quizRun.problems.forEach((_, n) => {
+      const v = (quizRun.verdicts || [])[n];
+      strip.appendChild(h('span', {
+        class: 'runcell' + (v ? (v.correct ? ' ok' : ' no') : '')
+          + (n === quizRun.index ? ' here' : ''),
+      }));
+    });
+    root.appendChild(strip);
+  }
+
   const card = h('section', { class: 'card problem' });
   card.appendChild(h('div', { class: 'ptop' }, [
     h('span', { class: 'ptopic', text: q.topicName || '' }),

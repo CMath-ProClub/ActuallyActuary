@@ -2033,3 +2033,56 @@ body.noscroll { overflow: hidden; }
   .card.retakes .cta { display: flex; gap: 8px; }
   .card.retakes .cta .btn { flex: 1 1 0; text-align: center; padding-left: 8px; padding-right: 8px; }
 }
+
+/* ---------------------------------------------- the strip under a paper */
+.runstrip { display: flex; gap: 2px; margin: -6px 0 14px; }
+.runcell { flex: 1 1 0; height: 6px; background: var(--edge); min-width: 2px; }
+.runcell.ok { background: var(--good); }
+.runcell.no { background: var(--bad); }
+.runcell.here { background: var(--ink); }
+
+/* ------------------------------------------------ answering on a phone
+
+   The one thing done on every question is pressing Check, and it was a
+   small button at the left edge - the far side of the screen from a right
+   thumb. It takes the full width now, the lesser buttons share the row
+   under it, and the tool chips sit in an even grid instead of wrapping
+   three and one. */
+@media (max-width: 620px) {
+  .answerform .cta { gap: 8px; }
+  .answerform .cta > .btn:first-child {
+    flex: 1 1 100%;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+  .answerform .cta > .btn:not(:first-child) { flex: 1 1 0; text-align: center; }
+  /* Practice builds its row under another name; the same thumb is on it. */
+  .actions { gap: 8px; }
+  .actions > .btn:first-child {
+    flex: 1 1 100%;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+  .actions > .btn:not(:first-child) { flex: 1 1 0; text-align: center; white-space: nowrap; }
+  .toolrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .toolrow .chip { text-align: center; padding-top: 10px; padding-bottom: 10px; }
+  /* The title gives way before the way out does. */
+  .sessionbar { flex-wrap: nowrap; align-items: baseline; }
+  .sessionbar > div:first-child { min-width: 0; }
+  .sessionbar .tbarright { flex: 0 0 auto; }
+  .steps + .btn, .steps ~ .btn { margin-top: 10px; }
+}
+
+/* Two words that broke onto two lines in a narrow column, and a row of
+   buttons that sat flush against the card underneath it. */
+.btn.small { white-space: nowrap; }
+.cta + .card, .cta + section.card { margin-top: 18px; }
+
+/* An answer travels as one piece. As inline text a leading minus could be
+   left at the end of one line with its fraction on the next, which reads
+   as a dash and then a positive answer. */
+.answerline b { display: inline-block; max-width: 100%; vertical-align: middle; }

@@ -248,7 +248,10 @@ export function inputHint(problem) {
          note lives under the question, where it is not truncated. */
       return problem.implicit
         ? 'an expression in x and y, e.g. -x/y'
-        : 'the derivative, e.g. 6*x*cos(3*x^2)';
+        /* Short enough to fit a phone's answer box whole. The longer
+           version was cut off mid-expression at "6*x*cos(3*x^", which is
+           an example of how NOT to finish typing one. */
+        : 'e.g. 6x*cos(3x^2)';
     case 'numeric': return 'a number, e.g. 12, -3.5, 3/4, 2*pi/3';
     case 'set': return problem.ordered ? 'two values, e.g. 3, -1' : 'all values, separated by commas';
     case 'parts': return 'one line at a time';
