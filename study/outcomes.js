@@ -41,7 +41,7 @@ export const OUTCOMES = [
   { id: 'L5', unit: 'Limits', quiz: 'Quiz 3', status: 'mastered',
     name: 'Continuity at a point',
     topics: ['calc.continuity'] },
-  { id: 'L6', unit: 'Limits', quiz: 'Quiz 3', status: 'mastered',
+  { id: 'L6', exam: true, unit: 'Limits', quiz: 'Quiz 3', status: 'mastered',
     name: 'Intermediate Value Theorem',
     topics: ['calc.ivt'] },
 
@@ -72,14 +72,14 @@ export const OUTCOMES = [
     skills: ['logdiff'] },
 
   /* ------------------------------------------------------ applications */
-  { id: 'A1', unit: 'Applications', quiz: 'Quiz 7', status: 'retake',
+  { id: 'A1', exam: true, unit: 'Applications', quiz: 'Quiz 7', status: 'retake',
     name: 'Related rates',
     skills: ['rates'] },
-  { id: 'A2', unit: 'Applications', quiz: 'Quiz 7', status: 'mastered',
+  { id: 'A2', exam: true, unit: 'Applications', quiz: 'Quiz 7', status: 'mastered',
     name: 'L’Hospital’s Rule',
     topics: ['calc.lhopital'] },
-  { id: 'A3', unit: 'Applications', quiz: 'Quiz 7', status: 'mastered',
-    name: 'Absolute extrema on an interval',
+  { id: 'A3', exam: true, unit: 'Applications', quiz: 'Quiz 7', status: 'mastered',
+    name: 'Extreme Value Theorem: absolute max and min',
     topics: ['calc.absextrema'] },
   { id: 'A4', unit: 'Applications', quiz: 'Quiz 8', status: 'mastered',
     name: 'Increasing, decreasing and local extrema',
@@ -94,16 +94,37 @@ export const OUTCOMES = [
        question here that asks for a drawing and marks it. */
     note: 'No question here marks a sketch. This practises the two things a '
       + 'sketch is built from - where it rises and falls, and how it bends.' },
-  { id: 'A7', unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
+  { id: 'A7', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Optimization',
     skills: ['optimize'] },
-  { id: 'A8', unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
+  { id: 'A8', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Mean Value Theorem',
     topics: ['calc.mvt'] },
   { id: 'A9', unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Linear approximation and differentials',
     topics: ['calc.linear'] },
 ];
+
+/* What is on the exam, and when.
+
+   From Carter, 16 November 2026: the exam on Tuesday 24 November covers
+   IVT, EVT, MVT, related rates, optimization and L'Hospital - six
+   outcomes, marked `exam: true` above - and nothing from before Quiz 6
+   that was already on the earlier test. That is his reading of it ("I
+   think"), so the other seventeen are still one tap away on the same
+   page rather than removed.
+
+   The date is a DEFAULT, used only until somebody types their own and
+   only while it is still in the future. */
+export const EXAM_DATE = '2026-11-24';
+export const EXAM_OUTCOMES = OUTCOMES.filter((o) => o.exam);
+
+export function examDateFor(settings, today = new Date()) {
+  if (settings && settings.examDate) return settings.examDate;
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-`
+    + `${String(today.getDate()).padStart(2, '0')}`;
+  return EXAM_DATE >= iso ? EXAM_DATE : '';
+}
 
 export const STATUS_LABEL = {
   retake: 'Retake',
@@ -130,4 +151,6 @@ export function byUrgency(list = OUTCOMES) {
   return list.slice().sort((a, b) => rank[a.status] - rank[b.status]);
 }
 
-export default { OUTCOMES, STATUS_LABEL, topicIdsFor, byUrgency };
+export default {
+  OUTCOMES, EXAM_OUTCOMES, EXAM_DATE, examDateFor, STATUS_LABEL, topicIdsFor, byUrgency,
+};

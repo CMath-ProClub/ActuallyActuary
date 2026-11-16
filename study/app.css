@@ -2121,3 +2121,7 @@ body.noscroll { overflow: hidden; }
   .card.examtop .cta .btn { flex: 1 1 100%; text-align: center; padding-top: 14px; padding-bottom: 14px; }
 }
 .card.examtop .todaydate { margin: 0 0 8px; }
+
+.restofsheet > summary { cursor: pointer; font-family: var(--face-ui); font-size: 0.84rem;
+  letter-spacing: 0.04em; color: var(--muted); }
+.restofsheet[open] > summary { margin-bottom: 10px; }

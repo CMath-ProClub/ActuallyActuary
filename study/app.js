@@ -30,7 +30,9 @@ import {
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
-import { OUTCOMES, STATUS_LABEL } from './outcomes.js';
+import {
+  OUTCOMES, EXAM_OUTCOMES, STATUS_LABEL, examDateFor,
+} from './outcomes.js';
 import * as classify from './classify.js';
 import * as solve from './solve.js';
 import * as plan from './plan.js';
@@ -103,6 +105,33 @@ function go(path) {
    this". Opening the site and being asked what you feel like practising is
    how revision time goes on whatever you thought of last, which is rarely
    the thing you are worst at. */
+/* The exam, on the page the app opens on: how long there is, what is on
+   it, and a button. Gone the day after, because the date is. */
+function examCard() {
+  const profile = store.activeProfile();
+  const date = examDateFor(profile.settings);
+  if (!date) return h('div', { hidden: true });
+  const made = plan.planFor(profile, { examDate: date, topicName: (id) => id, due: [] });
+  if (made.days === null || made.days < 0) return h('div', { hidden: true });
+  const when = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+  return h('section', { class: 'card examtop' }, [
+    h('p', { class: 'eyebrow', text: `Exam · ${when}` }),
+    h('h2', { text: made.days === 0 ? 'Today'
+      : made.days === 1 ? 'Tomorrow' : `${made.days} days` }),
+    h('p', { class: 'muted', text: EXAM_OUTCOMES.map((o) => o.name.replace(/:.*$/, ''))
+      .join(' · ') }),
+    h('div', { class: 'cta' }, [
+      h('button', {
+        class: 'btn big', type: 'button',
+        onclick: () => startSession({ label: 'The exam', mixed: EXAM_OUTCOMES }),
+      }, 'Practise the exam'),
+      h('a', { class: 'btn ghost', href: '#/exam' }, 'One at a time'),
+    ]),
+  ]);
+}
+
 /* The retakes, one tap from opening the app.
 
    Lock In is where they live, and it was a tab away from the page the app
@@ -141,9 +170,7 @@ function retakeCard() {
       h('a', { class: 'btn ghost', href: '#/lockin' }, 'See the list'),
     ]),
     h('p', { class: 'small muted' }, [
-      h('span', { text: 'Only what was marked wrong. For everything on the exam, ' }),
-      h('a', { href: '#/exam' }, 'all 23 outcomes are here'),
-      h('span', { text: '.' }),
+      h('span', { text: 'For the quiz retakes: only what was marked wrong.' }),
     ]),
   ]);
 }
@@ -152,7 +179,7 @@ function todayCard() {
   const profile = store.activeProfile();
   const made = plan.planFor(profile, {
     topicName: (id) => (TOPIC_BY_ID[id] && TOPIC_BY_ID[id].name) || id,
-    examDate: profile.settings.examDate || '',
+    examDate: examDateFor(profile.settings),
     /* What the spaced-repetition scheduler says has come round again. It
        has tracked this since the beginning and the plan never asked. */
     due: sched.dueTopics(ALL_TOPIC_IDS, profile, 6),
@@ -186,14 +213,14 @@ function todayCard() {
   /* The date, asked for once and only once it would change anything. */
   const date = h('input', {
     type: 'date', class: 'textinput datein',
-    value: profile.settings.examDate || '',
+    value: examDateFor(profile.settings),
   });
   date.addEventListener('change', () => {
     store.setSetting('examDate', date.value);
     router();
   });
   card.appendChild(h('p', { class: 'small muted todaydate' }, [
-    h('span', { text: profile.settings.examDate ? 'Test date: ' : 'When is the test? ' }),
+    h('span', { text: examDateFor(profile.settings) ? 'Test date: ' : 'When is the test? ' }),
     date,
   ]));
 
@@ -2598,6 +2625,7 @@ function renderStart(root) {
 
   /* The exam is the thing being studied for this week, so it goes above
      the flow rather than four questions into it. */
+  root.appendChild(examCard());
   root.appendChild(retakeCard());
   root.appendChild(todayCard());
 
@@ -5528,11 +5556,14 @@ function renderExamPrep(root) {
     const t = tallies.get(o.id);
     return t.total >= 4 && t.right / t.total >= 0.75;
   };
-  const open = OUTCOMES.filter((o) => o.status !== 'mastered' && !solid(o));
-  const untouched = OUTCOMES.filter((o) => tallies.get(o.id).total === 0);
+  /* The exam is six outcomes, not twenty-three. Everything on this page
+     above the fold is about those six; the rest of the sheet is kept,
+     folded, because "I think" is how its absence was described. */
+  const open = EXAM_OUTCOMES.filter((o) => !solid(o));
+  const untouched = EXAM_OUTCOMES.filter((o) => tallies.get(o.id).total === 0);
 
   const days = (() => {
-    const date = profile.settings.examDate;
+    const date = examDateFor(profile.settings);
     if (!date) return null;
     const made = plan.planFor(profile, { examDate: date, topicName: (id) => id, due: [] });
     return made.days;
@@ -5540,9 +5571,9 @@ function renderExamPrep(root) {
 
   root.appendChild(h('header', { class: 'pagehead' }, [
     h('h1', { text: 'The exam' }),
-    h('p', { class: 'lead', text: 'All 23 outcomes on the Math 114 sheet. Each one says '
-      + 'where it stood on your copy, what you have answered here since, and '
-      + 'has a button that practises exactly that.' }),
+    h('p', { class: 'lead', text: 'IVT, EVT, MVT, related rates, optimization and '
+      + 'L’Hospital. Six outcomes, each with what you have answered here and a '
+      + 'button that practises exactly that.' }),
   ]));
 
   root.appendChild(h('section', { class: 'card examtop' }, [
@@ -5555,75 +5586,91 @@ function renderExamPrep(root) {
     (() => {
       const date = h('input', {
         type: 'date', class: 'textinput datein', 'aria-label': 'Exam date',
-        value: profile.settings.examDate || '',
+        value: examDateFor(profile.settings),
       });
       date.addEventListener('change', () => {
         store.setSetting('examDate', date.value);
         router();
       });
       return h('label', { class: 'todaydate small muted' }, [
-        h('span', { text: profile.settings.examDate ? 'Exam date' : 'When is the exam?' }),
+        h('span', { text: examDateFor(profile.settings) ? 'Exam date' : 'When is the exam?' }),
         date,
       ]);
     })(),
     h('h2', { text: open.length
-      ? `${open.length} of 23 still open`
-      : 'Nothing open - keep them warm' }),
+      ? `${open.length} of ${EXAM_OUTCOMES.length} not solid yet`
+      : `All ${EXAM_OUTCOMES.length} solid here - keep them warm` }),
     h('p', { class: 'muted', text: open.length
-      ? `Open means a retake or a quiz you have not sat, and not yet solid here: ${
-        open.map((o) => o.id).join(', ')}.`
-      : 'Every retake and every unsat outcome has at least four answers here, '
-        + 'three quarters of them right.' }),
+      ? `Solid means four or more answered here and three quarters right. Still to go: ${
+        open.map((o) => o.name.replace(/:.*$/, '')).join(', ')}.`
+      : 'Every one has at least four answers here, three quarters of them right.' }),
     h('div', { class: 'cta' }, [
-      open.length ? h('button', {
-        class: 'btn big', type: 'button',
-        onclick: () => startSession({ label: 'What is still open', mixed: open }),
-      }, 'Practise what is open') : null,
       h('button', {
-        class: open.length ? 'btn ghost' : 'btn big', type: 'button',
-        onclick: () => startSession({ label: 'The whole sheet', mixed: OUTCOMES }),
-      }, 'Mix all 23'),
-      untouched.length && untouched.length < OUTCOMES.length ? h('button', {
+        class: 'btn big', type: 'button',
+        onclick: () => startSession({ label: 'The exam', mixed: EXAM_OUTCOMES }),
+      }, 'Practise the exam'),
+      open.length && open.length < EXAM_OUTCOMES.length ? h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => startSession({ label: 'Not solid yet', mixed: open }),
+      }, `Only what is not solid (${open.length})`) : null,
+      untouched.length && untouched.length < EXAM_OUTCOMES.length ? h('button', {
         class: 'btn ghost', type: 'button',
         onclick: () => startSession({ label: 'Not tried here yet', mixed: untouched }),
       }, `Not tried yet (${untouched.length})`) : null,
     ]),
-    h('p', { class: 'small muted', text: 'A mixed session picks an outcome each '
-      + 'question and never the same one twice running, which is closer to an '
-      + 'exam than a block of one thing.' }),
+    h('p', { class: 'small muted', text: 'It picks one of the six each question and '
+      + 'never the same one twice running, which is closer to an exam than a '
+      + 'block of one thing.' }),
   ]));
 
-  for (const unit of ['Limits', 'Derivatives', 'Applications']) {
-    const card = h('section', { class: 'card outcomes' }, [
-      h('h2', { text: unit }),
+  const row = (o) => {
+    const t = tallies.get(o.id);
+    const state = solid(o) ? 'solid' : o.status;
+    return h('li', { class: `outcome is-${state}` }, [
+      h('div', { class: 'outcomehead' }, [
+        h('span', { class: 'outcometag', text: o.id }),
+        h('strong', { text: o.name }),
+      ]),
+      h('div', { class: 'outcomemeta' }, [
+        h('span', { class: `statustag st-${state}`,
+          text: solid(o) ? 'Solid here' : STATUS_LABEL[o.status] }),
+        h('span', { class: 'quiztag', text: o.quiz }),
+        h('span', { class: 'small muted', text: t.total
+          ? `${t.right} of ${t.total} right here`
+          : 'not tried here yet' }),
+      ]),
+      o.note ? h('p', { class: 'small muted', text: o.note }) : null,
+      h('button', {
+        class: 'btn small ghost', type: 'button',
+        onclick: () => practiseOutcome(o),
+      }, 'Practise'),
     ]);
-    const list = h('ul', { class: 'outcomelist' });
-    for (const o of OUTCOMES.filter((x) => x.unit === unit)) {
-      const t = tallies.get(o.id);
-      const state = solid(o) ? 'solid' : o.status;
-      list.appendChild(h('li', { class: `outcome is-${state}` }, [
-        h('div', { class: 'outcomehead' }, [
-          h('span', { class: 'outcometag', text: o.id }),
-          h('strong', { text: o.name }),
-        ]),
-        h('div', { class: 'outcomemeta' }, [
-          h('span', { class: `statustag st-${state}`,
-            text: solid(o) ? 'Solid here' : STATUS_LABEL[o.status] }),
-          h('span', { class: 'quiztag', text: o.quiz }),
-          h('span', { class: 'small muted', text: t.total
-            ? `${t.right} of ${t.total} right here`
-            : 'not tried here yet' }),
-        ]),
-        o.note ? h('p', { class: 'small muted', text: o.note }) : null,
-        h('button', {
-          class: 'btn small ghost', type: 'button',
-          onclick: () => practiseOutcome(o),
-        }, 'Practise'),
-      ]));
-    }
-    card.appendChild(list);
-    root.appendChild(card);
+  };
+
+  root.appendChild(h('section', { class: 'card outcomes' }, [
+    h('h2', { text: 'On the exam' }),
+    h('ul', { class: 'outcomelist' }, EXAM_OUTCOMES.map(row)),
+  ]));
+
+  /* The other seventeen. Not on this exam as far as anybody knows, and
+     still here: the retakes are among them, and being wrong about what
+     an exam covers should cost a tap, not a search. */
+  const rest = h('details', { class: 'card outcomes restofsheet' });
+  rest.appendChild(h('summary', { text: `The rest of the sheet (${
+    OUTCOMES.length - EXAM_OUTCOMES.length} outcomes, not on this exam)` }));
+  for (const unit of ['Limits', 'Derivatives', 'Applications']) {
+    const those = OUTCOMES.filter((x) => x.unit === unit && !x.exam);
+    if (!those.length) continue;
+    rest.appendChild(h('h3', { class: 'unit' }, [h('span', { text: unit })]));
+    rest.appendChild(h('ul', { class: 'outcomelist' }, those.map(row)));
   }
+  rest.appendChild(h('div', { class: 'cta' }, [
+    h('button', {
+      class: 'btn ghost', type: 'button',
+      onclick: () => startSession({ label: 'The whole sheet', mixed: OUTCOMES }),
+    }, 'Mix all 23'),
+  ]));
+  root.appendChild(rest);
 
   root.appendChild(h('p', { class: 'small muted', text: 'The status on each line '
     + 'is how your sheet read on 16 November. "Solid here" is this app’s own '
