@@ -30,6 +30,7 @@ import {
 import * as drill from './drill.js';
 import { FOCUS_IDS, focusFamily } from './gen-sandbox.js';
 import * as help from './help.js';
+import { OUTCOMES, STATUS_LABEL } from './outcomes.js';
 import * as classify from './classify.js';
 import * as solve from './solve.js';
 import * as plan from './plan.js';
@@ -70,6 +71,7 @@ const ROUTES = {
   '': renderStart,
   start: renderStart,
   lockin: renderLockIn,
+  exam: renderExamPrep,
   q: renderShared,
   print: renderPrintable,
   workspace: renderWorkspace,
@@ -138,8 +140,11 @@ function retakeCard() {
       }, running ? 'Carry on' : 'Start now'),
       h('a', { class: 'btn ghost', href: '#/lockin' }, 'See the list'),
     ]),
-    h('p', { class: 'small muted', text: 'Only what was marked wrong. Nothing you '
-      + 'have already passed is in here.' }),
+    h('p', { class: 'small muted' }, [
+      h('span', { text: 'Only what was marked wrong. For everything on the exam, ' }),
+      h('a', { href: '#/exam' }, 'all 23 outcomes are here'),
+      h('span', { text: '.' }),
+    ]),
   ]);
 }
 
@@ -807,8 +812,11 @@ function startTopic(topicId, label) {
   startSession({ pool: [topicId], label });
 }
 
-function startSession({ pool, label, items = null, setId = null, sandbox = null }) {
+function startSession({ pool, label, items = null, setId = null, sandbox = null, mixed = null }) {
   session = {
+    /* A list of outcomes to draw from, each either sandbox skills or
+       curriculum topics. See nextProblem. */
+    mixed,
     pool: pool && pool.length ? pool : ALL_TOPIC_IDS,
     label: label || 'Practice',
     /* A sandbox session builds its problems from gen-sandbox.js, which asks
@@ -841,6 +849,7 @@ function savePractice() {
   persist.saveSession(store.activeProfile().id, 'practice', {
     label: session.label,
     sandbox: session.sandbox || null,
+    mixed: session.mixed || null,
     pool: session.pool,
     answered: session.answered,
     correct: session.correct,
@@ -861,6 +870,7 @@ function renderPractice(root) {
         items: null,
         setId: null,
         sandbox: saved.sandbox || null,
+        mixed: saved.mixed || null,
         index: 0,
         answered: saved.answered || 0,
         correct: saved.correct || 0,
@@ -948,6 +958,39 @@ function nextProblem(stage) {
       renderProblem(stage, resumed, { remediation: null, mode: 'practice' });
       return;
     }
+  }
+
+  /* A session across the whole sheet.
+
+     The two kinds of question live in two generators and a session has
+     always been one or the other, which was fine until the thing being
+     revised for was an exam: half its outcomes are full-working
+     derivative questions and half are a number at the end of a limit or
+     a theorem. So a mixed session holds a list of outcomes and picks one
+     each time - never the same one twice running - and builds whichever
+     kind that outcome is. */
+  if (session.mixed && session.mixed.length) {
+    for (let tries = 0; tries < 16 && !problem; tries++) {
+      let entry = session.mixed[Math.floor(Math.random() * session.mixed.length)];
+      if (session.mixed.length > 1 && entry.id === session.lastMixed) continue;
+      const level = 1 + Math.floor(Math.random() * 3);
+      if (entry.skills && entry.skills.length) {
+        problem = buildProblem({ skills: entry.skills, level: Math.max(2, level) }, freshSeed());
+      } else if (entry.topics && entry.topics.length) {
+        const topicId = entry.topics[Math.floor(Math.random() * entry.topics.length)];
+        problem = generate(topicId, level);
+      }
+      if (problem) session.lastMixed = entry.id;
+    }
+    if (!problem) {
+      stage.appendChild(h('p', { class: 'muted', text: 'Could not build a problem for that selection.' }));
+      return;
+    }
+    session.current = problem;
+    session.lastTopicId = problem.topicId;
+    savePractice();
+    renderProblem(stage, problem, { remediation: null, mode: 'practice' });
+    return;
   }
 
   if (session.sandbox) {
@@ -5425,6 +5468,167 @@ function renderShared(root, args) {
     marking,
   ]));
   root.appendChild(card);
+}
+
+/* ================================================================ the exam
+
+   The outcomes sheet, as a page.
+
+   Everything else in this app is organised the way the app thinks about
+   calculus. The exam is organised the way the COURSE does - 23 outcomes,
+   L1 to A9 - and eight days out the useful question is not "what is the
+   chain rule" but "which of the 23 can I not do yet". So this page is
+   the sheet: every outcome, where it stood on Carter's copy, what has
+   been answered here since, and a button that practises exactly that.
+
+   It counts and never scores. "4 of 6 here" is a fact; a readiness
+   percentage would be an invention, and plan.js already draws that line. */
+
+/* What has been answered HERE for one outcome. Skills are counted by the
+   question's own key rather than its topic, because several skills share
+   a topic id - the limit definition records against the power rule's -
+   and counting by topic would show D1 and D3 the same numbers. */
+function outcomeTally(outcome, attempts) {
+  const skills = new Set(outcome.skills || []);
+  const topics = new Set(outcome.topics || []);
+  let right = 0;
+  let total = 0;
+  for (const a of attempts) {
+    const key = String(a.key || '');
+    const m = key.match(/^sandbox:([a-z+]+):/);
+    const hit = m
+      ? m[1].split('+').some((id) => skills.has(id))
+      : topics.has(a.topicId);
+    if (!hit) continue;
+    total++;
+    if (a.correct) right++;
+  }
+  return { right, total };
+}
+
+function practiseOutcome(outcome) {
+  if (outcome.skills && outcome.skills.length) {
+    startSession({
+      label: `${outcome.id} · ${outcome.name}`,
+      sandbox: { skills: outcome.skills, level: 2 },
+    });
+  } else {
+    startSession({ pool: outcome.topics, label: `${outcome.id} · ${outcome.name}` });
+  }
+}
+
+function renderExamPrep(root) {
+  const profile = store.activeProfile();
+  const attempts = profile.attempts || [];
+  const tallies = new Map(OUTCOMES.map((o) => [o.id, outcomeTally(o, attempts)]));
+  /* "Solid here" is deliberately strict and deliberately local: at least
+     four answered in this app and at least three quarters of them right.
+     It says nothing about the outcome it has not seen. */
+  const solid = (o) => {
+    const t = tallies.get(o.id);
+    return t.total >= 4 && t.right / t.total >= 0.75;
+  };
+  const open = OUTCOMES.filter((o) => o.status !== 'mastered' && !solid(o));
+  const untouched = OUTCOMES.filter((o) => tallies.get(o.id).total === 0);
+
+  const days = (() => {
+    const date = profile.settings.examDate;
+    if (!date) return null;
+    const made = plan.planFor(profile, { examDate: date, topicName: (id) => id, due: [] });
+    return made.days;
+  })();
+
+  root.appendChild(h('header', { class: 'pagehead' }, [
+    h('h1', { text: 'The exam' }),
+    h('p', { class: 'lead', text: 'All 23 outcomes on the Math 114 sheet. Each one says '
+      + 'where it stood on your copy, what you have answered here since, and '
+      + 'has a button that practises exactly that.' }),
+  ]));
+
+  root.appendChild(h('section', { class: 'card examtop' }, [
+    days !== null && days >= 0
+      ? h('p', { class: 'eyebrow', text: days === 0 ? 'The exam is today'
+        : days === 1 ? 'The exam is tomorrow' : `${days} days to the exam` })
+      : null,
+    /* Asked for here, where it is wanted, rather than pointing at another
+       page that has the box. */
+    (() => {
+      const date = h('input', {
+        type: 'date', class: 'textinput datein', 'aria-label': 'Exam date',
+        value: profile.settings.examDate || '',
+      });
+      date.addEventListener('change', () => {
+        store.setSetting('examDate', date.value);
+        router();
+      });
+      return h('label', { class: 'todaydate small muted' }, [
+        h('span', { text: profile.settings.examDate ? 'Exam date' : 'When is the exam?' }),
+        date,
+      ]);
+    })(),
+    h('h2', { text: open.length
+      ? `${open.length} of 23 still open`
+      : 'Nothing open - keep them warm' }),
+    h('p', { class: 'muted', text: open.length
+      ? `Open means a retake or a quiz you have not sat, and not yet solid here: ${
+        open.map((o) => o.id).join(', ')}.`
+      : 'Every retake and every unsat outcome has at least four answers here, '
+        + 'three quarters of them right.' }),
+    h('div', { class: 'cta' }, [
+      open.length ? h('button', {
+        class: 'btn big', type: 'button',
+        onclick: () => startSession({ label: 'What is still open', mixed: open }),
+      }, 'Practise what is open') : null,
+      h('button', {
+        class: open.length ? 'btn ghost' : 'btn big', type: 'button',
+        onclick: () => startSession({ label: 'The whole sheet', mixed: OUTCOMES }),
+      }, 'Mix all 23'),
+      untouched.length && untouched.length < OUTCOMES.length ? h('button', {
+        class: 'btn ghost', type: 'button',
+        onclick: () => startSession({ label: 'Not tried here yet', mixed: untouched }),
+      }, `Not tried yet (${untouched.length})`) : null,
+    ]),
+    h('p', { class: 'small muted', text: 'A mixed session picks an outcome each '
+      + 'question and never the same one twice running, which is closer to an '
+      + 'exam than a block of one thing.' }),
+  ]));
+
+  for (const unit of ['Limits', 'Derivatives', 'Applications']) {
+    const card = h('section', { class: 'card outcomes' }, [
+      h('h2', { text: unit }),
+    ]);
+    const list = h('ul', { class: 'outcomelist' });
+    for (const o of OUTCOMES.filter((x) => x.unit === unit)) {
+      const t = tallies.get(o.id);
+      const state = solid(o) ? 'solid' : o.status;
+      list.appendChild(h('li', { class: `outcome is-${state}` }, [
+        h('div', { class: 'outcomehead' }, [
+          h('span', { class: 'outcometag', text: o.id }),
+          h('strong', { text: o.name }),
+        ]),
+        h('div', { class: 'outcomemeta' }, [
+          h('span', { class: `statustag st-${state}`,
+            text: solid(o) ? 'Solid here' : STATUS_LABEL[o.status] }),
+          h('span', { class: 'quiztag', text: o.quiz }),
+          h('span', { class: 'small muted', text: t.total
+            ? `${t.right} of ${t.total} right here`
+            : 'not tried here yet' }),
+        ]),
+        o.note ? h('p', { class: 'small muted', text: o.note }) : null,
+        h('button', {
+          class: 'btn small ghost', type: 'button',
+          onclick: () => practiseOutcome(o),
+        }, 'Practise'),
+      ]));
+    }
+    card.appendChild(list);
+    root.appendChild(card);
+  }
+
+  root.appendChild(h('p', { class: 'small muted', text: 'The status on each line '
+    + 'is how your sheet read on 16 November. "Solid here" is this app’s own '
+    + 'count: four or more answered and three quarters right. Neither is a '
+    + 'prediction of a mark.' }));
 }
 
 /* ===================================================================== lock in */

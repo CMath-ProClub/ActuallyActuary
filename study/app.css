@@ -2086,3 +2086,38 @@ body.noscroll { overflow: hidden; }
    left at the end of one line with its fraction on the next, which reads
    as a dash and then a positive answer. */
 .answerline b { display: inline-block; max-width: 100%; vertical-align: middle; }
+
+/* ------------------------------------------------- the exam: 23 outcomes */
+.card.examtop { border-left: 4px solid var(--accent); }
+.outcomelist { list-style: none; margin: 0; padding: 0; }
+.outcome {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 12px 0 12px 12px;
+  border-top: 1px solid var(--hair);
+  border-left: 3px solid var(--edge);
+}
+.outcome:first-child { border-top: 0; }
+.outcome.is-retake { border-left-color: var(--bad); }
+.outcome.is-ahead { border-left-color: var(--warnc); }
+.outcome.is-solid, .outcome.is-mastered { border-left-color: var(--good); }
+.outcomehead { display: flex; align-items: baseline; gap: 10px; grid-column: 1; }
+.outcomemeta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; grid-column: 1; }
+.outcome > p { grid-column: 1; margin: 2px 0 0; }
+.outcome > .btn { grid-column: 2; grid-row: 1 / span 2; }
+.statustag {
+  font-family: var(--face-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.st-retake { color: var(--bad); }
+.st-ahead { color: var(--warnc); }
+.st-mastered, .st-solid { color: var(--good-ink, var(--good)); }
+@media (max-width: 620px) {
+  .outcome > .btn { padding: 12px 14px; }
+  .card.examtop .cta .btn { flex: 1 1 100%; text-align: center; padding-top: 14px; padding-bottom: 14px; }
+}
+.card.examtop .todaydate { margin: 0 0 8px; }

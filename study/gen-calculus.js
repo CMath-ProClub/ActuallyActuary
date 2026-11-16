@@ -222,6 +222,405 @@ export function epsilonDelta(rng, level) {
   };
 }
 
+/* ================================================= the five that were missing
+
+   Carter's outcomes sheet lists 23 outcomes and five of them could not be
+   practised here at all: L6, A2, A3, A8 and A9. Two of those are on a
+   quiz he has not sat yet, with the exam eight days off.
+
+   Each carries `probe`, a description of the question in a form a test can
+   evaluate WITHOUT using the stated answer - the function as text, the
+   interval, the point. tools/test_outcomes.mjs recomputes every answer
+   from it by brute force. */
+
+const minus = (n) => num(n).replace('-', '−');
+
+/* L6. The Intermediate Value Theorem, as the thing it is used for:
+   trapping a root between two numbers. The cubic is x^3 + px + q with
+   p >= 0, so it only ever rises and has exactly one real root - which is
+   what makes "between which two integers" a question with one answer. */
+export function ivtRoot(rng, level) {
+  /* p >= 1 always: with p = 0 the gap between f(0) and f(1) is exactly 1,
+     which leaves no whole number strictly between and puts the root ON
+     an integer - a question whose answer is the question. */
+  const p = rng.int(1, level >= 3 ? 7 : 4);
+  const n = rng.int(level === 1 ? 0 : -3, 3);
+  const f = (x) => x * x * x + p * x;
+  /* q strictly between -f(n+1) and -f(n) puts the sign change in (n, n+1). */
+  const lo = -f(n + 1) + 1;
+  const hi = -f(n) - 1;
+  const q = hi >= lo ? rng.int(lo, hi) : lo;
+  const g = (x) => f(x) + q;
+  const fx = `x${sup(3)}${p ? `${plus(p).replace(/(\d+)$/, p === 1 ? '' : '$1')}x` : ''}${plus(q)}`;
+  return {
+    stem: `<span class="eq">f(x) = ${fx}</span> is continuous everywhere and has exactly `
+      + 'one real root. The Intermediate Value Theorem traps it between two '
+      + 'consecutive integers. What is the smaller one?',
+    kind: 'numeric',
+    answer: n,
+    tol: 1e-9,
+    answerHtml: `${minus(n)} - the root is between ${minus(n)} and ${minus(n + 1)}`,
+    probe: { type: 'ivt', f: `x^3 + ${p}*x + ${q}` },
+    hints: ['Evaluate f at whole numbers until the sign changes.',
+      'IVT needs two things said out loud: f is continuous on [a, b], and f(a) and f(b) have opposite signs.'],
+    steps: [
+      { title: 'Why IVT applies', html: 'f is a polynomial, so it is continuous on every closed interval.' },
+      { title: 'Find a sign change',
+        html: `f(${minus(n)}) = ${minus(g(n))} and f(${minus(n + 1)}) = ${minus(g(n + 1))}` },
+      { title: 'Conclude',
+        html: `0 is between ${minus(g(n))} and ${minus(g(n + 1))}, so f(c) = 0 for some c in (${minus(n)}, ${minus(n + 1)}).` },
+    ],
+  };
+}
+
+/* A2. L'Hospital's rule. Every form here is 0/0 or infinity/infinity BY
+   CONSTRUCTION, and the first hint always says to check that - applying
+   the rule to a limit that is not indeterminate is the classic way to
+   get a confident wrong answer. */
+export function lhopital(rng, level) {
+  const k = rng.int(2, 7);
+  let m = rng.int(2, 7);
+  if (m === k) m = k + 1;
+  const kx = `${k}x`;
+  const forms = level === 1 ? ['sin', 'exp', 'ln'] : level === 2 ? ['cos', 'exp2', 'quiz'] : ['tan3', 'sintan', 'lnpow', 'xlnx'];
+  const form = rng.pick(forms);
+  const q = (top, bot) => frac(top, bot);
+  const out = (to, body, answer, answerHtml, text, at, steps, extra = {}) => ({
+    stem: `Find the limit using L’Hospital’s Rule: ${lim(to, body)}`,
+    kind: 'numeric',
+    answer,
+    tol: 1e-9,
+    answerHtml,
+    probe: { type: 'limit', f: text, at, ...extra },
+    hints: ['Substitute first. L’Hospital only applies if you get 0/0 or ∞/∞.',
+      'Differentiate the top and the bottom SEPARATELY - this is not the quotient rule.'],
+    steps,
+  });
+  /* Reduced, and a whole number when it is one: 36/2 is 18. */
+  const ratio = (a, b) => {
+    let x = Math.abs(a); let y = Math.abs(b);
+    while (y) { [x, y] = [y, x % y]; }
+    return b / x === 1 ? String(a / x) : frac(String(a / x), String(b / x));
+  };
+
+  if (form === 'sin') {
+    return out('0', q(`sin(${kx})`, `${m}x`), k / m, ratio(k, m), `sin(${k}*x)/(${m}*x)`, 0, [
+      { title: 'Check the form', html: 'sin(0) = 0 on top and 0 underneath: 0/0.' },
+      { title: 'Differentiate top and bottom', html: q(`${k}cos(${kx})`, String(m)) },
+      { title: 'Substitute', html: `${q(`${k}·1`, String(m))} = ${ratio(k, m)}` },
+    ]);
+  }
+  if (form === 'exp') {
+    return out('0', q(`e${sup(kx)} − 1`, `${m}x`), k / m, ratio(k, m), `(e^(${k}*x) - 1)/(${m}*x)`, 0, [
+      { title: 'Check the form', html: `e${sup('0')} − 1 = 0 on top and 0 underneath: 0/0.` },
+      { title: 'Differentiate top and bottom', html: q(`${k}e${sup(kx)}`, String(m)) },
+      { title: 'Substitute', html: ratio(k, m) },
+    ]);
+  }
+  if (form === 'ln') {
+    return out('1', q(`${k} ln x`, `${m}(x − 1)`), k / m, ratio(k, m), `${k}*ln(x)/(${m}*(x - 1))`, 1, [
+      { title: 'Check the form', html: 'ln 1 = 0 on top and 0 underneath: 0/0.' },
+      { title: 'Differentiate top and bottom', html: q(`${k}/x`, String(m)) },
+      { title: 'Substitute x = 1', html: ratio(k, m) },
+    ]);
+  }
+  if (form === 'cos') {
+    return out('0', q(`1 − cos(${kx})`, `x${sup(2)}`), k * k / 2, ratio(k * k, 2), `(1 - cos(${k}*x))/(x^2)`, 0, [
+      { title: 'Check the form', html: '1 − cos 0 = 0 over 0: 0/0.' },
+      { title: 'First pass', html: `${q(`${k} sin(${kx})`, '2x')} - still 0/0, so go again.` },
+      { title: 'Second pass', html: `${q(`${k * k} cos(${kx})`, '2')} → ${ratio(k * k, 2)}` },
+    ]);
+  }
+  if (form === 'exp2') {
+    return out('0', q(`e${sup(kx)} − 1 − ${kx}`, `x${sup(2)}`), k * k / 2, ratio(k * k, 2),
+      `(e^(${k}*x) - 1 - ${k}*x)/(x^2)`, 0, [
+        { title: 'Check the form', html: '1 − 1 − 0 = 0 over 0: 0/0.' },
+        { title: 'First pass', html: `${q(`${k}e${sup(kx)} − ${k}`, '2x')} - still 0/0, so go again.` },
+        { title: 'Second pass', html: `${q(`${k * k}e${sup(kx)}`, '2')} → ${ratio(k * k, 2)}` },
+      ]);
+  }
+  if (form === 'quiz') {
+    /* Quiz 7 question 2, with the constants free. */
+    return out('π/2', q(`${k}(1 − sin x)`, `${m} cos x`), 0, '0',
+      `${k}*(1 - sin(x))/(${m}*cos(x))`, Math.PI / 2, [
+        { title: 'Check the form', html: '1 − sin(π/2) = 0 and cos(π/2) = 0: 0/0.' },
+        { title: 'Differentiate top and bottom', html: q(`−${k} cos x`, `−${m} sin x`) },
+        { title: 'Substitute x = π/2', html: `${q(`${k}·0`, `${m}·1`)} = 0` },
+      ]);
+  }
+  if (form === 'tan3') {
+    return out('0', q(`tan(${kx}) − ${kx}`, `x${sup(3)}`), k * k * k / 3, ratio(k * k * k, 3),
+      `(tan(${k}*x) - ${k}*x)/(x^3)`, 0, [
+        { title: 'Check the form', html: '0 − 0 over 0: 0/0.' },
+        { title: 'First pass', html: `${q(`${k} sec${sup(2)}(${kx}) − ${k}`, `3x${sup(2)}`)} - still 0/0.` },
+        { title: 'Use sec² − 1 = tan²', html: q(`${k} tan${sup(2)}(${kx})`, `3x${sup(2)}`) },
+        { title: 'tan(kx)/x → k', html: `${q(`${k}·${k * k}`, '3')} = ${ratio(k * k * k, 3)}` },
+      ]);
+  }
+  if (form === 'sintan') {
+    return out('0', q(`sin(${kx})`, `tan(${m}x)`), k / m, ratio(k, m), `sin(${k}*x)/tan(${m}*x)`, 0, [
+      { title: 'Check the form', html: '0 over 0: 0/0.' },
+      { title: 'Differentiate top and bottom', html: q(`${k} cos(${kx})`, `${m} sec${sup(2)}(${m}x)`) },
+      { title: 'Substitute', html: ratio(k, m) },
+    ]);
+  }
+  if (form === 'lnpow') {
+    return out('∞', q(`${k} ln x`, `x${sup(m)}`), 0, '0', `${k}*ln(x)/(x^${m})`, Infinity, [
+      { title: 'Check the form', html: 'Both grow without bound: ∞/∞.' },
+      { title: 'Differentiate top and bottom', html: `${q(`${k}/x`, `${m}x${sup(m - 1)}`)} = ${q(String(k), `${m}x${sup(m)}`)}` },
+      { title: 'Let x grow', html: 'The bottom grows without bound, so the limit is 0.' },
+    ]);
+  }
+  /* x ln x is 0 times minus infinity, which has to be REWRITTEN as a
+     quotient before the rule can be used at all. */
+  return {
+    ...out(`0${sup('+')}`, `${k}x ln x`, 0, '0', `${k}*x*ln(x)`, 0, [
+      { title: 'Check the form', html: '0 · (−∞) - indeterminate, but not yet a quotient.' },
+      { title: 'Rewrite as a quotient', html: `${q(`${k} ln x`, '1/x')}, which is ∞/∞` },
+      { title: 'Differentiate top and bottom', html: `${q(`${k}/x`, `−1/x${sup(2)}`)} = −${kx}` },
+      { title: 'Let x → 0', html: '0' },
+    ], { side: 'right' }),
+    hints: ['This is 0 · ∞, which L’Hospital cannot be applied to directly.',
+      'Move one factor into the denominator as a reciprocal: x ln x = (ln x)/(1/x).'],
+  };
+}
+
+/* A3. Absolute extrema on a closed interval - the Extreme Value Theorem.
+   Built backward from the critical points: f'(x) = 3(x - p)(x - q), so
+   they are whole numbers, and p + q is kept even so the coefficients are
+   too. The interval is chosen so the answer is sometimes at a critical
+   point and sometimes at an endpoint, because "check the endpoints" is
+   the half of the method that gets forgotten. */
+export function absoluteExtrema(rng, level) {
+  const wantMax = rng.pick([true, false]);
+  let f; let fx; let a; let b; let crit; let text;
+  if (level === 1) {
+    /* A parabola: one critical point. */
+    const h = rng.int(-4, 4);
+    const k = rng.int(-9, 9);
+    const up = rng.pick([1, -1]);
+    f = (x) => up * (x - h) * (x - h) + k;
+    const B = -2 * up * h;
+    const C = up * h * h + k;
+    fx = `${up === 1 ? '' : '−'}x${sup(2)}${B ? `${plus(B).replace(/(\d+)$/, Math.abs(B) === 1 ? '' : '$1')}x` : ''}${plus(C)}`;
+    text = `${up}*x^2 + ${B}*x + ${C}`;
+    a = h - rng.int(1, 3);
+    b = h + rng.int(2, 5);
+    crit = [h];
+  } else {
+    const p = rng.int(-5, 1);
+    const q = p + 2 * rng.int(1, 3);
+    const c = rng.int(-6, 6);
+    const B = -3 * (p + q) / 2;
+    const C = 3 * p * q;
+    f = (x) => x * x * x + B * x * x + C * x + c;
+    fx = `x${sup(3)}${B ? `${plus(B).replace(/(\d+)$/, Math.abs(B) === 1 ? '' : '$1')}x${sup(2)}` : ''}`
+      + `${C ? `${plus(C).replace(/(\d+)$/, Math.abs(C) === 1 ? '' : '$1')}x` : ''}${plus(c)}`;
+    text = `x^3 + ${B}*x^2 + ${C}*x + ${c}`;
+    if (level === 2) {
+      /* Only one of the two critical points inside. */
+      a = p - rng.int(1, 2);
+      b = p + rng.int(1, q - p - 1 || 1);
+      if (b >= q) b = q - 1;
+    } else {
+      a = p - rng.int(1, 3);
+      b = q + rng.int(1, 3);
+    }
+    crit = [p, q];
+  }
+  const inside = crit.filter((x) => x > a && x < b);
+  const candidates = [a, ...inside, b];
+  const values = candidates.map(f);
+  const answer = wantMax ? Math.max(...values) : Math.min(...values);
+  const where = candidates[values.indexOf(answer)];
+  return {
+    stem: `Find the absolute ${wantMax ? 'maximum' : 'minimum'} VALUE of `
+      + `<span class="eq">f(x) = ${fx}</span> on the interval [${minus(a)}, ${minus(b)}].`,
+    kind: 'numeric',
+    answer,
+    tol: 1e-9,
+    answerHtml: `${minus(answer)}, at x = ${minus(where)}`,
+    probe: { type: 'extreme', f: text, a, b, max: wantMax },
+    hints: ['A continuous function on a closed interval has both, and they can only be at a critical point or an endpoint.',
+      'Solve f′(x) = 0, throw away anything outside the interval, then compare f at what is left AND at both ends.'],
+    steps: [
+      { title: 'Critical points', html: `f′(x) = 0 at x = ${crit.map(minus).join(' and ')}` },
+      { title: 'Keep the ones inside the interval',
+        html: inside.length ? `x = ${inside.map(minus).join(' and ')}` : 'None of them is inside.' },
+      { title: 'Compare the candidates',
+        html: candidates.map((x, i) => `f(${minus(x)}) = ${minus(values[i])}`).join(', ') },
+      { title: 'Read off the answer',
+        html: `The ${wantMax ? 'largest' : 'smallest'} is ${minus(answer)}, at x = ${minus(where)}.` },
+    ],
+  };
+}
+
+/* A8. The Mean Value Theorem: the c where the tangent is parallel to the
+   chord. Three families, each chosen because c comes out exact - a
+   parabola (c is the midpoint, which is worth noticing), x^3 + px on
+   [-k, 2k] where c = k, and a square root on [a^2, b^2]. */
+export function meanValue(rng, level) {
+  let fx; let text; let a; let b; let c; let steps;
+  if (level === 1) {
+    const B = rng.int(-6, 6);
+    const C = rng.int(-9, 9);
+    a = rng.int(-4, 2);
+    b = a + 2 * rng.int(1, 3);
+    c = (a + b) / 2;
+    fx = `x${sup(2)}${B ? `${plus(B).replace(/(\d+)$/, Math.abs(B) === 1 ? '' : '$1')}x` : ''}${plus(C)}`;
+    text = `x^2 + ${B}*x + ${C}`;
+    const slope = a + b + B;
+    steps = [
+      { title: 'Average rate of change', html: `${frac('f(b) − f(a)', 'b − a')} = ${minus(slope)}` },
+      { title: 'Set f′(c) equal to it', html: `2c${plus(B)} = ${minus(slope)}` },
+      { title: 'Solve', html: `c = ${minus(c)} - the midpoint, which is always true of a parabola` },
+    ];
+  } else if (level === 2) {
+    const k = rng.int(1, 4);
+    const p = rng.int(-5, 5);
+    const q = rng.int(-6, 6);
+    a = -k; b = 2 * k; c = k;
+    fx = `x${sup(3)}${p ? `${plus(p).replace(/(\d+)$/, Math.abs(p) === 1 ? '' : '$1')}x` : ''}${plus(q)}`;
+    text = `x^3 + ${p}*x + ${q}`;
+    const slope = 3 * k * k + p;
+    steps = [
+      { title: 'Average rate of change', html: `${frac('f(b) − f(a)', 'b − a')} = ${minus(slope)}` },
+      { title: 'Set f′(c) equal to it', html: `3c${sup(2)}${plus(p)} = ${minus(slope)}, so c${sup(2)} = ${k * k}` },
+      { title: 'Keep the one INSIDE the interval',
+        html: `c = ±${k}, and −${k} is an endpoint, not inside. So c = ${k}.` },
+    ];
+  } else {
+    const lo = rng.int(1, 4);
+    const hi = lo + 2 * rng.int(1, 3);
+    const m = rng.int(1, 4);
+    a = lo * lo; b = hi * hi; c = (lo + hi) * (lo + hi) / 4;
+    fx = `${m === 1 ? '' : m}${sqrt('x')}`;
+    text = `${m}*sqrt(x)`;
+    steps = [
+      { title: 'Average rate of change',
+        html: `${frac(`${m * hi} − ${m * lo}`, `${b} − ${a}`)} = ${frac(String(m), String(lo + hi))}` },
+      { title: 'Set f′(c) equal to it',
+        html: `${frac(String(m), `2${sqrt('c')}`)} = ${frac(String(m), String(lo + hi))}, so ${sqrt('c')} = ${frac(String(lo + hi), '2')}` },
+      { title: 'Solve', html: `c = ${num(c)}` },
+    ];
+  }
+  return {
+    stem: `<span class="eq">f(x) = ${fx}</span> on [${minus(a)}, ${minus(b)}]. Find the value of c `
+      + 'that the Mean Value Theorem guarantees.',
+    kind: 'numeric',
+    answer: c,
+    tol: 1e-9,
+    answerHtml: `c = ${minus(c)}`,
+    probe: { type: 'mvt', f: text, a, b },
+    hints: ['MVT: somewhere inside, the instantaneous rate equals the average rate over the whole interval.',
+      'Work out (f(b) − f(a))/(b − a) first, then solve f′(c) = that number - and keep only a c strictly between a and b.'],
+    steps,
+  };
+}
+
+/* A9. Linear approximation, and differentials for a maximum error.
+   The numbers are chosen so the ESTIMATE is exact to write down - the
+   square root of 25.2 is about 5.02 - because the answer being marked is
+   the tangent-line value, not the true one, and a key rounded from the
+   true value would mark the method wrong. */
+export function linearApprox(rng, level) {
+  if (level === 1) {
+    const a = rng.int(2, 9);
+    const t = rng.pick([0.01, 0.02, 0.05, -0.01, -0.02, -0.05]);
+    const dx = 2 * a * t;
+    const x = a * a + dx;
+    const est = a + t;
+    return {
+      stem: `Use linear approximation to estimate <span class="eq">${sqrt(num(x))}</span>.`,
+      kind: 'numeric',
+      answer: est,
+      tol: 1e-9,
+      answerHtml: num(est),
+      probe: { type: 'linear', f: 'sqrt(x)', at: a * a, x },
+      hints: [`Pick the nearest value you can take the root of exactly: ${a * a}.`,
+        'L(x) = f(a) + f′(a)(x − a), with f(x) = √x.'],
+      steps: [
+        { title: 'Choose a', html: `a = ${a * a}, so f(a) = ${a}` },
+        { title: 'The slope there', html: `f′(x) = ${frac('1', `2${sqrt('x')}`)}, so f′(${a * a}) = ${frac('1', String(2 * a))}` },
+        { title: 'The tangent line at the new point',
+          html: `${a} + ${frac('1', String(2 * a))}(${minus(dx)}) = ${num(est)}` },
+      ],
+    };
+  }
+  if (level === 2) {
+    const a = rng.int(2, 5);
+    const t = rng.pick([0.01, 0.02, -0.01, -0.02]);
+    const dx = 3 * a * a * t;
+    const x = a * a * a + dx;
+    const est = a + t;
+    return {
+      stem: `Use linear approximation to estimate the cube root of ${num(x)}.`,
+      kind: 'numeric',
+      answer: est,
+      tol: 1e-9,
+      answerHtml: num(est),
+      probe: { type: 'linear', f: 'x^(1/3)', at: a * a * a, x },
+      hints: [`The nearest perfect cube is ${a * a * a}.`,
+        `L(x) = f(a) + f′(a)(x − a), with f(x) = x${sup('1/3')}.`],
+      steps: [
+        { title: 'Choose a', html: `a = ${a * a * a}, so f(a) = ${a}` },
+        { title: 'The slope there', html: `f′(x) = ${frac('1', `3x${sup('2/3')}`)}, so f′(${a * a * a}) = ${frac('1', String(3 * a * a))}` },
+        { title: 'The tangent line at the new point',
+          html: `${a} + ${frac('1', String(3 * a * a))}(${minus(dx)}) = ${num(est)}` },
+      ],
+    };
+  }
+  /* Differentials: the maximum error in something computed from a
+     measurement that is itself a little off. */
+  const s = rng.int(3, 12);
+  const e = rng.pick([0.01, 0.02, 0.05, 0.1]);
+  const kind = rng.pick(['cube', 'square', 'sphere']);
+  if (kind === 'cube') {
+    const dV = 3 * s * s * e;
+    return {
+      stem: `The edge of a cube is measured as ${s} cm, with a possible error of ${num(e)} cm. `
+        + 'Use differentials to estimate the maximum error in the computed volume, in cm³.',
+      kind: 'numeric', answer: dV, tol: 1e-9, answerHtml: `${num(dV)} cm${sup(3)}`,
+      probe: { type: 'differential', f: 'x^3', at: s, dx: e },
+      hints: ['V = s³, so dV = 3s² ds.', 'ds is the measurement error; dV is what it does to the volume.'],
+      steps: [
+        { title: 'The formula', html: `V = s${sup(3)}` },
+        { title: 'Its differential', html: `dV = 3s${sup(2)} ds` },
+        { title: 'Put the numbers in', html: `3(${s})${sup(2)}(${num(e)}) = ${num(dV)}` },
+      ],
+    };
+  }
+  if (kind === 'square') {
+    const dA = 2 * s * e;
+    return {
+      stem: `The side of a square is measured as ${s} cm, with a possible error of ${num(e)} cm. `
+        + 'Use differentials to estimate the maximum error in the computed area, in cm².',
+      kind: 'numeric', answer: dA, tol: 1e-9, answerHtml: `${num(dA)} cm${sup(2)}`,
+      probe: { type: 'differential', f: 'x^2', at: s, dx: e },
+      hints: ['A = s², so dA = 2s ds.', 'ds is the measurement error; dA is what it does to the area.'],
+      steps: [
+        { title: 'The formula', html: `A = s${sup(2)}` },
+        { title: 'Its differential', html: 'dA = 2s ds' },
+        { title: 'Put the numbers in', html: `2(${s})(${num(e)}) = ${num(dA)}` },
+      ],
+    };
+  }
+  const coef = 4 * s * s * e;
+  return {
+    stem: `The radius of a sphere is measured as ${s} cm, with a possible error of ${num(e)} cm. `
+      + 'Use differentials to estimate the maximum error in the computed volume. '
+      + 'Give the number that multiplies π.',
+    kind: 'numeric', answer: coef, tol: 1e-9, answerHtml: `${num(coef)}π cm${sup(3)}`,
+    probe: { type: 'differential', f: '4/3*x^3', at: s, dx: e },
+    hints: ['V = (4/3)πr³, so dV = 4πr² dr.', 'dr is the measurement error; leave π out of the number you type.'],
+    steps: [
+      { title: 'The formula', html: `V = ${frac('4', '3')}πr${sup(3)}` },
+      { title: 'Its differential', html: `dV = 4πr${sup(2)} dr` },
+      { title: 'Put the numbers in', html: `4π(${s})${sup(2)}(${num(e)}) = ${num(coef)}π` },
+    ],
+  };
+}
+
 /* ================================================================ derivatives */
 
 export function derivPower(rng, level) {
