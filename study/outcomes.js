@@ -100,7 +100,7 @@ export const OUTCOMES = [
   { id: 'A8', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Mean Value Theorem',
     topics: ['calc.mvt'] },
-  { id: 'A9', unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
+  { id: 'A9', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Linear approximation and differentials',
     topics: ['calc.linear'] },
 ];
@@ -108,8 +108,11 @@ export const OUTCOMES = [
 /* What is on the exam, and when.
 
    From Carter, 16 November 2026: the exam on Tuesday 24 November covers
-   IVT, EVT, MVT, related rates, optimization and L'Hospital - six
-   outcomes, marked `exam: true` above - and nothing from before Quiz 6
+   IVT, EVT, MVT, related rates, optimization and L'Hospital, plus
+   linear approximation and differentials, which he had not been taught
+   yet but is on Quiz 9 with the others ("if it is on Q9 it is going to
+   be on that test"). Seven outcomes, marked `exam: true` above - and
+   nothing from before Quiz 6
    that was already on the earlier test. That is his reading of it ("I
    think"), so the other seventeen are still one tap away on the same
    page rather than removed.

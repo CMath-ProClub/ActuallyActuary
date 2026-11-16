@@ -5556,7 +5556,7 @@ function renderExamPrep(root) {
     const t = tallies.get(o.id);
     return t.total >= 4 && t.right / t.total >= 0.75;
   };
-  /* The exam is six outcomes, not twenty-three. Everything on this page
+  /* The exam is a handful of outcomes, not twenty-three. Everything on this page
      above the fold is about those six; the rest of the sheet is kept,
      folded, because "I think" is how its absence was described. */
   const open = EXAM_OUTCOMES.filter((o) => !solid(o));
@@ -5571,8 +5571,8 @@ function renderExamPrep(root) {
 
   root.appendChild(h('header', { class: 'pagehead' }, [
     h('h1', { text: 'The exam' }),
-    h('p', { class: 'lead', text: 'IVT, EVT, MVT, related rates, optimization and '
-      + 'L’Hospital. Six outcomes, each with what you have answered here and a '
+    h('p', { class: 'lead', text: `${EXAM_OUTCOMES.map((o) => o.short || o.name.replace(/:.*$/, ''))
+      .join(', ')}. Each one shows what you have answered here and has a `
       + 'button that practises exactly that.' }),
   ]));
 
@@ -5618,7 +5618,7 @@ function renderExamPrep(root) {
         onclick: () => startSession({ label: 'Not tried here yet', mixed: untouched }),
       }, `Not tried yet (${untouched.length})`) : null,
     ]),
-    h('p', { class: 'small muted', text: 'It picks one of the six each question and '
+    h('p', { class: 'small muted', text: 'It picks a different one each question and '
       + 'never the same one twice running, which is closer to an exam than a '
       + 'block of one thing.' }),
   ]));
