@@ -3235,7 +3235,7 @@ function buildLimitDefinition(id, skill, built, level, seed) {
         promptHtml: `f(x + h) = `,
         answerNode: shifted,
         vars: ['x', 'h'],
-        placeholder: 'f with every x replaced by (x + h)',
+        placeholder: 'every x becomes (x + h)',
         hint: 'Every x in f becomes (x + h). Nothing else changes.',
       },
       {
@@ -3244,7 +3244,7 @@ function buildLimitDefinition(id, skill, built, level, seed) {
         promptHtml: `f′(x) = ${lim(frac('f(x + h) − f(x)', '<i>h</i>'))} = ${lim('')}`,
         answerNode: quotient,
         vars: ['x', 'h'],
-        placeholder: '(f(x+h) - f(x))/h, written out',
+        placeholder: '(f(x+h) - f(x))/h in full',
         hint: 'Put what you wrote above over h, and subtract f(x) from it.',
       },
       {
@@ -3255,7 +3255,7 @@ function buildLimitDefinition(id, skill, built, level, seed) {
         vars: ['x', 'h'],
         /* The whole point of the question. */
         mustBeFiniteAtZero: true,
-        placeholder: 'the same thing, with no h left on the bottom',
+        placeholder: 'no h left underneath',
         hint: built.note || 'Simplify the top until every term has an h in it, '
           + 'then cancel it against the h underneath.',
       },

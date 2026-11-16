@@ -3550,9 +3550,17 @@ const PROOF_KEYS = [
 function mathKeys(target, problem = null) {
   const proof = !!(problem && problem.skill === 'epsilondelta');
   if (!touchDevice() && !proof) return null;
+  /* The limit definition is written in h on every line, and h was the one
+     letter the row did not have: each one meant bringing the phone's own
+     keyboard up and putting it away again. */
+  const usesH = !!(problem && (problem.parts || [])
+    .some((part) => (part.vars || []).includes('h')));
   const keyset = proof
     ? [...PROOF_KEYS, ...(touchDevice() ? MATH_KEYS : [])]
-    : MATH_KEYS;
+    : usesH
+      ? [MATH_KEYS[0], { label: 'h', insert: 'h' }, { label: 'x+h', insert: '(x+h)' },
+        ...MATH_KEYS.slice(1)]
+      : MATH_KEYS;
   /* `target` may be an input or a function returning one, so a single row of
      keys can serve a four-box answer. Resolved at tap time, not now. */
   const pick = () => (typeof target === 'function' ? target() : target);
@@ -5294,6 +5302,12 @@ function renderShared(root, args) {
      no record that they had done it. Practice has had all three for
      months. */
   const scratch = scratchPanel(problem);
+  /* The tip and the labelled diagram, which a related rates question is
+     hard to do without - and which this page's own copy pointed at ("the
+     shape itself, which is on the Diagram button") while offering no such
+     button. Both return null for a question that has neither. */
+  const tip = tipPanel(problem);
+  const picture = diagramPanel(problem);
 
   const started = Date.now();
   let tries = 0;
@@ -5373,6 +5387,8 @@ function renderShared(root, args) {
       h('a', { class: 'btn ghost', href: '#/lockin' }, 'Practise more like it'),
     ]),
     h('div', { class: 'toolrow' }, [
+      tip ? tip.toggle : null,
+      picture ? picture.toggle : null,
       scratch.toggle,
       problem.noGraph ? null : h('button', {
         class: 'chip', type: 'button',
@@ -5402,6 +5418,8 @@ function renderShared(root, args) {
       + 'the point is the algebra.' }) : null,
     h('p', { class: 'small muted', text: 'This exact question rebuilds from the '
       + 'link on any device - it is the seed that travels, not the text.' }),
+    tip ? tip.slot : null,
+    picture ? picture.slot : null,
     scratch.slot,
     graphSlot,
     marking,
