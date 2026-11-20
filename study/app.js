@@ -144,23 +144,30 @@ function examCard() {
    and this card goes with it instead of advertising something else. */
 function retakeCard() {
   const focus = lockInFocus();
-  const retakes = focus.filter((f) => f.quiz);
-  if (!retakes.length || retakes.length !== focus.length) return h('div', { hidden: true });
+  const targets = focus.every((f) => f.tag);
+  const retakes = focus.every((f) => f.retake);
+  if (!focus.length || (!targets && !retakes)) return h('div', { hidden: true });
 
   const running = quizRun && quizRun.plan && quizRun.plan.lockin
     && quizRun.phase === 'running';
-  const outcomes = [];
-  for (const f of retakes) {
-    if (!outcomes.some((o) => o.outcome === f.outcome)) outcomes.push(f);
+  const lines = [];
+  for (const f of focus) {
+    const tag = f.tag || f.outcome;
+    const name = targets ? f.label : f.label.replace(/ · .*$/, '');
+    if (!lines.some((l) => l.name === name)) lines.push({ tag, name });
   }
-  const quizzes = [...new Set(retakes.map((f) => f.quiz.replace('Quiz ', '')))];
+  const quizzes = [...new Set(focus.map((f) => f.quiz.replace('Quiz ', '')))];
 
-  return h('section', { class: 'card retakes' }, [
-    h('p', { class: 'eyebrow', text: `Retakes · Quizzes ${quizzes.join(', ')}` }),
-    h('h2', { text: `${outcomes.length} things to get back` }),
-    h('ul', { class: 'retakelist' }, outcomes.map((f) => h('li', {}, [
-      h('span', { class: 'outcometag', text: f.outcome }),
-      h('span', { text: f.label.replace(/ · .*$/, '') }),
+  return h('section', { class: `card retakes${targets ? ' targets' : ''}` }, [
+    h('p', { class: 'eyebrow', text: targets
+      ? `Lock in · Quiz ${quizzes.join(', ')}`
+      : `Retakes · Quizzes ${quizzes.join(', ')}` }),
+    h('h2', { text: targets
+      ? `${[...new Set(focus.map((f) => f.tag))].length} learning targets`
+      : `${lines.length} things to get back` }),
+    h('ul', { class: 'retakelist' }, lines.map((l) => h('li', {}, [
+      h('span', { class: 'outcometag', text: l.tag }),
+      h('span', { text: l.name }),
     ]))),
     h('div', { class: 'cta' }, [
       h('button', {
@@ -169,12 +176,10 @@ function retakeCard() {
       }, running ? 'Carry on' : 'Start now'),
       h('a', { class: 'btn ghost', href: '#/lockin' }, 'See the list'),
     ]),
-    h('p', { class: 'small muted' }, [
-      h('span', { text: 'For the quiz retakes: only what was marked wrong.' }),
-    ]),
   ]);
 }
 
+/* What the page opens on today. */
 function todayCard() {
   const profile = store.activeProfile();
   const made = plan.planFor(profile, {
@@ -5778,6 +5783,7 @@ const RETAKE_FOCUS = [
     skill: 'epsilondelta',
     key: 'epsilondelta',
     outcome: 'L4',
+    retake: true,
     quiz: 'Quiz 3',
     label: 'The formal definition of a limit',
     study: 'simplify |f(x) − L| down to a number times |x − a|, then '
@@ -5788,6 +5794,7 @@ const RETAKE_FOCUS = [
     skill: 'limitdef',
     key: 'limitdef',
     outcome: 'D1',
+    retake: true,
     quiz: 'Quiz 4',
     label: 'The limit definition of the derivative',
     study: 'substitute, form the quotient, cancel the h, then let h go to zero',
@@ -5797,6 +5804,7 @@ const RETAKE_FOCUS = [
     skill: 'chain',
     key: 'chain',
     outcome: 'D6',
+    retake: true,
     quiz: 'Quiz 6',
     label: 'The chain rule',
     study: 'differentiate the outside, leave the inside alone, then multiply '
@@ -5807,6 +5815,7 @@ const RETAKE_FOCUS = [
     skill: 'implicit',
     key: 'implicit',
     outcome: 'D7',
+    retake: true,
     quiz: 'Quiz 6',
     label: 'Implicit differentiation',
     study: 'differentiate both sides as they stand, put a y′ on every y '
@@ -5817,6 +5826,7 @@ const RETAKE_FOCUS = [
     skill: 'rates',
     key: 'rates:cone',
     outcome: 'A1',
+    retake: true,
     quiz: 'Quiz 7',
     label: 'Related rates · the cone',
     study: 'similar triangles FIRST: write r in terms of h, so the volume '
@@ -5829,6 +5839,7 @@ const RETAKE_FOCUS = [
     skill: 'rates',
     key: 'rates',
     outcome: 'A1',
+    retake: true,
     quiz: 'Quiz 7',
     label: 'Related rates · every other shape',
     study: 'name the variables, write the one equation that links them, '
@@ -5839,6 +5850,71 @@ const RETAKE_FOCUS = [
   },
 ];
 const RETAKE_UNIT = 'Retakes · Quizzes 3, 4, 6 and 7';
+
+/* Quiz 9's three learning targets, as Carter's sheet words them.
+
+   LT1 optimization - set up and solve it. The sheet also says "check the
+   reasonability", which he does not have to do, and the question here
+   never asks for it.
+   LT2 the Mean Value Theorem, both uses: find the c where the
+   instantaneous rate equals the average one, and show an equation has
+   exactly one root (IVT for at least one, Rolle for at most one). Two
+   lines, because they are two different arguments.
+   LT3 linear approximation to estimate a value, and differentials for a
+   maximum error. One topic whose levels are different KINDS of question,
+   so all three levels are asked rather than the usual 2 and 3. */
+const QUIZ9_FOCUS = [
+  {
+    skill: 'optimize',
+    key: 'q9:optimize',
+    tag: 'LT1',
+    quiz: 'Quiz 9',
+    label: 'Optimization',
+    goal: 'Set up and solve an optimization problem.',
+    study: 'write what you are maximising, use the constraint to get it into one '
+      + 'variable, set the derivative to zero, then answer the question that was asked',
+  },
+  {
+    skill: 'calc.mvt',
+    topic: 'calc.mvt',
+    key: 'q9:mvt',
+    levels: [1, 2, 3],
+    tag: 'LT2',
+    quiz: 'Quiz 9',
+    label: 'Mean Value Theorem · find the c',
+    goal: 'Show there is a point where the instantaneous rate of change equals '
+      + 'the average rate of change.',
+    study: 'average rate (f(b) − f(a))/(b − a) first, then solve f′(c) = '
+      + 'that number, and keep only a c strictly between a and b',
+  },
+  {
+    skill: 'calc.oneroot',
+    topic: 'calc.oneroot',
+    key: 'q9:oneroot',
+    levels: [1, 2, 3],
+    tag: 'LT2',
+    quiz: 'Quiz 9',
+    label: 'Mean Value Theorem · exactly one root',
+    goal: 'Show a function has exactly one root.',
+    study: 'at least one by the IVT (continuous, signs change), at most one '
+      + 'because two roots would force f′ = 0 between them (Rolle) and f′ is never 0',
+  },
+  {
+    skill: 'calc.linear',
+    topic: 'calc.linear',
+    key: 'q9:linear',
+    levels: [1, 2, 3],
+    anyLevel: true,
+    tag: 'LT3',
+    quiz: 'Quiz 9',
+    label: 'Linear approximation and differentials',
+    goal: 'Use linear approximation to estimate a value, or differentials to '
+      + 'calculate the maximum error.',
+    study: 'L(x) = f(a) + f′(a)(x − a) at a point you can do in your head; '
+      + 'for an error, dy = f′(x) dx with dx the measurement error',
+  },
+];
+const QUIZ9_UNIT = 'Quiz 9 · learning targets';
 
 /* The implicit shapes, as a group like any other. */
 const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family }));
@@ -5855,6 +5931,7 @@ const IMPLICIT_FOCUS = FOCUS_IDS.map((family) => ({ skill: 'implicit', family })
    you are working on, start. Nothing here is deleted when you change
    units; it is just not ticked. */
 const FOCUS_GROUPS = [
+  ...QUIZ9_FOCUS.map((g) => ({ ...g, unit: QUIZ9_UNIT })),
   ...RETAKE_FOCUS.map((g) => ({ ...g, unit: RETAKE_UNIT })),
   ...UNIT_FOCUS.map((g) => ({ ...g, unit: 'Unit 3 \u00b7 Applications' })),
   ...IMPLICIT_FOCUS.map((f) => {
@@ -5884,14 +5961,16 @@ const FOCUS_BY_KEY = Object.fromEntries(FOCUS_GROUPS.map((g) => [g.key, g]));
    before the retakes existed; honouring it would mean the button Carter
    asked to be changed went on doing what it did. Under a new name the
    default applies once, and anything ticked from here on is kept. */
-const LOCKIN_SETTING = 'lockInFocus:2026-11';
+/* Re-pointed on 20 November 2026 from the quiz retakes to Quiz 9's three
+   learning targets. */
+const LOCKIN_SETTING = 'lockInFocus:2026-11-20';
 
 /* Which groups are ticked. Defaults to the current unit, so the button
    does something sensible before anybody has chosen anything. */
 function lockInKeys() {
   const saved = store.activeProfile().settings[LOCKIN_SETTING];
   const known = Array.isArray(saved) ? saved.filter((k) => FOCUS_BY_KEY[k]) : [];
-  return known.length ? known : RETAKE_FOCUS.map((g) => g.key);
+  return known.length ? known : QUIZ9_FOCUS.map((g) => g.key);
 }
 
 function lockInFocus() {
@@ -5902,9 +5981,15 @@ function lockInFocus() {
    and a headline written for one unit is wrong the day it changes. */
 function lockInLead() {
   const focus = lockInFocus();
-  const retakes = focus.filter((f) => f.quiz);
   const tail = ' Each one eases off once you have had three in a row right, '
     + 'and comes straight back if you miss one.';
+  if (focus.length && focus.every((f) => f.tag)) {
+    const tags = [...new Set(focus.map((f) => f.tag))];
+    return `Learning targets ${tags.join(', ').replace(/, ([^,]*)$/, ' and $1')} from `
+      + `${focus[0].quiz}: ${[...new Set(focus.map((f) => f.label.replace(/ · .*$/, '')))]
+        .join(', ').replace(/, ([^,]*)$/, ' and $1')}.${tail}`;
+  }
+  const retakes = focus.filter((f) => f.retake);
   if (retakes.length && retakes.length === focus.length) {
     const quizzes = [...new Set(retakes.map((f) => f.quiz))];
     return `The ${quizzes.length === 1 ? 'question' : 'questions'} marked wrong on `
@@ -5944,7 +6029,8 @@ function renderLockIn(root) {
 
     list.appendChild(h('li', { class: seen && seen.solid ? 'solid' : '' }, [
       h('div', { class: 'focusname' }, [
-        entry.outcome ? h('span', { class: 'outcometag', text: entry.outcome }) : null,
+        entry.outcome || entry.tag
+          ? h('span', { class: 'outcometag', text: entry.tag || entry.outcome }) : null,
         h('strong', { text: label }),
         entry.quiz ? h('span', { class: 'quiztag', text: entry.quiz }) : null,
         seen && seen.solid ? h('span', { class: 'pill good', text: 'solid' }) : null,
@@ -5953,6 +6039,12 @@ function renderLockIn(root) {
         ? h('p', { class: 'small missedline' }, [
           h('span', { class: 'missedlabel', text: 'Marked wrong: ' }),
           h('span', { text: entry.missed }),
+        ])
+        : null,
+      entry.goal
+        ? h('p', { class: 'small missedline' }, [
+          h('span', { class: 'goallabel', text: 'Target: ' }),
+          h('span', { text: entry.goal }),
         ])
         : null,
       study ? h('p', { class: 'small muted', text: `How: ${study}.` }) : null,
@@ -6183,7 +6275,11 @@ function worksheetPanel() {
 function startLockIn() {
   const focus = lockInFocus();
   if (!focus.length) return;
-  startDrill({ focus, label: 'Lock in', lockin: true });
+  /* Pointed at learning targets for a quiz that is days away, the
+     sprinkled-in questions are material already examined - so the focus
+     keeps at least two thirds of the session even once it is solid. */
+  const targets = focus.every((f) => f.tag);
+  startDrill({ focus, label: 'Lock in', lockin: true, floor: targets ? 0.67 : undefined });
 }
 
 /* Choose what the paper is about.
@@ -6263,7 +6359,7 @@ function examConceptSwitches() {
    There is no end to it, so there is no mark out of anything: the only
    number worth showing is how you are doing lately. */
 function startDrill(opts = {}) {
-  const state = drill.createDrill(freshSeed(), { focus: opts.focus || [] });
+  const state = drill.createDrill(freshSeed(), { focus: opts.focus || [], floor: opts.floor });
   const first = drillQuestion(state, 0);
   quizRun = {
     plan: {
@@ -6333,6 +6429,12 @@ function againLikeThis(problem) {
 function drillQuestion(state, index) {
   for (let tries = 0; tries < 30; tries++) {
     const slot = drill.nextSlot(state, index);
+    /* A curriculum topic is built by its own generator. */
+    if (slot.topic) {
+      const made = generate(slot.topic, slot.level);
+      if (made) return { slot, problem: made };
+      continue;
+    }
     const problem = buildProblem({
       skills: [slot.skill],
       level: slot.level,
@@ -6518,7 +6620,10 @@ function examGraph(problem, answer, slot) {
         : '';
       note.textContent = (series.some((s) => s.role === 'yours')
         ? 'Your answer is dashed. Where it leaves the solid line is where it went wrong.'
-        : 'The function and its derivative.') + how;
+        : series.some((s) => s.role === 'truth')
+          ? 'The function and its derivative.'
+          : 'The function. Where it crosses zero, and where its slope matches the '
+            + 'chord, are what the question is about.') + how;
       /* A legend, because three unlabelled curves is a puzzle. */
       const legend = h('div', { class: 'graphlegend' });
       for (const s of series) {

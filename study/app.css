@@ -2125,3 +2125,14 @@ body.noscroll { overflow: hidden; }
 .restofsheet > summary { cursor: pointer; font-family: var(--face-ui); font-size: 0.84rem;
   letter-spacing: 0.04em; color: var(--muted); }
 .restofsheet[open] > summary { margin-bottom: 10px; }
+
+/* A learning target is something to learn, not something that went wrong:
+   accent, not red. */
+.card.retakes.targets { border-left-color: var(--accent); }
+.goallabel {
+  font-family: var(--face-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}

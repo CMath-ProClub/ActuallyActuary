@@ -7,6 +7,7 @@
    general derivative, so the symbolic work is still on screen. */
 
 import MathKit from './math.js';
+import Expr from './expr.js';
 
 const { sup, poly, coef, terms, frac, sqrt, num, linFactor, F , plus } = MathKit;
 
@@ -518,6 +519,75 @@ export function meanValue(rng, level) {
   };
 }
 
+/* A8, the other half: "show a function has exactly one root".
+
+   The argument has two halves and both have to be written. EXISTENCE is
+   the Intermediate Value Theorem - f is continuous and changes sign. AT
+   MOST ONE is Rolle's Theorem, which is the Mean Value Theorem with equal
+   endpoints - if there were two roots, f' would be zero somewhere between
+   them, and f' is never zero. Asking for the root alone tests neither, so
+   this is asked as the four numbers the argument is made of, and the
+   worked steps write out the sentences that join them.
+
+   f(x) = x^n + px + q with n odd and p > 0, so f'(x) = nx^(n-1) + p is at
+   least p everywhere. Built backward like ivtRoot: the sign change is put
+   in [m, m + 1] first and q chosen to land it there. */
+export function oneRoot(rng, level) {
+  const n = level === 1 ? 3 : rng.pick([3, 5]);
+  const p = rng.int(1, level >= 3 ? 9 : 6);
+  const m = rng.int(level === 1 ? 0 : -2, 2);
+  const f0 = (x) => x ** n + p * x;
+  const lo = -f0(m + 1) + 1;
+  const hi = -f0(m) - 1;
+  const q = hi >= lo ? rng.int(lo, hi) : lo;
+  const f = (x) => f0(x) + q;
+  const pTerm = p === 1 ? ' + x' : ` + ${p}x`;
+  const fx = `x${sup(n)}${pTerm}${plus(q)}`;
+  const text = `x^${n} + ${p}*x + ${q}`;
+  const dText = `${n}*x^${n - 1} + ${p}`;
+  const dHtml = `${n}x${sup(n - 1)} + ${p}`;
+  const show = (v) => num(v).replace('-', '−');
+  return {
+    stem: `Show that <span class="eq">${fx} = 0</span> has exactly one real solution. `
+      + `Fill in the four pieces the argument rests on.`,
+    kind: 'parts',
+    instruction: 'Existence first (the Intermediate Value Theorem), then why there '
+      + 'cannot be a second one (Rolle’s Theorem, which is the Mean Value Theorem '
+      + 'with f(a) = f(b)).',
+    parts: [
+      { id: 'left', label: 'IVT: one end', promptHtml: `f(${show(m)}) = `,
+        answerNode: Expr.parse(String(f(m))), vars: [], placeholder: 'a number' },
+      { id: 'right', label: 'IVT: the other end', promptHtml: `f(${show(m + 1)}) = `,
+        answerNode: Expr.parse(String(f(m + 1))), vars: [], placeholder: 'a number' },
+      { id: 'deriv', label: 'Rolle: the derivative', promptHtml: 'f′(x) = ',
+        answerNode: Expr.parse(dText), vars: ['x'], placeholder: 'in terms of x' },
+      { id: 'floor', label: 'Rolle: f′ is never smaller than', promptHtml: 'f′(x) ≥ ',
+        answerNode: Expr.parse(String(p)), vars: [], placeholder: 'a number' },
+    ],
+    partAnswers: [String(f(m)), String(f(m + 1)), dText, String(p)],
+    answerHtml: `f(${show(m)}) = ${show(f(m))} and f(${show(m + 1)}) = ${show(f(m + 1))}, `
+      + `and f′(x) = ${dHtml} ≥ ${p} &gt; 0`,
+    probe: { type: 'oneroot', f: text, m },
+    hints: ['Two separate claims: there is at least one root, and there is at most one.',
+      `At least one: evaluate f at ${show(m)} and ${show(m + 1)}. Opposite signs plus continuity is the IVT.`,
+      'At most one: if there were two roots a and b, Rolle’s Theorem would give a c between them with f′(c) = 0. Can f′ ever be 0?'],
+    steps: [
+      { title: 'At least one root (IVT)',
+        html: `f is a polynomial, so it is continuous on [${show(m)}, ${show(m + 1)}]. `
+          + `f(${show(m)}) = ${show(f(m))} and f(${show(m + 1)}) = ${show(f(m + 1))} have `
+          + `opposite signs, so by the Intermediate Value Theorem there is a c in `
+          + `(${show(m)}, ${show(m + 1)}) with f(c) = 0.` },
+      { title: 'Suppose there were two',
+        html: 'If f(a) = f(b) = 0 with a &lt; b, then f is continuous on [a, b] and '
+          + 'differentiable on (a, b), so Rolle’s Theorem gives some c in (a, b) with f′(c) = 0.' },
+      { title: 'But f′ is never zero',
+        html: `f′(x) = ${dHtml}. x${sup(n - 1)} ≥ 0, so f′(x) ≥ ${p} &gt; 0 for every x.` },
+      { title: 'Conclude',
+        html: 'That contradicts the step above, so there is no second root: exactly one.' },
+    ],
+  };
+}
+
 /* A9. Linear approximation, and differentials for a maximum error.
    The numbers are chosen so the ESTIMATE is exact to write down - the
    square root of 25.2 is about 5.02 - because the answer being marked is
@@ -544,6 +614,69 @@ export function linearApprox(rng, level) {
         { title: 'The slope there', html: `f′(x) = ${frac('1', `2${sqrt('x')}`)}, so f′(${a * a}) = ${frac('1', String(2 * a))}` },
         { title: 'The tangent line at the new point',
           html: `${a} + ${frac('1', String(2 * a))}(${minus(dx)}) = ${num(est)}` },
+      ],
+    };
+  }
+  /* The other shapes a linear approximation question comes in: about 0
+     or 1 rather than a perfect power. Every one has a tangent line simple
+     enough to do in your head, which is the point of the method. */
+  if (level === 2 && rng.pick([true, false])) {
+    const kind = rng.pick(['exp', 'ln', 'sin', 'pow']);
+    if (kind === 'exp') {
+      const t = rng.pick([0.01, 0.02, 0.03, 0.05, -0.01, -0.02, -0.05]);
+      return {
+        stem: `Use linear approximation to estimate <span class="eq">e${sup(num(t).replace('-', '\u2212'))}</span>.`,
+        kind: 'numeric', answer: 1 + t, tol: 1e-9, answerHtml: num(1 + t),
+        probe: { type: 'linear', f: 'e^x', at: 0, x: t },
+        hints: ['Use a = 0, where e\u2070 = 1 and the slope is also 1.', 'L(x) = f(0) + f\u2032(0)(x \u2212 0) = 1 + x.'],
+        steps: [
+          { title: 'Choose a', html: 'a = 0, so f(a) = e\u2070 = 1' },
+          { title: 'The slope there', html: `f\u2032(x) = e${sup('x')}, so f\u2032(0) = 1` },
+          { title: 'The tangent line', html: `L(x) = 1 + x, so L(${num(t)}) = ${num(1 + t)}` },
+        ],
+      };
+    }
+    if (kind === 'ln') {
+      const t = rng.pick([0.01, 0.02, 0.03, 0.04, 0.05, -0.02, -0.04]);
+      return {
+        stem: `Use linear approximation to estimate <span class="eq">ln(${num(1 + t)})</span>.`,
+        kind: 'numeric', answer: t, tol: 1e-9, answerHtml: num(t),
+        probe: { type: 'linear', f: 'ln(x)', at: 1, x: 1 + t },
+        hints: ['Use a = 1, where ln 1 = 0.', 'f\u2032(x) = 1/x, so the slope at 1 is 1.'],
+        steps: [
+          { title: 'Choose a', html: 'a = 1, so f(a) = ln 1 = 0' },
+          { title: 'The slope there', html: 'f\u2032(x) = 1/x, so f\u2032(1) = 1' },
+          { title: 'The tangent line', html: `L(x) = x \u2212 1, so L(${num(1 + t)}) = ${num(t)}` },
+        ],
+      };
+    }
+    if (kind === 'sin') {
+      const t = rng.pick([0.01, 0.02, 0.03, 0.05, -0.02, -0.04]);
+      return {
+        stem: `Use linear approximation to estimate <span class="eq">sin(${num(t).replace('-', '\u2212')})</span>, in radians.`,
+        kind: 'numeric', answer: t, tol: 1e-9, answerHtml: num(t),
+        probe: { type: 'linear', f: 'sin(x)', at: 0, x: t },
+        hints: ['Use a = 0, where sin 0 = 0.', 'f\u2032(x) = cos x, so the slope at 0 is 1.'],
+        steps: [
+          { title: 'Choose a', html: 'a = 0, so f(a) = sin 0 = 0' },
+          { title: 'The slope there', html: 'f\u2032(x) = cos x, so f\u2032(0) = 1' },
+          { title: 'The tangent line', html: `L(x) = x, so L(${num(t)}) = ${num(t)}` },
+        ],
+      };
+    }
+    const k = rng.int(3, 5);
+    const t = rng.pick([0.01, 0.02, -0.01, -0.02]);
+    const est = 1 + k * t;
+    return {
+      stem: `Use linear approximation to estimate <span class="eq">(${num(1 + t)})${sup(k)}</span>.`,
+      kind: 'numeric', answer: est, tol: 1e-9, answerHtml: num(est),
+      probe: { type: 'linear', f: `x^${k}`, at: 1, x: 1 + t },
+      hints: ['Use a = 1, where 1 to any power is 1.', `f\u2032(x) = ${k}x${sup(k - 1)}, so the slope at 1 is ${k}.`],
+      steps: [
+        { title: 'Choose a', html: 'a = 1, so f(a) = 1' },
+        { title: 'The slope there', html: `f\u2032(x) = ${k}x${sup(k - 1)}, so f\u2032(1) = ${k}` },
+        { title: 'The tangent line',
+          html: `L(x) = 1 + ${k}(x \u2212 1), so L(${num(1 + t)}) = 1 + ${k}(${num(t)}) = ${num(est)}` },
       ],
     };
   }
@@ -574,7 +707,23 @@ export function linearApprox(rng, level) {
      measurement that is itself a little off. */
   const s = rng.int(3, 12);
   const e = rng.pick([0.01, 0.02, 0.05, 0.1]);
-  const kind = rng.pick(['cube', 'square', 'sphere']);
+  const kind = rng.pick(['cube', 'square', 'sphere', 'circle']);
+  if (kind === 'circle') {
+    const coef = 2 * s * e;
+    return {
+      stem: `The radius of a circle is measured as ${s} cm, with a possible error of ${num(e)} cm. `
+        + 'Use differentials to estimate the maximum error in the computed area. '
+        + 'Give the number that multiplies \u03c0.',
+      kind: 'numeric', answer: coef, tol: 1e-9, answerHtml: `${num(coef)}\u03c0 cm${sup(2)}`,
+      probe: { type: 'differential', f: 'x^2', at: s, dx: e },
+      hints: ['A = \u03c0r\u00b2, so dA = 2\u03c0r dr.', 'dr is the measurement error; leave \u03c0 out of the number you type.'],
+      steps: [
+        { title: 'The formula', html: `A = \u03c0r${sup(2)}` },
+        { title: 'Its differential', html: 'dA = 2\u03c0r dr' },
+        { title: 'Put the numbers in', html: `2\u03c0(${s})(${num(e)}) = ${num(coef)}\u03c0` },
+      ],
+    };
+  }
   if (kind === 'cube') {
     const dV = 3 * s * s * e;
     return {

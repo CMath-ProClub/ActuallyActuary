@@ -99,7 +99,7 @@ export const OUTCOMES = [
     skills: ['optimize'] },
   { id: 'A8', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Mean Value Theorem',
-    topics: ['calc.mvt'] },
+    topics: ['calc.mvt', 'calc.oneroot'] },
   { id: 'A9', exam: true, unit: 'Applications', quiz: 'Quiz 9', status: 'ahead',
     name: 'Linear approximation and differentials',
     topics: ['calc.linear'] },

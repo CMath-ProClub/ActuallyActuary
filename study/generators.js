@@ -6,6 +6,7 @@
    reopened months later and still be the same test. */
 
 import MathKit from './math.js';
+import Expr from './expr.js';
 import { TOPIC_BY_ID } from './topics.js';
 import * as ALG from './gen-algebra.js';
 import * as CALC from './gen-calculus.js';
@@ -53,8 +54,16 @@ export function generate(topicId, difficulty = 1, seed = null) {
     return null;
   }
   if (!p || !p.stem) return null;
+  /* A question that names its function in a probe can be graphed: the
+     Mean Value Theorem and the one-root argument are both easier to SEE
+     than to read. The answer is a number, so only f itself is drawn. */
+  let original = p.original || null;
+  if (!original && p.probe && p.probe.f) {
+    try { original = Expr.parse(p.probe.f); } catch { original = null; }
+  }
   return {
     ...p,
+    original,
     topicId,
     difficulty: lvl,
     seed: s,
@@ -252,7 +261,8 @@ export function inputHint(problem) {
            version was cut off mid-expression at "6*x*cos(3*x^", which is
            an example of how NOT to finish typing one. */
         : 'e.g. 6x*cos(3x^2)';
-    case 'numeric': return 'a number, e.g. 12, -3.5, 3/4, 2*pi/3';
+    /* Short enough to fit a phone's answer box whole. */
+    case 'numeric': return 'a number, e.g. 3/4 or -2.5';
     case 'set': return problem.ordered ? 'two values, e.g. 3, -1' : 'all values, separated by commas';
     case 'parts': return 'one line at a time';
     case 'text': return 'your answer';

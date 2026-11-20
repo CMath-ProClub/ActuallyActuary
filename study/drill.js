@@ -134,12 +134,30 @@ export function createDrill(seed, opts = {}) {
          Carried rather than interpreted: drill.js schedules questions
          and has no opinion about what is in them. */
       spec: f.spec || null,
+      /* A focus can also be a CURRICULUM topic - the Mean Value Theorem,
+         linear approximation - which comes from generators.js rather
+         than the sandbox. Carried like spec, and the caller builds it. */
+      topic: f.topic || null,
+      levels: Array.isArray(f.levels) && f.levels.length ? f.levels : null,
+      /* Levels that are different KINDS of question rather than harder
+         ones. Linear approximation is an estimate at 1 and 2 and a
+         differential at 3; following the ladder down after a miss would
+         mean somebody who is struggling never meets differentials at all,
+         which is half of what the learning target asks. So these draw a
+         level at random each time instead. */
+      anyLevel: !!f.anyLevel,
     }));
   return {
     seed: (seed >>> 0) || 1,
     focus,
     /* How much of the session the focus shapes take, right now. */
     share: focus.length ? FOCUS_MAX : 0,
+    /* The least share of the session the focus keeps once it is all
+       solid. 30% by default, which leaves room for the rules the focus is
+       built out of. A session pointed at a quiz that is days away asks
+       for more, because what is sprinkled in then is material that was
+       already examined. */
+    floor: typeof opts.floor === 'number' ? Math.max(0, Math.min(FOCUS_MAX, opts.floor)) : FOCUS_MIN,
     /* Right and wrong on each focus shape, so the worst one comes up most. */
     tally: {},
     /* Questions scheduled by a wrong answer, each {at, skill, level, why}. */
@@ -244,7 +262,8 @@ export function focusShare(state) {
     sum += Math.min(1, run / FOCUS_RUN);
   }
   const solid = sum / state.focus.length;
-  return FOCUS_MAX - (FOCUS_MAX - FOCUS_MIN) * solid;
+  const floor = typeof state.floor === 'number' ? state.floor : FOCUS_MIN;
+  return FOCUS_MAX - (FOCUS_MAX - floor) * solid;
 }
 
 /* How each shape is going, for the panel that lists them. */
@@ -308,7 +327,12 @@ export function nextSlot(state, index) {
     const chosen = starved || pickFocus(state, r);
     if (chosen) {
       const key = chosen.key || chosen.family || chosen.skill;
-      const level = offeredLevel({ levels: [2, 3] }, ladderFor(state, key));
+      /* Levels 2 and 3 by default. A topic whose levels are different
+         KINDS of question rather than harder ones - linear approximation
+         is a square root at 1 and a differential at 3 - says so. */
+      const level = chosen.anyLevel && chosen.levels
+        ? chosen.levels[Math.floor(r() * chosen.levels.length)]
+        : offeredLevel({ levels: chosen.levels || [2, 3] }, ladderFor(state, key));
       remember(state, key);
       return {
         skill: chosen.skill || 'implicit',
@@ -316,6 +340,8 @@ export function nextSlot(state, index) {
         key,
         level,
         spec: chosen.spec || null,
+        topic: chosen.topic || null,
+        anyLevel: !!chosen.anyLevel,
         why: 'focus',
         repeat: false,
       };
@@ -423,7 +449,10 @@ export function recordResult(state, index, slot, correct) {
   state.strikes[key] = strikes;
 
   /* Keep missing it and it comes back easier, not harder and not forever. */
-  const level = strikes > DROP_AFTER ? Math.max(1, slot.level - 1) : slot.level;
+  /* Stepping down a level makes a question easier - except where the
+     levels are different KINDS of question, when it swaps a differential
+     for a square root and calls that help. Those repeat as they were. */
+  const level = strikes > DROP_AFTER && !slot.anyLevel ? Math.max(1, slot.level - 1) : slot.level;
   const waiting = state.scheduled.filter((x) => trackOf(x) === trackOf(slot)).length;
   const room = Math.min(MAX_PENDING_PER_KEY - waiting, MAX_PENDING - state.scheduled.length);
   if (room <= 0) return [];
@@ -442,6 +471,8 @@ export function recordResult(state, index, slot, correct) {
          missed cone came back as a circle, which is a different problem
          wearing the same topic name. */
       spec: slot.spec || null,
+      topic: slot.topic || null,
+      anyLevel: !!slot.anyLevel,
       why: 'missed',
       easier: level < slot.level,
     };

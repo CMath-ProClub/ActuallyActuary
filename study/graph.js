@@ -548,7 +548,10 @@ export function derivativeSeries(problem, studentText) {
   };
   if (problem && problem.original) add(problem.original, 'original', 'f(x)');
   if (problem && problem.answerNode) add(problem.answerNode, 'truth', 'the derivative');
-  if (studentText && String(studentText).trim()) {
+  /* Only an answer that IS a function is drawn. A number - the c of the
+     Mean Value Theorem, an estimate - drawn as a curve is a flat line
+     labelled "your answer" that means nothing. */
+  if (problem && problem.answerNode && studentText && String(studentText).trim()) {
     const node = Expr.tryParse(studentText, { vars: ['x'] });
     add(node, 'yours', 'your answer');
   }
